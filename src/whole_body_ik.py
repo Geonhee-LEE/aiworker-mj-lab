@@ -1,19 +1,12 @@
-"""Differential whole-body IK for the mobile FFW-SH5, using MuJoCo + NumPy only.
+"""FFW-SH5 이동형 로봇의 MuJoCo/NumPy 기반 differential whole-body IK.
 
-The controlled generalized velocity is::
+제어하는 generalized velocity 순서는 다음과 같다::
 
     [base_x, base_y, base_yaw, lift, right_arm(7), left_arm(7)]
 
-Both hand pose tasks are solved in one weighted least-squares problem.  Box constraints
-enforce per-DOF velocity limits and one-step joint-position limits, while signed-distance
-control barriers reactively avoid self/workspace collision.  A small posture task keeps the
-arms away from limits, allowing the holonomic base and lift to share motion instead of
-treating them as unrelated manual controls.
-
-Only the returned command is integrated.  The solver never writes live ``data.qpos``:
-base velocity goes through the real swerve wheels, lift through its position actuator, and
-arm positions through the existing torque controllers.  This is the ROS-free equivalent of
-the weighted differential IK/QP structure used by Cyclo, specialized to this MuJoCo model.
+이 파일은 task 조립과 로봇 상태 관리만 담당한다. 순수 bounded least-squares 계산은
+``bounded_optimization``, 양손 상대 pose 계산은 ``bimanual_kinematics``, 충돌 거리
+계산은 ``collision_kinematics``에 분리되어 있다.
 """
 
 from dataclasses import dataclass, field
@@ -23,7 +16,12 @@ import mujoco
 import numpy as np
 
 from base_teleop import BodyTwist
-import kinematics
+import bimanual_kinematics
+import bounded_optimization
+import collision_kinematics
+from kinematic_tree import KinematicTree
+from kinematics import KinematicsSolver
+import kinematics_math
 
 
 BASE_JOINTS = ("base_x", "base_y", "base_yaw")
@@ -49,7 +47,7 @@ class WholeBodyCommand:
 
 
 class WholeBodyIK:
-    """Weighted, bounded differential IK over base, lift and both arms."""
+    """base, lift, 양팔을 함께 푸는 weighted bounded differential IK."""
 
     def __init__(self, model, site_names, arm_joint_names, *,
                  position_weight=10.0, orientation_weight=5.0,
@@ -81,12 +79,10 @@ class WholeBodyIK:
             side: np.array([self.index[name] for name in names], dtype=int)
             for side, names in self.arm_joint_names.items()
         }
-        # Parse the compiled MJCF topology once, then share the immutable tree between
-        # both end-effector solvers.  FK/Jacobian evaluation below is independent of the
-        # live MjData and does not call a MuJoCo forward/Jacobian solver.
-        self.kinematic_tree = kinematics.KinematicTree(model)
+        # MJCF topology는 한 번만 읽고 불변 tree를 양쪽 end-effector solver가 공유한다.
+        self.kinematic_tree = KinematicTree(model)
         self.kinematics_solvers = {
-            side: kinematics.KinematicsSolver(
+            side: KinematicsSolver(
                 model, site_names[side], self.joint_names, tree=self.kinematic_tree)
             for side in self.site_ids
         }
@@ -113,7 +109,7 @@ class WholeBodyIK:
             raise ValueError("collision barrier gain/weight must be positive")
         if collision_avoidance:
             self.collision_pairs = tuple(
-                kinematics.default_collision_pairs(model)
+                collision_kinematics.default_collision_pairs(model)
                 if collision_pairs is None else collision_pairs)
         else:
             self.collision_pairs = ()
@@ -131,9 +127,7 @@ class WholeBodyIK:
         self._reference_hand_quaternions = {}
         self._rigid_grasp_reference = None
 
-        # Regularization is expressed in task-normalized units.  The mobile/lift DOFs are
-        # deliberately cheaper for common dual-hand motion; otherwise fourteen arm columns
-        # absorb the shared task numerically and the physical base is barely recruited.
+        # 양손의 공통 이동에 base/lift가 참여하도록 해당 DOF의 정규화 비용을 낮춘다.
         self.damping_weights = np.array(
             [0.25, 0.25, 0.20, 0.12] + [0.045] * 14, dtype=float)
         self.posture_weights = np.array([0.0, 0.0, 0.0, 0.10] + [0.025] * 14, dtype=float)
@@ -145,12 +139,12 @@ class WholeBodyIK:
         self.position_ranges = np.array([model.jnt_range[jid] for jid in self.joint_ids], dtype=float)
 
     def rebase(self, data, target_poses=None):
-        """Make the current base pose the origin of subsequent common-hand motion.
+        """현재 base pose를 이후 양손 공통 이동의 기준점으로 재설정한다.
 
-        Manual driving intentionally moves the whole target frame with the chassis.  On
-        handover, using the solver's startup reference would interpret that movement as a
-        new task and command the base back to its old pose.  Rebasing to the carried target
-        poses makes zero target delta mean "stay here" while preserving later WBIK motion.
+        수동 주행 중에는 target frame도 chassis와 함께 움직인다. 제어권을 넘길 때
+        시작 시점의 reference를 그대로 쓰면 이 이동을 새 task로 해석해 base가 원래
+        위치로 돌아가려 한다. 현재 target pose를 다시 기준으로 삼아 target delta가
+        0일 때 현 위치를 유지하도록 한다.
         """
         current_q = np.asarray(data.qpos[self.qpos_adrs], dtype=float)
         self._reference_base_yaw = float(current_q[self.index["base_yaw"]])
@@ -160,7 +154,7 @@ class WholeBodyIK:
             if side in target_poses:
                 position, quaternion = target_poses[side]
                 position = np.asarray(position, dtype=float).copy()
-                quaternion = kinematics.normalize_quaternion(quaternion)
+                quaternion = kinematics_math.normalize_quaternion(quaternion)
             else:
                 state = self.site_state(data, side, current_q)
                 position = state.position
@@ -171,11 +165,11 @@ class WholeBodyIK:
         self._last_solve_time = None
 
     def set_rigid_grasp(self, data, active):
-        """Capture or clear the current left-hand pose in the right-hand frame.
+        """오른손 frame에서 본 현재 왼손 pose를 캡처하거나 해제한다.
 
-        Cyclo's bimanual MoveL controller adds a six-dimensional relative-pose equality to
-        its QP.  We retain the same velocity-level geometry as a strong least-squares task,
-        which fits this small NumPy solver without adding OSQP or ROS dependencies.
+        Cyclo의 bimanual MoveL controller는 6차원 상대 pose equality를 QP에 넣는다.
+        여기서는 같은 velocity-level geometry를 강한 least-squares task로 구성해
+        OSQP나 ROS 의존성을 추가하지 않는다.
         """
         if not active:
             self._rigid_grasp_reference = None
@@ -183,22 +177,18 @@ class WholeBodyIK:
         current_q = np.asarray(data.qpos[self.qpos_adrs], dtype=float)
         right = self.site_state(data, "r", current_q)
         left = self.site_state(data, "l", current_q)
-        right_rotation = _quaternion_matrix(right.quaternion)
-        left_rotation = _quaternion_matrix(left.quaternion)
-        self._rigid_grasp_reference = {
-            "position_right": right_rotation.T @ (left.position - right.position),
-            "rotation_right": right_rotation.T @ left_rotation,
-        }
+        self._rigid_grasp_reference = bimanual_kinematics.capture_reference(
+            right, left)
 
     def solve(self, data, target_poses, dt, *, active_sides=("r", "l"),
               arm_nominal=None, lift_nominal=None, rigid_grasp=False,
               whole_body_enabled=True):
-        """Return actuator-level goals for one control frame.
+        """한 control frame에 적용할 actuator-level 목표를 반환한다.
 
-        ``target_poses`` maps ``"r"``/``"l"`` to world ``(position, quaternion)``.
-        ``active_sides`` lets FK-mode arms opt out.  With ``whole_body_enabled=False`` the
-        planar base and lift are pinned at zero differential velocity, leaving an arm-only
-        solve that retains the same joint-limit and collision constraints.
+        ``target_poses``는 ``"r"``/``"l"``을 world ``(position, quaternion)``에
+        대응시킨다. ``active_sides``에서 빠진 FK-mode 팔은 계산에 참여하지 않는다.
+        ``whole_body_enabled=False``이면 base와 lift 속도를 0으로 고정하되 관절 한계와
+        충돌 constraint는 그대로 유지한다.
         """
         dt = max(float(dt), 1e-5)
         active_sides = tuple(side for side in active_sides if side in self.site_ids)
@@ -219,16 +209,18 @@ class WholeBodyIK:
 
             current_pos = state.position
             pos_error = np.asarray(target_pos, dtype=float) - current_pos
-            ori_error_world = kinematics.shortest_orientation_error(
+            ori_error_world = kinematics_math.shortest_orientation_error(
                 target_quat, state.quaternion)
 
             desired = np.concatenate((
-                _clip_norm(self.position_gain * pos_error
-                           - self.linear_velocity_damping * site_velocity[:3],
-                           self.max_task_linear_speed),
-                _clip_norm(self.orientation_gain * ori_error_world
-                           - self.angular_velocity_damping * site_velocity[3:],
-                           self.max_task_angular_speed),
+                kinematics_math.clip_norm(
+                    self.position_gain * pos_error
+                    - self.linear_velocity_damping * site_velocity[:3],
+                    self.max_task_linear_speed),
+                kinematics_math.clip_norm(
+                    self.orientation_gain * ori_error_world
+                    - self.angular_velocity_damping * site_velocity[3:],
+                    self.max_task_angular_speed),
             ))
             weights = np.sqrt(np.array(
                 [self.position_weight] * 3 + [self.orientation_weight] * 3))
@@ -245,11 +237,9 @@ class WholeBodyIK:
             rows.append(weight * grasp_jacobian)
             rhs.append(weight * grasp_velocity)
 
-        # A stable hierarchy for dual-hand common motion: explicitly servo the base from
-        # the average task error, then let the same least-squares system use lift/arms for
-        # the remaining individual-hand residual.  Relying only on minimum norm allowed
-        # fourteen arm columns to change the common error's sign while the swerve base was
-        # still steering, producing repeated chassis reversals.
+        # 양손 평균 오차로 base를 먼저 servo하고 나머지 개별 오차는 lift/팔이 푼다.
+        # minimum norm에만 맡기면 swerve가 조향 중일 때 14개 팔 열이 공통 오차의
+        # 부호를 바꾸어 chassis 방향이 반복 반전될 수 있다.
         if whole_body_enabled and all(side in position_errors for side in ("r", "l")):
             reference_centroid = 0.5 * (
                 self._reference_hand_positions["r"] + self._reference_hand_positions["l"])
@@ -260,11 +250,11 @@ class WholeBodyIK:
             target_yaw_deltas = []
             for side in ("r", "l"):
                 target_quaternion = np.asarray(target_poses[side][1], dtype=float)
-                delta_world = kinematics.shortest_orientation_error(
+                delta_world = kinematics_math.shortest_orientation_error(
                     target_quaternion, self._reference_hand_quaternions[side])
                 target_yaw_deltas.append(delta_world[2])
             desired_base_yaw = self._reference_base_yaw + float(np.mean(target_yaw_deltas))
-            base_yaw_error = _wrap_angle(
+            base_yaw_error = kinematics_math.wrap_angle(
                 desired_base_yaw - current_q[self.index["base_yaw"]])
             yaw_deadband = 0.05
             yaw_control_error = (0.0 if abs(base_yaw_error) <= yaw_deadband else
@@ -284,7 +274,7 @@ class WholeBodyIK:
             rows.append(common_base_weights[:, None] * base_selector)
             rhs.append(common_base_weights * desired_base)
 
-        # Tikhonov damping makes the least-squares system well-conditioned at singularities.
+        # Tikhonov damping으로 특이점 부근에서도 least-squares 조건을 안정화한다.
         rows.append(np.diag(np.sqrt(self.damping_weights)))
         rhs.append(np.zeros(len(self.joint_names)))
 
@@ -303,25 +293,24 @@ class WholeBodyIK:
         vector = np.concatenate(rhs)
         lower, upper = self._velocity_bounds(current_q, dt)
 
-        # The UI whole-body switch is a hard participation gate, not merely a small task
-        # weight.  Pinning all four body DOFs guarantees that numerical compromise,
-        # posture bias or a collision barrier cannot leave a residual chassis/lift command.
+        # Whole-body OFF는 작은 weight가 아니라 hard participation gate다. body 4개
+        # DOF를 고정해 수치 절충이나 posture/collision 항이 잔류 명령을 만들지 못한다.
         if not whole_body_enabled:
             lower[:4] = 0.0
             upper[:4] = 0.0
 
-        # A joint in FK mode must remain under the FK controller.  Pin its differential IK
-        # velocity to zero while still allowing the other arm, lift and base to cooperate.
+        # FK mode 팔은 기존 FK controller가 소유하므로 differential velocity를 0으로
+        # 고정하고, 반대쪽 팔과 lift/base만 계속 협력하게 한다.
         for side in ("r", "l"):
             if side not in active_sides:
                 lower[self.side_indices[side]] = 0.0
                 upper[self.side_indices[side]] = 0.0
 
-        qdot = _bounded_least_squares(matrix, vector, lower, upper)
+        qdot = bounded_optimization.bounded_least_squares(
+            matrix, vector, lower, upper)
         if dual_base_request is not None:
-            # Enforce the hierarchy exactly.  The weighted rows above let lift/arms solve
-            # the residual consistently; copying the three base components prevents small
-            # numerical compromises from becoming large swerve heading changes.
+            # hierarchy를 정확히 적용한다. lift/팔은 위 weighted row로 잔차를 풀고,
+            # base 3축을 복사해 작은 수치 절충이 큰 swerve heading 변화로 번지지 않게 한다.
             qdot[:3] = dual_base_request
         if whole_body_enabled:
             qdot = self._shape_base_velocity(
@@ -336,15 +325,13 @@ class WholeBodyIK:
                 constraint.gradient for constraint, _bound in collision_constraints])
             barrier_lower = np.array([
                 bound for _constraint, bound in collision_constraints])
-            # This is Cyclo's collision CBF with a quadratic slack penalty, reduced to a
-            # squared hinge loss and solved by a tiny active set.  Applying it after base
-            # velocity shaping ensures acceleration limiting cannot re-introduce an unsafe
-            # approach velocity.
-            qdot = _bounded_least_squares_with_barriers(
+            # Cyclo collision CBF의 quadratic slack을 squared hinge loss로 줄여 작은
+            # active set으로 푼다. base shaping 뒤에 적용해야 가속도 제한이 위험한
+            # 접근 속도를 다시 만들지 않는다.
+            qdot = bounded_optimization.bounded_least_squares_with_barriers(
                 np.eye(len(qdot)), qdot, lower, upper,
                 barrier_matrix, barrier_lower, self.collision_slack_weight)
-            # The next acceleration ramp must start from the command actually returned,
-            # including any safety override of the shaped base velocity.
+            # 다음 가속 ramp는 collision safety override까지 반영된 실제 명령에서 시작한다.
             self._previous_base_velocity_world = qdot[:3].copy()
             collision_violation = float(np.max(np.maximum(
                 barrier_lower - barrier_matrix @ qdot, 0.0)))
@@ -383,7 +370,7 @@ class WholeBodyIK:
         )
 
     def _collision_constraints(self, data, dt):
-        """Return active ``grad(distance) @ qdot >= lower`` CBF rows."""
+        """활성화된 ``grad(distance) @ qdot >= lower`` CBF 행을 반환한다."""
         barrier_gain = min(
             self.collision_barrier_gain, 1.0 / max(float(dt), 1e-5))
         constraints = []
@@ -395,7 +382,7 @@ class WholeBodyIK:
         return constraints
 
     def site_state(self, data, side, current_q=None):
-        """Evaluate one hand through the custom tree FK/Jacobian implementation."""
+        """custom tree FK/Jacobian으로 한 손의 pose와 Jacobian을 계산한다."""
         if side not in self.kinematics_solvers:
             raise ValueError(f"unknown hand side: {side!r}")
         if current_q is None:
@@ -404,56 +391,40 @@ class WholeBodyIK:
             current_q, context_qpos=data.qpos)
 
     def collision_distances(self, data, max_distance=None):
-        """Return monitored pair distances for control diagnostics/visualization.
+        """제어 진단과 시각화에 쓸 collision pair 거리를 반환한다.
 
-        The query is read-only and uses the same geometry/gradient code as the CBF, so a
-        rendered closest-point line cannot silently disagree with the safety controller.
+        read-only query이며 CBF와 같은 geometry/gradient 구현을 사용한다. 따라서
+        화면의 최근접점 선과 safety controller의 판단이 달라지지 않는다.
         """
         distance_limit = (self.collision_buffer if max_distance is None
                           else max(float(max_distance), 0.0))
         results = []
+        frame_cache = {}
         for pair in self.collision_pairs:
-            result = kinematics.collision_distance_gradient(
+            result = collision_kinematics.collision_distance_gradient(
                 self.model, data, pair, self.kinematic_tree,
-                self.joint_ids, distance_limit)
+                self.joint_ids, distance_limit, frame_cache)
             if result is not None:
                 results.append(result)
         return tuple(results)
 
     def _rigid_grasp_task(self, site_states, dt):
-        """Build Cyclo-style relative hand Jacobian and drift-correction velocity."""
-        right, left = site_states["r"], site_states["l"]
-        reference = self._rigid_grasp_reference
-        right_rotation = _quaternion_matrix(right.quaternion)
-        right_to_left_world = right_rotation @ reference["position_right"]
-        transform = np.eye(6)
-        transform[:3, 3:] = -_skew(right_to_left_world)
-        grasp_jacobian = left.jacobian - transform @ right.jacobian
-
-        desired_left_position = right.position + right_to_left_world
-        desired_left_rotation = right_rotation @ reference["rotation_right"]
-        desired_left_quaternion = _matrix_quaternion(desired_left_rotation)
-        # Exact 1/dt correction, as in Cyclo, can exceed this model's velocity box after a
-        # contact disturbance. Norm clipping preserves direction while keeping the QP
-        # feasible enough for the strong soft equality to recover over multiple frames.
-        correction_dt = max(float(dt), 1e-5)
-        linear = _clip_norm(
-            (desired_left_position - left.position) / correction_dt,
-            self.max_task_linear_speed)
-        angular = _clip_norm(
-            kinematics.shortest_orientation_error(
-                desired_left_quaternion, left.quaternion) / correction_dt,
-            self.max_task_angular_speed)
-        return grasp_jacobian, np.concatenate((linear, angular))
+        """기존 호출 경로를 유지하면서 양손 기구학 모듈에 계산을 위임한다."""
+        return bimanual_kinematics.rigid_grasp_task(
+            self._rigid_grasp_reference,
+            site_states,
+            dt,
+            self.max_task_linear_speed,
+            self.max_task_angular_speed,
+        )
 
     def _shape_base_velocity(self, qdot, position_errors, orientation_errors, dt, data_time):
-        """Fade and acceleration-limit the physical base part of the differential solution.
+        """differential 해의 물리 base 성분에 fade와 가속도 제한을 적용한다.
 
-        Arms track a new position target almost immediately, while swerve steering and the
-        heavy chassis have real lag.  Feeding every frame's unconstrained sign change into
-        the modules caused repeated direction reversals near a goal.  The task remains fast
-        at large error, then hands fine positioning back to lift/arms as error approaches
-        zero; a short acceleration ramp suppresses one-frame chassis reversals.
+        팔은 새 목표를 빠르게 추종하지만 swerve 조향과 무거운 chassis에는 지연이 있다.
+        매 frame의 부호 변화를 그대로 보내면 목표 근처에서 방향이 반복 반전된다. 오차가
+        클 때는 빠르게 움직이고, 0에 가까워지면 정밀 위치 보정을 lift/팔에 넘긴다.
+        짧은 가속 ramp는 한 frame짜리 chassis 반전을 억제한다.
         """
         result = qdot.copy()
         if self._last_solve_time is None or data_time < self._last_solve_time:
@@ -487,15 +458,13 @@ class WholeBodyIK:
             lo, hi = self.position_ranges[i]
             margin = min(self.joint_limit_margin, max(0.0, 0.25 * (hi - lo)))
             safe_lo, safe_hi = lo + margin, hi - margin
-            # Cyclo's joint-limit control-barrier constraint bounds approach velocity by
-            # distance to each limit. Unlike a one-frame hard clamp, this decelerates before
-            # the margin and gives smooth, exponentially safe recovery if contact pushes a
-            # joint outside it.
+            # joint-limit CBF는 한계까지의 거리에 따라 접근 속도를 줄인다. 한 frame
+            # hard clamp와 달리 margin 전에 감속하고, 외력으로 벗어나도 부드럽게 복귀한다.
             lower[i] = max(lower[i], -barrier_gain * (current_q[i] - safe_lo))
             upper[i] = min(upper[i], barrier_gain * (safe_hi - current_q[i]))
             if lower[i] > upper[i]:
-                # Degenerate/narrow ranges or a badly out-of-range imported state: choose a
-                # bounded recovery direction instead of passing an infeasible box onward.
+                # 너무 좁은 range나 범위를 크게 벗어난 상태는 infeasible box를 넘기지 않고
+                # 제한된 복귀 방향 하나로 고정한다.
                 recovery = (self.velocity_limits[i]
                             if current_q[i] < safe_lo else -self.velocity_limits[i])
                 lower[i] = upper[i] = recovery
@@ -509,136 +478,10 @@ class WholeBodyIK:
         return result
 
 
-def _bounded_least_squares(matrix, vector, lower, upper):
-    """Solve a small box-constrained least-squares problem with a BVLS active set.
-
-    The former one-way active set pinned a variable after its first unconstrained bound
-    violation and could never release it, so coupled Jacobian columns sometimes produced a
-    feasible but non-optimal velocity. Cyclo uses a full QP solver; bounded-variable least
-    squares adds the missing KKT release step and reaches the same box-QP optimum without
-    OSQP. It solves at most a few 18-column least-squares systems per control frame.
-    """
-    matrix = np.asarray(matrix, dtype=float)
-    vector = np.asarray(vector, dtype=float)
-    lower = np.asarray(lower, dtype=float)
-    upper = np.asarray(upper, dtype=float)
-    if matrix.ndim != 2 or vector.shape != (matrix.shape[0],):
-        raise ValueError("incompatible least-squares matrix/vector shapes")
-    if lower.shape != (matrix.shape[1],) or upper.shape != lower.shape:
-        raise ValueError("incompatible least-squares bound shapes")
-    if np.any(lower > upper):
-        raise ValueError("lower bound exceeds upper bound")
-
-    tolerance = 1e-10
-    fixed = upper - lower <= tolerance
-    movable = ~fixed
-    x = np.zeros(matrix.shape[1], dtype=float)
-    x[fixed] = 0.5 * (lower[fixed] + upper[fixed])
-    if np.any(movable):
-        reduced_rhs = vector - matrix[:, fixed] @ x[fixed]
-        solution, *_ = np.linalg.lstsq(matrix[:, movable], reduced_rhs, rcond=None)
-        x[movable] = np.clip(solution, lower[movable], upper[movable])
-    active_lower = movable & (x <= lower + tolerance)
-    active_upper = movable & ~active_lower & (x >= upper - tolerance)
-
-    for _ in range(4 * matrix.shape[1] + 4):
-        active = fixed | active_lower | active_upper
-        free = ~active
-        candidate = x.copy()
-        if np.any(free):
-            reduced_rhs = vector - matrix[:, active] @ x[active]
-            candidate[free], *_ = np.linalg.lstsq(
-                matrix[:, free], reduced_rhs, rcond=None)
-
-        direction = candidate - x
-        step = 1.0
-        for index in np.flatnonzero(free):
-            if candidate[index] < lower[index] - tolerance:
-                step = min(step, (lower[index] - x[index]) / direction[index])
-            elif candidate[index] > upper[index] + tolerance:
-                step = min(step, (upper[index] - x[index]) / direction[index])
-        if step < 1.0 - tolerance:
-            x += max(0.0, step) * direction
-            x = np.clip(x, lower, upper)
-            active_lower |= free & (direction < 0.0) & (x <= lower + tolerance)
-            active_upper |= free & (direction > 0.0) & (x >= upper - tolerance)
-            continue
-
-        x = np.clip(candidate, lower, upper)
-        residual = matrix @ x - vector
-        gradient = matrix.T @ residual
-        lower_violation = np.where(active_lower, -gradient, -np.inf)
-        upper_violation = np.where(active_upper, gradient, -np.inf)
-        lower_index = int(np.argmax(lower_violation))
-        upper_index = int(np.argmax(upper_violation))
-        worst_lower = lower_violation[lower_index]
-        worst_upper = upper_violation[upper_index]
-        if max(worst_lower, worst_upper) <= tolerance:
-            break
-        if worst_lower >= worst_upper:
-            active_lower[lower_index] = False
-        else:
-            active_upper[upper_index] = False
-    return np.clip(x, lower, upper)
-
-
-def _bounded_least_squares_with_barriers(matrix, vector, lower, upper,
-                                         barrier_matrix, barrier_lower, slack_weight):
-    """Solve box least squares plus soft one-sided linear barrier constraints.
-
-    Eliminating non-negative slack from ``G x + s >= h`` adds the convex penalty
-    ``weight * max(0, h - G x)^2``.  On each smooth region this is ordinary bounded least
-    squares, so updating the violated-row active set reaches its piecewise-quadratic
-    optimum without bringing ROS, OSQP, or another optimizer into the runtime.
-    """
-    barrier_matrix = np.asarray(barrier_matrix, dtype=float)
-    barrier_lower = np.asarray(barrier_lower, dtype=float)
-    if barrier_matrix.ndim != 2 or barrier_matrix.shape[1] != np.shape(matrix)[1]:
-        raise ValueError("incompatible collision barrier matrix shape")
-    if barrier_lower.shape != (barrier_matrix.shape[0],):
-        raise ValueError("incompatible collision barrier lower-bound shape")
-    if barrier_matrix.shape[0] == 0:
-        return _bounded_least_squares(matrix, vector, lower, upper)
-
-    root_weight = math.sqrt(float(slack_weight))
-    solution = _bounded_least_squares(matrix, vector, lower, upper)
-    active = barrier_matrix @ solution < barrier_lower
-    for _ in range(2 * barrier_matrix.shape[0] + 4):
-        if not np.any(active):
-            return solution
-        augmented_matrix = np.vstack((matrix, root_weight * barrier_matrix[active]))
-        augmented_vector = np.concatenate((vector, root_weight * barrier_lower[active]))
-        candidate = _bounded_least_squares(
-            augmented_matrix, augmented_vector, lower, upper)
-        next_active = barrier_matrix @ candidate < barrier_lower - 1e-10
-        if np.array_equal(next_active, active):
-            return candidate
-        solution, active = candidate, next_active
-    return solution
-
-
-def _clip_norm(vector, limit):
-    vector = np.asarray(vector, dtype=float)
-    norm = float(np.linalg.norm(vector))
-    return vector if norm <= limit or norm < 1e-12 else vector * (limit / norm)
-
-
-def _wrap_angle(angle):
-    return (float(angle) + math.pi) % (2.0 * math.pi) - math.pi
-
-
-def _skew(vector):
-    x, y, z = np.asarray(vector, dtype=float)
-    return np.array([[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]])
-
-
-def _quaternion_matrix(quaternion):
-    matrix = np.zeros(9)
-    mujoco.mju_quat2Mat(matrix, kinematics.normalize_quaternion(quaternion))
-    return matrix.reshape(3, 3)
-
-
-def _matrix_quaternion(matrix):
-    quaternion = np.zeros(4)
-    mujoco.mju_mat2Quat(quaternion, np.asarray(matrix, dtype=float).reshape(9))
-    return kinematics.normalize_quaternion(quaternion)
+# 과거 회귀 테스트와 외부 디버그 스크립트의 private import 경로를 보존한다.
+# 실제 구현은 아래 전용 모듈에 하나만 존재한다.
+_bounded_least_squares = bounded_optimization.bounded_least_squares
+_bounded_least_squares_with_barriers = (
+    bounded_optimization.bounded_least_squares_with_barriers)
+_quaternion_matrix = kinematics_math.rotation_from_quaternion
+_matrix_quaternion = kinematics_math.quaternion_from_rotation

@@ -1,7 +1,12 @@
 # `KinematicsSolver`와 `src/ik.py` 호환 계층
 
-`src/kinematics.py`의 `KinematicsSolver`가 MJCF 트리 파싱, FK, Jacobian, 단일 팔
-IK를 한 구조에서 제공한다. `src/ik.py`는 기존 호출 코드가 계속 동작하도록
+!!! info "핵심 알고리즘 학습 순서 3/7"
+    [DLS와 위치 우선 IK 수학](ik-math.md)의 결과식을 실제 반복 solver로 연결한다.
+    다음은 같은 pose/Jacobian을 18자유도로 확장하는
+    [전신 IK와 충돌 회피](whole_body_ik.md)다.
+
+`src/kinematics.py`의 `KinematicsSolver`가 `kinematic_tree.py`의 FK/Jacobian을 사용해
+단일 팔 IK를 제공한다. `src/ik.py`는 기존 호출 코드가 계속 동작하도록
 `InverseKinematics`라는 이름과 기본 상수만 다시 노출하는 얇은 호환 계층이다.
 
 !!! note "현재 텔레옵 런타임은 whole-body IK 사용"
@@ -25,6 +30,10 @@ IK를 한 구조에서 제공한다. `src/ik.py`는 기존 호출 코드가 계�
 `LOCAL_WORLD_ALIGNED`에 해당하는 6×N geometric Jacobian을 함께 얻는다. 단일 팔 IK와
 whole-body IK가 같은 quaternion 부호 규칙과 회전 오차 좌표계를 사용하므로, 두 경로의
 FK/Jacobian 정의가 달라지는 문제를 막는다.
+
+구조가 pose로 이어지는 상세 과정은 [Kinematic Tree](kinematic-tree.md)와
+[FK와 Jacobian](forward-kinematics.md), quaternion 부호·frame 규칙은
+[Quaternion과 Orientation Error](quaternion-math.md)에 분리되어 있다.
 
 ## 수식
 
@@ -69,6 +78,17 @@ flowchart TD
 이 곱셈 순서의 축은 처음부터 world frame이므로, world-aligned \(J_r\)과 바로 곱한다.
 또한 target/current의 내적이 음수면 target 부호를 뒤집어 \(q\)와 \(-q\)가 동일한
 자세라는 quaternion double-cover 성질을 명시적으로 보장한다.
+
+## 수식에서 코드까지
+
+| 수식 단계 | `KinematicsSolver.solve_pose()` 표현 | 의미 |
+|---|---|---|
+| \(e_p=p^*-p(q)\), \(e_R=\log(q^*q^{-1})\) | `_pose_error()` | 같은 world frame의 위치·자세 오차 |
+| \(J_p^T(J_pJ_p^T+\lambda^2I)^{-1}e_p\) | `position_delta` | 위치 우선 DLS step |
+| \(N_{p,\lambda}J_R^Te_R\) | `orientation_delta` | 위치 영향을 억제한 자세 보정 |
+| \(|\Delta q_i|\le\Delta q_{max}\) | `np.clip(full_delta, ...)` | iteration별 관절 변화 제한 |
+| \(C(q+\alpha\Delta q)<C(q)\) | `step *= 0.5` | 실제 FK 비용 기반 backtracking |
+| 여러 \(q_0\) 중 최소 오차 해 선택 | `solve_pose_multistart()` | local minimum 회피 |
 
 ## 클래스와 호환 이름
 
@@ -130,9 +150,22 @@ q_des, pos_err, ori_err = solver.solve_pose(
 )
 ```
 
-## 보장
+## 검증과 보장
 
 - live simulation의 `data.qpos`를 직접 수정하지 않는다.
 - FK/IK 계산에서 `mujoco.mj_forward()`를 호출하지 않는다.
 - 계산 결과는 관절각 배열로 반환된다.
 - 실제 로봇 움직임은 `arm_control.py`가 actuator torque로 만든다.
+
+`tests/test_phase_3.py`는 analytic Jacobian의 중앙 유한차분 일치, quaternion
+double-cover, 무작위 target 100개의 수렴률과 실제 pick을 함께 검사한다. 양팔 모델의
+동일 solver 경로는 `tests/test_phase_4.py`가 확인한다.
+
+```bash
+python3 tests/test_phase_3.py
+python3 tests/test_phase_4.py
+```
+
+[← 이전: DLS와 위치 우선 IK 수학](ik-math.md) ·
+[전체 학습 순서](index.md#algorithm-learning-order) ·
+[다음: 전신 IK와 충돌 회피 →](whole_body_ik.md)

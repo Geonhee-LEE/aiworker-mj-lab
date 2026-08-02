@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 4 — 전체 아키텍처 실행 흐름 {: #part-4 }
 
@@ -30,8 +30,13 @@ ffw-sh5-grasp/
 │   ├── teleop_ui.py           # ImGui 패널
 │   ├── teleop_render.py       # GLFW/렌더/카메라/3D gizmo
 │   ├── teleop_targets.py      # target ↔ world pose 변환, Cyclo 상태
-│   ├── kinematics.py          # 정규화 pose + world-aligned FK/Jacobian 공용 계층
-│   ├── whole_body_ik.py       # base/lift/양팔 weighted differential IK
+│   ├── kinematics.py          # 단일 site FK/IK 공개 진입점
+│   ├── kinematics_math.py     # 회전 행렬·쿼터니언 수학
+│   ├── kinematic_tree.py      # MJCF 트리 + FK/Jacobian
+│   ├── collision_kinematics.py # collision distance gradient
+│   ├── bimanual_kinematics.py # rigid-grasp 상대 pose/Jacobian
+│   ├── bounded_optimization.py # box BVLS + collision soft barrier
+│   ├── whole_body_ik.py       # WBIK task/bound/command 조립
 │   ├── ik.py                  # legacy 단일 팔 6DOF DLS IK(회귀 테스트용)
 │   ├── arm_control.py         # 팔 토크 제어(PD+중력보상)
 │   ├── grasp.py               # 손가락 synergy + 접촉 기반 grasp 판정
@@ -164,7 +169,10 @@ def _step_physics(self, drive_keys):
 | `teleop_ui.py` | `rqt` 플러그인 하나, 단 별도 프로세스가 아니라 인프로세스 위젯 |
 | `teleop_render.py` | RViz(3D 뷰) + 그 안의 InteractiveMarkerServer를 한 파일에 합친 것 |
 | `teleop_targets.py` | tf2 buffer/lookup + MoveIt의 "pose goal 계산"을 대신하는 순수 함수 모음 |
-| `kinematics.py` | 컴파일된 MJCF 트리를 복사해 직접 구현한 FK/`LOCAL_WORLD_ALIGNED` Jacobian 계층 |
+| `kinematics.py` | 단일 site FK/IK의 공개 진입점; 실제 MJCF tree 계산은 `kinematic_tree.py`가 담당 |
+| `bimanual_kinematics.py` | 양손 rigid-grasp 상대 pose/Jacobian 계산 계층 |
+| `bounded_optimization.py` | ROS/OSQP 없이 box BVLS와 collision soft barrier를 푸는 수치 계층 |
+| `whole_body_ik.py` | 위 계산 계층을 task, bound, 로봇 상태와 연결하는 전신 IK 조립 계층 |
 | `ik.py` | MoveIt의 IK 플러그인(KDL/TRAC-IK 자리) 하나만 떼어낸 것. 플래닝은 없다 |
 | `arm_control.py` | `ros2_control`의 `effort_controllers` 플러그인 하나 |
 | `grasp.py` | 그리퍼 액션 서버 + `/gripper/force_torque` 센서 판정 로직을 합친 것 |
@@ -172,4 +180,4 @@ def _step_physics(self, drive_keys):
 
 ---
 
-[← Part 3](./03-project-identity.md) · [전체 안내](../ros2-guide.md) · [Part 5 →](./05-hand-control.md)
+[← Part 3](./03-project-identity.md) · [전체 안내](../index.md#ros2-reading) · [Part 5 →](./05-hand-control.md)

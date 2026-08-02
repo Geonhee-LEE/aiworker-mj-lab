@@ -4,10 +4,15 @@ ROBOTIS FFW-SH5 양팔 모바일 로봇의 MuJoCo 물리 기반 텔레오퍼레�
 ROS 없이 손 목표, whole-body/arm-only IK, 실제 스워브 바퀴, 양손 grasp와 reactive
 collision avoidance를 하나의 Python 앱에서 실행합니다.
 
-[![demo video](https://img.youtube.com/vi/2LV_RsAGdz8/hqdefault.jpg)](https://www.youtube.com/watch?v=2LV_RsAGdz8)
+## 데모 영상
+
+| Whole-body Control | Whole-body 미사용 (Arm-only) |
+|---|---|
+| [![Whole-body Control 데모](https://img.youtube.com/vi/MzO1GpUfCd8/hqdefault.jpg)](https://www.youtube.com/watch?v=MzO1GpUfCd8&list=PLWyQPsEn5Atg) | [![Whole-body 미사용 데모](https://img.youtube.com/vi/2LV_RsAGdz8/hqdefault.jpg)](https://www.youtube.com/watch?v=2LV_RsAGdz8&list=PLWyQPsEn5Atg&index=2) |
+| base·lift·양팔이 함께 목표를 추종하는 버전 | base·lift 자동 참여를 끈 버전 |
 
 [문서 사이트](https://ggh-png.github.io/ffw-sh5-grasp/) ·
-[1.2.0 릴리스](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.2.0)
+[1.3.0 릴리스](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.3.0)
 
 ## 먼저 읽을 문서
 
@@ -17,7 +22,7 @@ collision avoidance를 하나의 Python 앱에서 실행합니다.
 | 버튼과 키 전체 목록 | [화면과 조작](docs/run.md) |
 | MoveL/IK/Whole-body 조합 | [모드 선택](docs/control-modes.md) |
 | 느림·잔류 주행·collision 진단 | [문제 해결](docs/troubleshooting.md) |
-| 구조와 알고리즘 이해 | [동작 원리](docs/concepts.md), [아키텍처와 데이터 흐름](docs/overview.md) |
+| 구조와 알고리즘 이해·수정 | [시스템 이해와 개발 가이드](docs/guide/index.md) |
 | 테스트 근거 | [테스트와 검증](docs/testing.md) |
 
 ## 핵심 기능
@@ -72,17 +77,17 @@ python src/teleop_app.py
 핵심 회귀:
 
 ```bash
-python tests/test_phase_6.py
-python tests/test_whole_body.py
+python3 tests/test_phase_6.py
+python3 tests/test_whole_body.py
 ```
 
 전체 회귀:
 
 ```bash
 for p in 0 1 2 3 4 5 6; do
-  python "tests/test_phase_${p}.py"
+  python3 "tests/test_phase_${p}.py"
 done
-python tests/test_whole_body.py
+python3 tests/test_whole_body.py
 ```
 
 문서:
@@ -101,14 +106,18 @@ src/
 ├── teleop_ui.py         # ImGui widget와 mode/target 입력
 ├── teleop_render.py     # GLFW/MuJoCo scene, camera, ImGuizmo, collision overlay
 ├── teleop_targets.py    # target 좌표 변환, marker, Bimanual state
-├── kinematics.py        # 공용 pose/FK/Jacobian과 collision distance gradient
-├── whole_body_ik.py     # bounded WBIK, joint/collision CBF, rigid grasp
+├── kinematics.py        # 단일 site FK/IK 공개 진입점
+├── kinematics_math.py   # 회전 행렬·쿼터니언 수학
+├── kinematic_tree.py    # MJCF 트리와 FK/Jacobian
+├── collision_kinematics.py # collision distance gradient
+├── bimanual_kinematics.py # 양손 rigid-grasp 상대 pose/Jacobian
+├── bounded_optimization.py # BVLS와 collision soft barrier solver
+├── whole_body_ik.py     # WBIK task 조립, 상태·bound·명령 관리
 ├── base_teleop.py       # BodyTwist, swerve IK/FK, reversal/steering controller
 ├── arm_control.py       # 팔 PD + gravity/Coriolis feedforward torque
 ├── grasp.py             # finger synergy와 contact-based grasp 판정
 └── ik.py                # 단일 팔 IK와 Phase 3/4 독립 회귀 경로
 ```
 
-코드를 처음 읽는다면 [동작 원리](docs/concepts.md) →
-[아키텍처와 데이터 흐름](docs/overview.md) →
-[코드 읽기 시작](docs/guide/index.md) 순서가 가장 짧습니다.
+코드를 처음 읽는다면 [시스템 이해와 개발 가이드](docs/guide/index.md)의 목적별
+읽기 경로에서 시작하는 것이 가장 짧습니다.

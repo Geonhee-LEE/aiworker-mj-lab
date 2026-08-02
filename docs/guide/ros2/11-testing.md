@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 11 — 테스트와 검증 철학 {: #part-11 }
 
@@ -38,11 +38,12 @@ python3 tests/test_whole_body.py
 ## 11.3 git tag = release 전략 {: #part-11-3 }
 
 Phase가 하나 끝날 때마다 `git tag phase-N`을 찍는다(3.2절 규칙 4).
-지금은 `0.0.1`/`0.0.2`/`0.1.0`/`1.0.0`/`1.1.0`/`1.1.1`/`1.2.0` 같은 semver 태그도 병행한다. 이건
+지금은 `0.0.1`/`0.0.2`/`0.1.0`/`1.0.0`/`1.1.0`/`1.1.1`/`1.2.0`/`1.3.0` 같은
+semver 태그도 병행한다. 이건
 ROS2 패키지의 릴리즈 태깅과 같은 개념이지만, CI가 자동으로 태그를 찍어주는
 게 아니라 사람이 "이 Phase의 성공 기준을 통과했다"고 판단한 시점에 수동으로
 찍는다.
 
 ---
 
-[← Part 10](./10-coordinate-frames.md) · [전체 안내](../ros2-guide.md) · [Part 12 →](./12-running.md)
+[← Part 10](./10-coordinate-frames.md) · [전체 안내](../index.md#ros2-reading) · [Part 12 →](./12-running.md)

@@ -1,5 +1,10 @@
 # DLS와 위치 우선 IK 수학
 
+!!! info "핵심 알고리즘 학습 순서 2/7"
+    [기구학 학습 안내](kinematics.md)의 Tree→FK→Quaternion→Collision 순서를 본 뒤,
+    이 문서에서 \(J\)의 역문제를 목적함수부터 관절 변화량까지 유도한다. 다음은
+    [단일 팔 IK 구현](ik.md)이다.
+
 이 페이지는 `src/kinematics.py`의 `KinematicsSolver.solve_pose()`를 읽을 때 가장
 헷갈리기 쉬운 두 질문에 답한다.
 
@@ -7,8 +12,8 @@
 2. 자세 보정은 어떻게 이미 맞춘 손 위치를 거의 망치지 않고 더할 수 있는가?
 
 설명은 7자유도 팔의 **한 solver iteration**을 기준으로 한다. 실제 클래스와 호출
-흐름은 [단일 팔 IK](ik.md), Jacobian과 좌표계 정의는
-[기구학과 충돌 거리](kinematics.md)를 참고한다.
+흐름은 [단일 팔 IK](ik.md), Jacobian 정의는 [FK와 Jacobian](forward-kinematics.md),
+자세 오차 좌표계는 [Quaternion 수학](quaternion-math.md)을 참고한다.
 
 !!! note "현재 텔레옵과 이 페이지의 관계"
     현재 텔레옵은 [`src/whole_body_ik.py`](whole_body_ik.md)의 bounded solver를
@@ -921,5 +926,21 @@ projector와 두 번째 pseudoinverse의 damping, rank 변화, joint limit를 �
 - damped projector의 위치 보존은 정확한 등식이 아니라 근사다.
 - clamp와 backtracking은 damping과 별개의 추가 안전층이다.
 
-다음으로 [단일 팔 IK 구현](ik.md)에서 이 식이 함수와 제어 흐름에 어떻게 대응하는지
-확인할 수 있다.
+## 코드와 검증 연결
+
+| 수학적 주장 | 코드 표현 | 검증 |
+|---|---|---|
+| \(J_pJ_p^T+\lambda^2I\)는 task-space DLS system이다 | `position_system` | Phase 3/4 무작위 IK 수렴률 |
+| 역행렬을 직접 만들 필요가 없다 | `np.linalg.solve(position_system, position_error)` | 동일 target의 잔여 위치 오차 |
+| \(N_{p,\lambda}J_R^Te_R\)는 위치 영향을 억제한 자세 방향이다 | `orientation_gradient - position_jacobian.T @ projected_gradient` | 위치·자세 동시 tolerance |
+| 한 iteration 관절 변화는 제한된다 | `np.clip(..., -max_joint_delta, max_joint_delta)` | 무작위 seed에서도 유한한 해 |
+| 실제 nonlinear 비용이 감소하는 step을 선택한다 | `step *= 0.5` backtracking | 100개 무작위 target 회귀 |
+
+```bash
+python3 tests/test_phase_3.py
+python3 tests/test_phase_4.py
+```
+
+[← 이전: Collision distance와 gradient](collision-kinematics.md) ·
+[전체 학습 순서](index.md#algorithm-learning-order) ·
+[다음: 단일 팔 IK →](ik.md)

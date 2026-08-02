@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 10 — 좌표계 완전 정리 {: #part-10 }
 
@@ -151,4 +151,4 @@ Euler 각의 축 결합(coupling) 때문에 "Roll"이라는 라벨이 실제로�
 
 ---
 
-[← Part 9](./09-teleoperation-ui.md) · [전체 안내](../ros2-guide.md) · [Part 11 →](./11-testing.md)
+[← Part 9](./09-teleoperation-ui.md) · [전체 안내](../index.md#ros2-reading) · [Part 11 →](./11-testing.md)

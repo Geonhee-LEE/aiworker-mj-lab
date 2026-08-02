@@ -49,8 +49,8 @@ printf '%s\n' "$XDG_SESSION_TYPE"
 - headless 서버에서는 GUI 대신 테스트만 실행할 수 있다.
 
 ```bash
-python tests/test_phase_6.py
-python tests/test_whole_body.py
+python3 tests/test_phase_6.py
+python3 tests/test_whole_body.py
 ```
 
 headless 테스트가 PASS인데 앱만 실패하면 IK/모델 문제가 아니라 window/context 문제로
@@ -81,7 +81,7 @@ marker는 target이고 손은 실제 물리 state다. 큰 target은 rate limit�
 모두 사용되는지 검사한다.
 
 ```bash
-python tests/test_whole_body.py
+python3 tests/test_whole_body.py
 ```
 
 출력의 `Whole-body solver gate`와 `Physical WBIK longitudinal/lateral/yaw`를 본다.
@@ -113,8 +113,8 @@ Arm-only solver gate: body_qdot_zero=True twist_zero=True ...: OK
 | 멈춘 뒤 원래 위치 쪽으로 수 cm 이상 복귀 | handover/rebase 문제 가능성 |
 
 ```bash
-python tests/test_phase_5.py
-python tests/test_whole_body.py
+python3 tests/test_phase_5.py
+python3 tests/test_whole_body.py
 ```
 
 `Manual release physical gate`에서 `base_stop`, `wheel_stop`, `return` 값을 확인한다.
@@ -182,13 +182,13 @@ and Capture Grasp가 활성
 
 | 실패 영역 | 명령 |
 |---|---|
-| 원본 모델/중력 안정성 | `python tests/test_phase_0.py` |
-| 손가락 collision | `python tests/test_phase_1.py` |
-| grasp/lift | `python tests/test_phase_2.py` |
-| 단일 팔 FK/IK | `python tests/test_phase_3.py` |
-| 전신 hold/pick | `python tests/test_phase_4.py` |
-| keyboard/swerve/제동 | `python tests/test_phase_5.py` |
-| UI target/Bimanual/toggle | `python tests/test_phase_6.py` |
-| WBIK/collision/mobile 통합 | `python tests/test_whole_body.py` |
+| 원본 모델/중력 안정성 | `python3 tests/test_phase_0.py` |
+| 손가락 collision | `python3 tests/test_phase_1.py` |
+| grasp/lift | `python3 tests/test_phase_2.py` |
+| 단일 팔 FK/IK | `python3 tests/test_phase_3.py` |
+| 전신 hold/pick | `python3 tests/test_phase_4.py` |
+| keyboard/swerve/제동 | `python3 tests/test_phase_5.py` |
+| UI target/Bimanual/toggle | `python3 tests/test_phase_6.py` |
+| WBIK/collision/mobile 통합 | `python3 tests/test_whole_body.py` |
 
 테스트 의미와 성공 기준은 [테스트와 검증](testing.md)에 정리되어 있다.

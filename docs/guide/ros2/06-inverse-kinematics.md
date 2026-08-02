@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 6 — 전신 IK와 단일 팔 DLS IK {: #part-6 }
 
@@ -20,7 +20,7 @@
 | 해결할 문제 | 양손 목표를 base·lift·양팔이 함께 추종하되 속도/관절 한계와 충돌 안전거리를 지켜야 한다. 단일 팔 회귀 경로에서는 특이점의 관절 step 폭발도 막아야 한다. |
 | 해결 방법 | 실시간 경로는 weighted bounded differential IK에 joint-limit bound와 collision barrier를 결합한다. legacy 단일 팔 경로는 위치 DLS 뒤에 자세 보정을 damped null-space로 투영한다. |
 | 사용 수식 | 실시간 경로는 먼저 \(\dot q_0=\arg\min_{\ell\le\dot q\le u}\|A\dot q-b\|^2\)를 푼다. 충돌 제약이 켜지면 \(\arg\min_{\ell\le\dot q\le u}\|\dot q-\dot q_0\|^2+\mu\|\max(0,h-G\dot q)\|^2\)로 안전 보정한다. 단일 팔 식은 [DLS와 위치 우선 IK 수학](../ik-math.md)에 목적함수부터 생략 없이 전개했다. |
-| 코드 구현 과정 | `TeleopApp._step_physics()` → `WholeBodyIK.solve()` → 공유 `KinematicTree`의 `KinematicsSolver.forward()` → `_bounded_least_squares()`/`_bounded_least_squares_with_barriers()` → base twist·lift 위치·양팔 위치 명령 반환 순서다. |
+| 코드 구현 과정 | `TeleopApp._step_physics()` → `WholeBodyIK.solve()` → 공유 `KinematicTree`의 `KinematicsSolver.forward()` → `bounded_optimization.bounded_least_squares()`/`bounded_least_squares_with_barriers()` → base twist·lift 위치·양팔 위치 명령 반환 순서다. rigid grasp를 쓰면 `bimanual_kinematics.rigid_grasp_task()`가 상대 task를 만든다. |
 | 수식 없이 사용하는 함수 | `rebase()`는 수동 주행 handover 기준을 재설정하고, `set_rigid_grasp()`는 양손 상대 pose를 캡처하며, `collision_distances()`는 모니터링/시각화용 거리 상태를 반환한다. |
 
 ## 6.1 이 프로젝트에 왜 MoveIt이 없는가 {: #part-6-1 }
@@ -110,7 +110,7 @@ J_{ji} = \frac{\partial x_j}{\partial q_i}
 관절을 얼마나(\(\Delta q\)) 바꿔야 하는가"를 거꾸로 구하는 것이 6.3의 DLS
 공식이다. 이 프로젝트는 `KinematicTree`가 MJCF에서 복사한 관절 구조를 따라가며
 각 slide/hinge 관절의 기하 Jacobian 열을 직접 만든다. 전체 전개와 코드 대응은
-[`src/kinematics.py` 가이드](../kinematics.md#direct-geometric-jacobian)에
+[FK와 geometric Jacobian 가이드](../forward-kinematics.md#geometric-jacobian)에
 있다.
 
 **null space(영공간, 커널)란**: 이 로봇 팔은 관절이 7개인데, 손끝 pose(위치
@@ -379,4 +379,4 @@ latency를 `tests/test_whole_body.py`에서 측정해 회귀를 막는다.
 
 ---
 
-[← Part 5](./05-hand-control.md) · [전체 안내](../ros2-guide.md) · [Part 7 →](./07-arm-torque-control.md)
+[← Part 5](./05-hand-control.md) · [전체 안내](../index.md#ros2-reading) · [Part 7 →](./07-arm-torque-control.md)

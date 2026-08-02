@@ -49,7 +49,7 @@ MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 import arm_control  # noqa: E402
 import base_teleop  # noqa: E402
 import grasp  # noqa: E402
-import ik  # noqa: E402
+import ik  # noqa: E402  # compatibility export used by phase tools
 import teleop_render  # noqa: E402
 import teleop_targets  # noqa: E402
 import teleop_ui  # noqa: E402
@@ -146,7 +146,7 @@ class TeleopApp:
 
     def __init__(self):
         self._setup_sim()
-        self._setup_render()
+        teleop_render.setup_render(self, WINDOW_W, WINDOW_H)
         self._setup_loop_state()
 
     # ------------------------------------------------------------------
@@ -322,10 +322,6 @@ class TeleopApp:
         # docstring for why it doesn't import teleop_app's constants instead).
         self.lift_range = LIFT_RANGE
         self.reset_can()
-
-    def _setup_render(self):
-        """MuJoCo 주 GLFW 창과 ImGui 플랫폼 창, 저수준 렌더 context를 만든다."""
-        teleop_render.setup_render(self, WINDOW_W, WINDOW_H)
 
     def _setup_loop_state(self):
         """메인 루프에서만 쓰는 상태(IK 웜스타트 값, 타이밍, 입력 헬퍼)."""
@@ -553,7 +549,7 @@ class TeleopApp:
             teleop_render.handle_camera_mouse(self, io)
             self._handle_edge_keys(io)
             drive_keys = self._read_drive_and_lift_keys(io)
-            self._draw_ui_panel()
+            teleop_ui.draw_panel(self)
             self._step_physics(drive_keys)
             teleop_render.render_scene(self)
             teleop_render.end_frame(self, t0)
@@ -602,13 +598,6 @@ class TeleopApp:
             self.targets["lift"] = float(np.clip(
                 self.targets["lift"] + lift_dir * 0.3 * self.frame_dt, LIFT_RANGE[0], LIFT_RANGE[1]))
         return drive_keys
-
-    def _draw_ui_panel(self):
-        """상태 창과 탭형 Control/Diagnostics 워크스페이스를 그린다.
-        실제 창 배치는 teleop_ui.draw_panel로 옮겼다(그 모듈 docstring 참고) --
-        여기서 바뀌는 값은 전부 self.targets로만 들어가고, 물리 반영은
-        _step_physics에서 이뤄진다."""
-        teleop_ui.draw_panel(self)
 
     def _read_base_feedback(self):
         """Read wheel and chassis feedback used by manual/base handover control."""

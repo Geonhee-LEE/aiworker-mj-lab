@@ -197,8 +197,8 @@ marker에서 translation 화살표 또는 rotation ring을 drag한다. gizmo는 
 ## 테스트와 문서 빌드
 
 ```bash
-python tests/test_phase_6.py
-python tests/test_whole_body.py
+python3 tests/test_phase_6.py
+python3 tests/test_whole_body.py
 mkdocs build --strict
 ```
 

@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 12 — 직접 실행해보기 {: #part-12 }
 
@@ -27,4 +27,4 @@ goal)을 고른 뒤 화면 안 3D gizmo를 드래그하면 그 손의 목표 pos
 
 ---
 
-[← Part 11](./11-testing.md) · [전체 안내](../ros2-guide.md) · [Part 13 →](./13-bug-cases.md)
+[← Part 11](./11-testing.md) · [전체 안내](../index.md#ros2-reading) · [Part 13 →](./13-bug-cases.md)

@@ -46,20 +46,28 @@ class ArmTorqueController:
 
     def __init__(self, model, joint_names, kp=600.0, kd=40.0):
         self.model = model
-        self.joint_ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n) for n in joint_names]
-        self.qpos_adrs = [model.jnt_qposadr[j] for j in self.joint_ids]
-        self.dof_ids = [model.jnt_dofadr[j] for j in self.joint_ids]
-        self.actuator_ids = []
+        joint_names = tuple(joint_names)
+        self.joint_ids = np.array([
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            for name in joint_names
+        ], dtype=int)
+        self.qpos_adrs = np.asarray(model.jnt_qposadr[self.joint_ids], dtype=int)
+        self.dof_ids = np.asarray(model.jnt_dofadr[self.joint_ids], dtype=int)
+        actuator_ids = []
         # 관절 이름 -> 그 관절을 구동하는 motor actuator id를 미리 찾아 캐싱
         # (매 스텝 다시 찾지 않도록 __init__에서 한 번만 수행).
-        for n in joint_names:
-            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)
+        for name, jid in zip(joint_names, self.joint_ids):
             aid = mj_util.find_actuator_for_joint(model, jid)
             if aid is None:
-                raise ValueError(f"no motor actuator found for joint {n}")
-            self.actuator_ids.append(aid)
-        self.kp = kp
-        self.kd = kd
+                raise ValueError(f"no motor actuator found for joint {name}")
+            actuator_ids.append(aid)
+        self.actuator_ids = np.asarray(actuator_ids, dtype=int)
+        self.ctrl_lower = np.asarray(
+            model.actuator_ctrlrange[self.actuator_ids, 0], dtype=float)
+        self.ctrl_upper = np.asarray(
+            model.actuator_ctrlrange[self.actuator_ids, 1], dtype=float)
+        self.kp = float(kp)
+        self.kd = float(kd)
 
     def apply(self, data, q_des, kp_scale=1.0):
         """Compute and write torques for this step. Reads data.qpos/qvel/qfrc_bias (state
@@ -68,12 +76,10 @@ class ArmTorqueController:
         # 차이를 PD로 보정하되, qfrc_bias(중력+코리올리+원심력)를 더해 "지금 이
         # 자세를 버티는 데 필요한 힘"을 미리 상쇄해준다 -- 이게 정적 처짐을 없애는
         # 핵심이고, kp를 올리는 것과는 다른 얘기다.
-        q = np.array([data.qpos[a] for a in self.qpos_adrs])
+        q = data.qpos[self.qpos_adrs]
         qd = data.qvel[self.dof_ids]
         qfrc_bias = data.qfrc_bias[self.dof_ids]
         tau = qfrc_bias + self.kp * kp_scale * (np.asarray(q_des) - q) - self.kd * qd
-        # 액추에이터의 ctrlrange(토크 한계)를 넘지 않도록 클램프 후 기록.
-        for aid, t in zip(self.actuator_ids, tau):
-            lo, hi = self.model.actuator_ctrlrange[aid]
-            data.ctrl[aid] = np.clip(t, lo, hi)
+        # 모든 팔 actuator의 범위를 초기화 때 한 번만 모아 두고 일괄 기록한다.
+        data.ctrl[self.actuator_ids] = np.clip(tau, self.ctrl_lower, self.ctrl_upper)
         return tau

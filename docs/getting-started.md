@@ -38,8 +38,8 @@ python -c "import mujoco, numpy, glfw; from imgui_bundle import imgui; print('ru
 창을 띄우기 전에 모델과 핵심 알고리즘이 동작하는지 확인한다.
 
 ```bash
-python tests/test_phase_6.py
-python tests/test_whole_body.py
+python3 tests/test_phase_6.py
+python3 tests/test_whole_body.py
 ```
 
 마지막 줄이 각각 `PASS`면 marker/UI 상태와 whole-body/mobile/collision 알고리즘이

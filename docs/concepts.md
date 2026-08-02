@@ -81,6 +81,8 @@ ON/OFF 전환 시 앱은 world pose를 먼저 저장하고 새 좌표계 값으�
 | FK mode | J1~J7 slider | 지정한 팔 관절 목표 | 해당 팔 Cartesian solver 제외 |
 | `ik.py` | 한 손 world pose | 한 팔 7개 관절 위치 | Phase 3/4 독립 회귀와 단일 팔 solver |
 | `whole_body_ik.py` | 양손 world pose | base/lift/양팔 differential command | 현재 teleop IK 경로 |
+| `bimanual_kinematics.py` | 양손 pose/Jacobian | rigid-grasp 상대 task | WBIK 순수 계산 보조 |
+| `bounded_optimization.py` | task 행렬과 box/barrier | bounded 최소제곱 해 | WBIK 순수 수치 solver |
 
 여기서 FK는 forward kinematics 계산 자체와 UI의 `FK mode`라는 표현이 겹친다. UI의
 FK mode는 “관절 slider를 직접 목표로 사용한다”는 뜻이고, 수학적 FK 계산은

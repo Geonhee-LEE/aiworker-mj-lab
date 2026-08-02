@@ -10,7 +10,7 @@ FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 ROS-free 텔
 </figure>
 
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black?logo=github)](https://github.com/ggh-png/ffw-sh5-grasp)
-[![Release](https://img.shields.io/badge/release-1.2.0-indigo)](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.2.0)
+[![Release](https://img.shields.io/badge/release-1.3.0-indigo)](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.3.0)
 
 ## 처음이라면 이 순서로 읽기
 
@@ -32,21 +32,18 @@ FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 ROS-free 텔
     - [화면과 조작](run.md)
     - [모드 선택](control-modes.md)
 
-=== "코드를 수정하고 싶다"
+=== "구조와 코드를 이해하고 싶다"
 
-    먼저 target, command, physics의 차이를 이해한 뒤 코드 흐름을 따라간다.
+    시스템 개념부터 모듈 책임과 수정 경로까지 하나의 안내에서 시작한다.
 
-    - [동작 원리](concepts.md)
-    - [아키텍처와 데이터 흐름](overview.md)
-    - [코드 읽기 시작](guide/index.md)
-    - [테스트와 검증](testing.md)
+    - [시스템 이해와 개발 가이드](guide/index.md)
 
 === "ROS2 경험으로 이해하고 싶다"
 
     기본 구조를 먼저 본 다음 ROS2 구성요소와 대응시킨다.
 
     - [아키텍처와 데이터 흐름](overview.md)
-    - [ROS2 관점의 시스템 해설](guide/ros2-guide.md)
+    - [통합 가이드의 ROS2 읽기 경로](guide/index.md#ros2-reading)
 
 ## 한눈에 보는 동작 흐름
 
@@ -88,14 +85,32 @@ command를 계산하고, MuJoCo physics가 다음 state를 만든다.
     Collision avoidance는 가까운 장애물에 반응하는 안전 계층이지 경로 플래너가
     아니다. Whole-body OFF는 자동 IK의 base/lift 참여만 끄며 수동 주행까지 막지 않는다.
 
-## Demo
+## 데모 영상
+
+### Whole-body Control
 
 <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
   <iframe
-    src="[https://www.youtube.com/watch?v=MzO1GpUfCd8&list=PLWyQPsEn5Atg&index=4](https://youtu.be/MzO1GpUfCd8?si=5XhxNuoJetenGAAw)"
-    title="ffw-sh5-grasp demo"
+    src="https://www.youtube.com/embed/MzO1GpUfCd8?list=PLWyQPsEn5Atg"
+    title="ffw-sh5-grasp Whole-body Control 데모"
     style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
     allowfullscreen>
   </iframe>
 </div>
+
+[YouTube에서 Whole-body Control 데모 보기](https://www.youtube.com/watch?v=MzO1GpUfCd8&list=PLWyQPsEn5Atg)
+
+### Whole-body 미사용 (Arm-only)
+
+<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
+  <iframe
+    src="https://www.youtube.com/embed/2LV_RsAGdz8?list=PLWyQPsEn5Atg&index=2"
+    title="ffw-sh5-grasp Whole-body 미사용 데모"
+    style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    allowfullscreen>
+  </iframe>
+</div>
+
+[YouTube에서 Whole-body 미사용 데모 보기](https://www.youtube.com/watch?v=2LV_RsAGdz8&list=PLWyQPsEn5Atg&index=2)

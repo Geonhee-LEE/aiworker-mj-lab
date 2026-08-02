@@ -100,6 +100,7 @@ CAN_GEOM_NAME = "can_geom"
 # first time it's resolved removes the repeat cost without changing any behavior -- keyed by
 # id(model) since tests construct a fresh MjModel per test file.
 _JOINT_ACTUATOR_CACHE = {}
+_COMMAND_COEFFICIENT_CACHE = {}
 
 
 def _validate_side(side):
@@ -127,36 +128,77 @@ def _resolve_joint_actuator(model, joint_name):
     return jid, aid
 
 
-def _ramp_value(lo, hi, frac, open_at_hi=False):
-    """관절 range의 [lo, hi] 구간을 frac(0~1) 비율로 보간한다.
+def _command_coefficients(model, side):
+    """Build ``ctrl = offset + grasp*g + thumb*t`` for one hand once per model."""
+    key = (id(model), side)
+    cached = _COMMAND_COEFFICIENT_CACHE.get(key)
+    if cached is not None:
+        return cached
 
-    open_at_hi=False면 lo가 "펼침"(frac=0 -> lo, frac=1 -> hi), True면 그 반대
-    (frac=0 -> hi, frac=1 -> lo) -- 왼손 엄지처럼 range 자체가 미러링돼 "펼침"이
-    hi 쪽인 관절에 쓴다(THUMB_CURL_OPEN_AT_HI 참고).
-    """
-    if open_at_hi:
-        return hi - frac * (hi - lo)
-    return lo + frac * (hi - lo)
+    actuator_ids = []
+    offsets = []
+    grasp_slopes = []
+    thumb_slopes = []
 
+    def add(joint_name, offset, grasp_slope=0.0, thumb_slope=0.0):
+        joint_id, actuator_id = _resolve_joint_actuator(model, joint_name)
+        if joint_id == -1 or actuator_id is None:
+            raise ValueError(f"no actuated joint found for {joint_name}")
+        actuator_ids.append(actuator_id)
+        offsets.append(offset)
+        grasp_slopes.append(grasp_slope)
+        thumb_slopes.append(thumb_slope)
 
-def _set_joint_ctrl(model, data, joint_name, value):
-    """관절 이름으로 바로 목표값(ctrl)을 써주는 편의 함수.
+    for joint_name, value in THUMB_PRESHAPE[side].items():
+        add(joint_name, value)
+    add(
+        f"finger_{side}_joint2",
+        THUMB_YAW_REST[side],
+        thumb_slope=THUMB_YAW_CURL[side] - THUMB_YAW_REST[side],
+    )
 
-    주의: 여기선 aid가 None인지 확인하지 않는다 -- 이 함수를 호출하는 쪽(엄지/검지/
-    중지 루프)은 항상 actuator가 존재함을 전제하기 때문. actuator가 없을 수도 있는
-    약지/새끼 루프는 apply_grasp 안에서 직접 _resolve_joint_actuator를 불러 None을
-    가드한다(data.ctrl[aid]에 aid=None이 들어가면 numpy가 배열 전체에 broadcast
-    대입해버리는 사고가 나므로 -- 아래 apply_grasp 주석 참고).
-    """
-    _jid, aid = _resolve_joint_actuator(model, joint_name)
-    data.ctrl[aid] = value
+    for joint_name in THUMB_CURL_JOINTS[side]:
+        joint_id, _actuator_id = _resolve_joint_actuator(model, joint_name)
+        lo, hi = model.jnt_range[joint_id]
+        span = hi - lo
+        if THUMB_CURL_OPEN_AT_HI[side]:
+            offset = hi - THUMB_OPEN_FRAC * span
+            slope = -(1.0 - THUMB_OPEN_FRAC) * span
+        else:
+            offset = lo + THUMB_OPEN_FRAC * span
+            slope = (1.0 - THUMB_OPEN_FRAC) * span
+        add(joint_name, offset, thumb_slope=slope)
 
+    for finger_joints in FINGER_CURL_JOINTS[side].values():
+        for joint_name in finger_joints:
+            joint_id, _actuator_id = _resolve_joint_actuator(model, joint_name)
+            lo, hi = model.jnt_range[joint_id]
+            span = hi - lo
+            add(
+                joint_name,
+                lo + FINGER_OPEN_FRAC * span,
+                grasp_slope=(1.0 - FINGER_OPEN_FRAC) * span,
+            )
 
-def _set_joint_fraction(model, data, joint_name, fraction, *, open_at_hi=False):
-    """Interpolate an actuated joint across its configured range."""
-    joint_id, actuator_id = _resolve_joint_actuator(model, joint_name)
-    lo, hi = model.jnt_range[joint_id]
-    data.ctrl[actuator_id] = _ramp_value(lo, hi, fraction, open_at_hi)
+    for joint_name in RING_PINKY_CURL_JOINTS[side]:
+        joint_id, actuator_id = _resolve_joint_actuator(model, joint_name)
+        if joint_id == -1 or actuator_id is None:
+            continue
+        lo, hi = model.jnt_range[joint_id]
+        add(
+            joint_name,
+            lo,
+            grasp_slope=RING_PINKY_MAX_FRAC * (hi - lo),
+        )
+
+    cached = tuple(np.asarray(values, dtype=dtype) for values, dtype in (
+        (actuator_ids, int),
+        (offsets, float),
+        (grasp_slopes, float),
+        (thumb_slopes, float),
+    ))
+    _COMMAND_COEFFICIENT_CACHE[key] = cached
+    return cached
 
 
 def apply_grasp(model, data, grasp: float, thumb: float, side: str = "r"):
@@ -171,54 +213,9 @@ def apply_grasp(model, data, grasp: float, thumb: float, side: str = "r"):
     _validate_side(side)
     grasp = float(np.clip(grasp, 0.0, 1.0))
     thumb = float(np.clip(thumb, 0.0, 1.0))
-    finger_fraction = FINGER_OPEN_FRAC + grasp * (1.0 - FINGER_OPEN_FRAC)
-    thumb_fraction = THUMB_OPEN_FRAC + thumb * (1.0 - THUMB_OPEN_FRAC)
-
-    # 1) 엄지 CMC는 항상 고정 pre-shape (grasp/thumb 스칼라와 무관).
-    for name, value in THUMB_PRESHAPE[side].items():
-        _set_joint_ctrl(model, data, name, value)
-    # MCP yaw는 thumb 스칼라로 REST(안전, 접근 중에도 캔을 안 침)에서
-    # CURL(사용자가 확인한, 손바닥 쪽으로 접힌 모습)까지 램프한다 -- 위 THUMB_YAW_REST/
-    # THUMB_YAW_CURL 주석 참고.
-    yaw_joint = f"finger_{side}_joint2"
-    yaw_value = THUMB_YAW_REST[side] + thumb * (THUMB_YAW_CURL[side] - THUMB_YAW_REST[side])
-    _set_joint_ctrl(model, data, yaw_joint, yaw_value)
-
-    # 2) 엄지 mcp_pitch/ip -- thumb 스칼라를 [THUMB_OPEN_FRAC, 1.0] 구간에 매핑.
-    #    손별로 range의 "편 상태"가 lo/hi 중 어느 쪽인지 다르므로(THUMB_CURL_OPEN_AT_HI)
-    #    보간 방향을 뒤집어준다.
-    for joint_name in THUMB_CURL_JOINTS[side]:
-        _set_joint_fraction(
-            model,
-            data,
-            joint_name,
-            thumb_fraction,
-            open_at_hi=THUMB_CURL_OPEN_AT_HI[side],
-        )
-
-    # 3) 검지/중지 pip/dip/tip -- grasp 스칼라를 [FINGER_OPEN_FRAC, 1.0] 구간에 매핑.
-    #    실제로 캔을 쥐는 3점 파지(엄지+검지+중지)의 핵심 구동부.
-    for finger_joints in FINGER_CURL_JOINTS[side].values():
-        for joint_name in finger_joints:
-            _set_joint_fraction(model, data, joint_name, finger_fraction)
-
-    # 4) 약지/새끼 pip/dip/tip -- 실제 grasp에는 참여하지 않고, grasp 스칼라에 비례해
-    #    자기 range의 RING_PINKY_MAX_FRAC까지만 코스메틱하게 굽는다(0=rest에서 완전히
-    #    펴짐, grasp=1에서 0.35까지).
-    for joint_name in RING_PINKY_CURL_JOINTS[side]:
-        # jid can be -1 (hand_only.xml/arm_hand.xml have no left hand at all) and aid can be
-        # None even when jid is valid (those two models still hard-lock ring/pinky pip/dip/
-        # tip at range="0 0" with no actuator, unlike full_scene.xml). Must check both
-        # explicitly: data.ctrl[None] silently broadcasts to the *entire* ctrl array instead
-        # of raising (the exact bug this project has hit more than once).
-        # (한글) jid/aid가 없을 수 있는 모델(hand_only/arm_hand)이 있으므로 반드시 둘 다
-        # None/-1 여부를 확인하고 건너뛴다 -- data.ctrl[None]은 에러 없이 배열 전체를
-        # 덮어써버리는 numpy의 함정이라 이 프로젝트에서 세 번이나 반복 재발했던 버그.
-        jid, aid = _resolve_joint_actuator(model, joint_name)
-        if jid == -1 or aid is None:
-            continue
-        lo, hi = model.jnt_range[jid]
-        data.ctrl[aid] = _ramp_value(lo, hi, grasp * RING_PINKY_MAX_FRAC)
+    actuator_ids, offsets, grasp_slopes, thumb_slopes = _command_coefficients(
+        model, side)
+    data.ctrl[actuator_ids] = offsets + grasp * grasp_slopes + thumb * thumb_slopes
 
 
 def get_finger_can_contacts(model, data, side: str = "r"):

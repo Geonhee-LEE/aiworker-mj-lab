@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 14 — 용어와 개념 찾아보기 {: #part-14 }
 
@@ -37,4 +37,4 @@
 
 ---
 
-[← Part 13](./13-bug-cases.md) · [전체 안내](../ros2-guide.md)
+[← Part 13](./13-bug-cases.md) · [전체 안내](../index.md#ros2-reading)

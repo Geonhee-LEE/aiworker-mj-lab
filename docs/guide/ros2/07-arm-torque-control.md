@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 7 — 팔 토크 제어: `src/arm_control.py` {: #part-7 }
 
@@ -263,4 +263,4 @@ def apply(self, data, q_des, kp_scale=1.0):
 
 ---
 
-[← Part 6](./06-inverse-kinematics.md) · [전체 안내](../ros2-guide.md) · [Part 8 →](./08-mobile-base.md)
+[← Part 6](./06-inverse-kinematics.md) · [전체 안내](../index.md#ros2-reading) · [Part 8 →](./08-mobile-base.md)

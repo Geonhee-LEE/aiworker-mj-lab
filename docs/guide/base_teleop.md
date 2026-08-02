@@ -1,5 +1,10 @@
 # `src/base_teleop.py`
 
+!!! info "핵심 알고리즘 학습 순서 6/7"
+    [전신 IK](whole_body_ik.md)가 반환한 `BodyTwist`를 실제 세 wheel module 명령으로
+    바꾸는 단계다. 다음은 손 actuator와 접촉 판정을 다루는
+    [손 파지와 접촉 판정](grasp.md)이다.
+
 body-frame 속도 명령을 ROBOTIS AI Worker식 스워브 바퀴 명령으로 변환한다. 키보드는
 가능한 입력원 중 하나일 뿐이며 whole-body IK도 같은 `BodyTwist` 경로를 사용한다.
 
@@ -13,6 +18,17 @@ body-frame 속도 명령을 ROBOTIS AI Worker식 스워브 바퀴 명령으로 �
 | 제한 조향 | 런타임 ±2π 범위에서 `angle + k*pi` 동치 상태를 비교해 가장 가까운 상태 선택 |
 | 반전 처리 | 움직이는 바퀴는 감속-조향-가속, 이미 멈춘 바퀴는 즉시 방향 전환 |
 | 안전 처리 | command-trajectory steering rate limit, 전체 module alignment gating, 비율 보존 전역 wheel saturation |
+
+## 기호와 좌표계
+
+| 기호 | 단위·frame | 코드 표현 |
+|---|---|---|
+| \((v_x,v_y,\omega)\) | m/s, m/s, rad/s · robot body frame | `BodyTwist(vx, vy, wz)` |
+| \((x_i,y_i)\) | m · base 중심에서 wheel module까지 | `WHEEL_POS[name]` |
+| \((v_{i,x},v_{i,y})\) | m/s · module 위치의 body-frame 속도 | `wheel_vx`, `wheel_vy` |
+| \(\theta_i\) | rad · steering joint 목표 | `steer` |
+| \(\dot\phi_i\) | rad/s · wheel drive 목표 | `wheel_speed` |
+| \(r\) | m · wheel 반지름 | `WHEEL_RADIUS` |
 
 ## 수식
 
@@ -53,6 +69,21 @@ s_i = \sqrt{v_{i,x}^2+v_{i,y}^2}, \quad
 런타임 조향 범위는 공식 AI Worker 설정과 같은 약 ±2π다. 그래도 알고리즘은 좁은
 범위에도 동작하도록 후보를 먼저 범위로 거른다. `test_whole_body.py`는 별도의 ±1.58
 rad kinematics를 주입해 100° 요청이 -80° 조향 + 역구동으로 표현되는지도 확인한다.
+
+## 수식에서 코드까지
+
+| 수식 단계 | 코드 표현 | 위치 |
+|---|---|---|
+| \(v_{i,x}=v_x-\omega y_i\) | `wheel_vx = twist.vx - twist.wz * module_y` | `SwerveKinematics.inverse()` |
+| \(v_{i,y}=v_y+\omega x_i\) | `wheel_vy = twist.vy + twist.wz * module_x` | `SwerveKinematics.inverse()` |
+| \(\theta_i=\operatorname{atan2}(v_{i,y},v_{i,x})\) | `math.atan2(wheel_vy, wheel_vx)` | `inverse()` |
+| \(\dot\phi_i=\|v_i\|/r\) | `linear_speed / self.wheel_radius` | `inverse()` |
+| \(A[v_x,v_y,\omega]^T=b\) | `np.linalg.lstsq(..., rcond=1e-6)` | `SwerveKinematics.forward()` |
+| \(\theta_i+k\pi\), drive 부호 반전 | `_nearest_feasible_state()` | feasible steering 선택 |
+
+위 기하식은 wheel 위치와 반지름에서 직접 나온다. 반면 acceleration limit, alignment
+threshold, reversal hysteresis는 actuator 지연과 접촉 안정성을 위한 제어 parameter이며
+기하식에서 증명되는 값이 아니다.
 
 ## 응답성과 안정성
 
@@ -139,3 +170,17 @@ flowchart TD
 바퀴 원통과 베이스의 보이지 않는 box가 약 25 mm 겹쳐 차체 회전을 막던 모델 내부
 접촉이었기 때문이다. `test_phase_5.py`가 이 각도에서 내부 접촉 0건을 먼저 검사한 뒤
 strafe, pure yaw, translation+yaw, 전후 반전을 실제 wheel-floor contact로 반복한다.
+
+## 검증
+
+```bash
+python3 tests/test_phase_5.py
+python3 tests/test_whole_body.py
+```
+
+Phase 5는 실제 wheel-ground contact 동작을, Whole-body 회귀는 inverse↔forward 무작위
+왕복, 좁은 steering range의 동치각, 전역 saturation과 수동/WBIK handover를 검사한다.
+
+[← 이전: 팔 토크 제어](arm_control.md) ·
+[전체 학습 순서](index.md#algorithm-learning-order) ·
+[다음: 손 파지와 접촉 판정 →](grasp.md)

@@ -1,5 +1,41 @@
 # 릴리스 기록
 
+## 1.3.0 — Modular Kinematics & Unified Developer Guide
+
+2026-08-02 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.3.0)
+
+### 구조와 코드
+
+- `kinematics.py`를 공개 facade와 단일 팔 solver에 집중시키고, 회전 수학,
+  MJCF tree/FK/Jacobian, collision distance gradient를 독립 모듈로 분리
+- `whole_body_ik.py`에서 BVLS/soft barrier와 양손 rigid-grasp 순수 계산을 분리
+- `KinematicTree`를 양손 solver가 공유해 모델 topology 중복 해석 제거
+- 기존 `kinematics` 공개 import와 `InverseKinematics` 호환 경로 유지
+- 사용하지 않는 wrapper·helper와 중복 ImGui 런타임 상태 파일 정리
+- 핵심 제어 흐름과 복잡한 수치 처리에 한국어 주석 보강
+
+### 문서와 학습 경로
+
+- 시스템 이해, 개발자 가이드와 ROS2 관점을 하나의 내비게이션으로 통합
+- Tree → FK/Jacobian → Quaternion → Collision → DLS → IK → WBIK 순서로 재구성
+- 기구학 tree를 만드는 이유부터 FK/Jacobian과 collision gradient까지 수식·코드·테스트 연결
+- 상황별 공개 함수, 반환값과 다음 호출을 찾는 API 함수 지도 추가
+- 기반 지식은 기존 상세 문서 링크로 연결하고 구현된 수학의 완주 범위 명시
+- 모방학습 episode/step schema, replay, shadow mode, sim-to-real 안전 절차 가이드 추가
+- Whole-body/Arm-only 데모 영상을 올바른 YouTube 링크로 교체
+
+### 검증
+
+- Phase 0–6 전체 통과
+- Whole-Body 통합 테스트 통과
+- FK/Jacobian 중앙 유한차분 최대 오차 `2.33e-10`
+- collision distance gradient 중앙 유한차분 최대 오차 `7.39e-11`
+- 단일 팔 무작위 IK 100/100 수렴
+- 무작위 WBIK 40/40 descent·read-only·bound 통과
+- `mkdocs build --strict`와 diff whitespace 검사 통과
+
+전체 diff: [1.2.0...1.3.0](https://github.com/ggh-png/ffw-sh5-grasp/compare/1.2.0...1.3.0)
+
 ## 1.2.0 — Custom Kinematics & Compact Multi-Viewport UI
 
 2026-07-23 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.2.0)

@@ -18,8 +18,8 @@
 ## 빠른 핵심 검증
 
 ```bash
-python tests/test_phase_6.py
-python tests/test_whole_body.py
+python3 tests/test_phase_6.py
+python3 tests/test_whole_body.py
 mkdocs build --strict
 ```
 
@@ -30,9 +30,9 @@ collision, 스워브와 실제 wheel-ground 추종을 빠르게 확인한다.
 
 ```bash
 for p in 0 1 2 3 4 5 6; do
-  python "tests/test_phase_${p}.py"
+  python3 "tests/test_phase_${p}.py"
 done
-python tests/test_whole_body.py
+python3 tests/test_whole_body.py
 mkdocs build --strict
 ```
 
@@ -52,7 +52,7 @@ mkdocs build --strict
 | Phase 6 | marker, gizmo, Bimanual, mode toggle | pose round-trip과 ON/OFF 불변성 |
 | Whole-body | BVLS, joint/collision CBF, rigid grasp, mobile WBIK | 수치/물리/latency 통합 gate |
 
-## 1.2.0 핵심 회귀가 증명하는 것
+## 1.3.0 핵심 회귀가 증명하는 것
 
 ### Custom kinematics hard gate
 

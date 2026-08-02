@@ -1,5 +1,10 @@
 # `src/arm_control.py`
 
+!!! info "핵심 알고리즘 학습 순서 5/7"
+    [전신 IK](whole_body_ik.md)가 반환한 팔 목표각을 실제 actuator torque로 바꾸는
+    단계다. 다음은 같은 전신 해의 base twist를 wheel 명령으로 바꾸는
+    [모바일 스워브 제어](base_teleop.md)다.
+
 팔 관절을 torque motor로 구동하는 제어기.
 
 ## 역할
@@ -33,9 +38,9 @@ flowchart TD
 `Kp` 경로는 목표로 끌어당기고, `Kd` 경로는 움직임을 감쇠하며, bias 경로는 로봇을
 현재 자세에 그대로 두어도 필요한 토크를 미리 보탠다.
 
-\(h(q,\dot q)\)는 MuJoCo가 매 스텝 계산해주는 `qfrc_bias`(중력+코리올리+원심력을
-같은 MuJoCo 모델 안에서 계산된 bias를 보상하는 feedforward 항 — 코리올리/원심력은 관절 속도들의 곱에 비례하는
-힘이라 관절이 멈추면 0이 된다), \(K_p\)/\(K_d\)는 스칼라 게인(`kp=600.0`,
+\(h(q,\dot q)\)는 MuJoCo가 같은 모델에서 매 step 계산하는 `qfrc_bias`, 즉
+중력·코리올리·원심력 bias다. 코리올리·원심력은 관절 속도의 곱에 비례하므로 관절이
+멈추면 0이 된다. \(K_p\)/\(K_d\)는 스칼라 gain(`kp=600.0`,
 `kd=40.0`)을 모든 관절에 동일하게 적용한다. 계산 결과는 `actuator_ctrlrange`로
 clamp한 뒤 `data.ctrl`에 쓴다.
 
@@ -46,6 +51,17 @@ clamp한 뒤 `data.ctrl`에 쓴다.
 조건의 양변에서 그 항이 상쇄돼 \(K_p(q_{des}-q)=0\), 즉 유한한 \(K_p\)에서도
 actuator 포화·모델 오차·외란이 없는 이상 조건에서 오차가 0인 평형점으로 바뀐다. 유도 과정은
 [팔 토크 제어 해설의 PD와 feedforward](ros2/07-arm-torque-control.md#part-7-2) 참고.
+
+## 수식에서 코드까지
+
+| 수식 항 | `ArmTorqueController.apply()` 표현 | 데이터 |
+|---|---|---|
+| \(q_{des}-q\) | `np.asarray(q_des) - q` | `q_des`, `data.qpos` |
+| \(K_p(q_{des}-q)\) | `self.kp * kp_scale * (...)` | position feedback |
+| \(-K_d\dot q\) | `-self.kd * qd` | `data.qvel` |
+| \(h(q,\dot q)\) | `qfrc_bias` | `data.qfrc_bias` |
+| actuator 한계 | `np.clip(tau, ctrl_lower, ctrl_upper)` | `model.actuator_ctrlrange` |
+| \(\tau\) 적용 | `data.ctrl[self.actuator_ids] = ...` | motor actuator |
 
 ## 클래스
 
@@ -89,3 +105,17 @@ self.ctrl_l.apply(data, self.q_des_l)
 | `data.qpos`, `data.qvel`, `data.qfrc_bias` | `data.ctrl[arm_motor_actuator]` |
 
 `data.qpos`를 직접 수정하지 않는다.
+
+## 검증
+
+`tests/test_phase_3.py`는 단일 팔 pick에서 IK 목표가 실제 torque 구동으로 추종되는지,
+`tests/test_phase_4.py`는 양팔 모델에서 같은 제어 경로가 유지되는지 확인한다.
+
+```bash
+python3 tests/test_phase_3.py
+python3 tests/test_phase_4.py
+```
+
+[← 이전: 전신 IK와 충돌 회피](whole_body_ik.md) ·
+[전체 학습 순서](index.md#algorithm-learning-order) ·
+[다음: 모바일 스워브 제어 →](base_teleop.md)

@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 13 — 버그 사례집 (지뢰찾기 지도) {: #part-13 }
 
@@ -83,4 +83,4 @@ auto-inertia, auto-limits 등)에 기대는 가정은, 실제로 렌더/테스�
 
 ---
 
-[← Part 12](./12-running.md) · [전체 안내](../ros2-guide.md) · [Part 14 →](./14-glossary.md)
+[← Part 12](./12-running.md) · [전체 안내](../index.md#ros2-reading) · [Part 14 →](./14-glossary.md)

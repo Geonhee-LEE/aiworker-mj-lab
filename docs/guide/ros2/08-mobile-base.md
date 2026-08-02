@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 8 — 모바일 베이스: `src/base_teleop.py` {: #part-8 }
 
@@ -211,4 +211,4 @@ translation+yaw, 전후 반전을 실제 wheel-floor contact로 실행한다. pu
 
 ---
 
-[← Part 7](./07-arm-torque-control.md) · [전체 안내](../ros2-guide.md) · [Part 9 →](./09-teleoperation-ui.md)
+[← Part 7](./07-arm-torque-control.md) · [전체 안내](../index.md#ros2-reading) · [Part 9 →](./09-teleoperation-ui.md)

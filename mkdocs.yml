@@ -86,44 +86,46 @@ nav:
         - 화면과 조작: run.md
         - 모드 선택: control-modes.md
         - 문제 해결: troubleshooting.md
-    - 시스템 이해:
-        - 동작 원리: concepts.md
-        - 아키텍처와 데이터 흐름: overview.md
-        - 테스트와 검증: testing.md
-    - 개발자 가이드:
-        - 코드 읽기 시작: guide/index.md
-        - MuJoCo 기본 용어: guide/00-basics.md
+    - 시스템 이해와 개발:
+        - 전체 안내: guide/index.md
+        - 시스템 기초:
+            - 동작 원리: concepts.md
+            - 아키텍처와 데이터 흐름: overview.md
+            - MuJoCo 기본 용어: guide/00-basics.md
+            - 테스트와 검증: testing.md
         - 핵심 알고리즘:
-            - 기구학과 충돌 거리: guide/kinematics.md
-            - 전신 IK와 충돌 회피: guide/whole_body_ik.md
-            - 모바일 스워브 제어: guide/base_teleop.md
+            - 기구학 기초:
+                - 전체 안내: guide/kinematics.md
+                - Kinematic Tree: guide/kinematic-tree.md
+                - FK와 Jacobian: guide/forward-kinematics.md
+                - Quaternion과 자세 오차: guide/quaternion-math.md
+                - Collision distance와 gradient: guide/collision-kinematics.md
             - DLS와 위치 우선 IK 수학: guide/ik-math.md
             - 단일 팔 IK: guide/ik.md
+            - 전신 IK와 충돌 회피: guide/whole_body_ik.md
             - 팔 토크 제어: guide/arm_control.md
+            - 모바일 스워브 제어: guide/base_teleop.md
             - 손 파지와 접촉 판정: guide/grasp.md
         - 애플리케이션 계층:
             - 앱 조립과 물리 루프: guide/teleop_app.md
             - 목표와 좌표 변환: guide/teleop_targets.md
             - UI 패널: guide/teleop_ui.md
             - 렌더링과 Gizmo: guide/teleop_render.md
+        - 확장과 실기:
+            - 모방학습 데이터와 실기 전환: guide/imitation-sim2real.md
         - 개발 체크리스트: guide/pitfalls.md
         - API 치트시트: guide/cheatsheet.md
-    - ROS2 관점의 시스템 해설:
-        - 전체 안내: guide/ros2-guide.md
-        - 시작과 구조:
-            - ROS2와 개념 지도: guide/ros2/01-concepts.md
+        - ROS2 관점:
+            - 개념 지도: guide/ros2/01-concepts.md
             - MuJoCo model과 data: guide/ros2/02-mujoco-model-data.md
             - 프로젝트 정체성: guide/ros2/03-project-identity.md
             - 런타임 아키텍처: guide/ros2/04-runtime-architecture.md
-        - 제어 알고리즘:
             - 손 제어: guide/ros2/05-hand-control.md
             - 역기구학: guide/ros2/06-inverse-kinematics.md
             - 팔 토크 제어: guide/ros2/07-arm-torque-control.md
             - 모바일 베이스: guide/ros2/08-mobile-base.md
-        - 조작과 좌표계:
             - 3D 텔레오퍼레이션 UI: guide/ros2/09-teleoperation-ui.md
             - 좌표계: guide/ros2/10-coordinate-frames.md
-        - 검증과 참고:
             - 테스트와 검증: guide/ros2/11-testing.md
             - 직접 실행: guide/ros2/12-running.md
             - 버그 사례집: guide/ros2/13-bug-cases.md

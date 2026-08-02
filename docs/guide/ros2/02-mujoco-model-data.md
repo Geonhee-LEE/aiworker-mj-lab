@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 2 — MuJoCo 속성 강의 (ROS2/Gazebo 경험자를 위해) {: #part-2 }
 
@@ -111,4 +111,4 @@ ROS2로 치면 "이 패키지는 `set_entity_state` 서비스를 그 어떤 이�
 
 ---
 
-[← Part 1](./01-concepts.md) · [전체 안내](../ros2-guide.md) · [Part 3 →](./03-project-identity.md)
+[← Part 1](./01-concepts.md) · [전체 안내](../index.md#ros2-reading) · [Part 3 →](./03-project-identity.md)

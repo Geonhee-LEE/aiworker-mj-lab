@@ -20,8 +20,8 @@ flowchart TB
         T["teleop_targets.py<br>좌표 변환 · marker · Bimanual state"]
     end
     subgraph Decision["명령 계산"]
-        W["whole_body_ik.py<br>base/lift/arms bounded IK + CBF"]
-        K["kinematics.py<br>pose · Jacobian · collision gradient"]
+        W["whole_body_ik.py<br>WBIK task · bound · command 조립"]
+        K["계산 모듈군<br>tree · collision · bimanual · BVLS"]
         B["base_teleop.py<br>BodyTwist · swerve · reversal FSM"]
         A["arm_control.py<br>PD + bias torque"]
         G["grasp.py<br>finger synergy · contact 판정"]
@@ -52,15 +52,17 @@ flowchart TB
 | `teleop_ui.py` | app 상태 | target/mode 상태 변경 | IK, physics, 3D render 없음 |
 | `teleop_render.py` | model/data/target pose | scene, camera, gizmo | controller 계산 없음 |
 | `teleop_targets.py` | UI target, base/anchor pose | world hand/virtual pose | actuator 접근 없음 |
-| `kinematics.py` | model/data, site/geom id | 정규화 pose/Jacobian/distance gradient | target 정책 없음 |
-| `whole_body_ik.py` | current state, world target | base twist, lift/arm position | live qpos write 없음 |
+| `kinematics*.py` | model/data, site/geom id | 정규화 pose/Jacobian/distance gradient | target 정책 없음 |
+| `bimanual_kinematics.py` | 두 손 pose/Jacobian, 캡처 reference | rigid-grasp 상대 task | actuator 접근 없음 |
+| `bounded_optimization.py` | 행렬·벡터·bound | box/soft-barrier 최소제곱 해 | robot model 접근 없음 |
+| `whole_body_ik.py` | current state, world target | base twist, lift/arm position | 수치 solver 중복·live qpos write 없음 |
 | `base_teleop.py` | keys/BodyTwist, wheel feedback | steer angle + wheel speed | MuJoCo/ROS import 없음 |
 | `arm_control.py` | current arm state, `q_des` | motor torque | IK target 해석 없음 |
 | `grasp.py` | grasp/thumb, contact | finger target, grasp 판정 | 물체 weld 없음 |
 | `ik.py` | 한 손 pose | 단일 팔 관절 해 | 현재 teleop WBIK 경로 아님 |
 | `mj_util.py` | joint id | 연결된 actuator id | 제어 정책 없음 |
 
-구현을 수정할 때는 [코드 읽기 시작](guide/index.md)의 목적별 경로에서 해당 모듈과
+구현을 수정할 때는 [시스템 이해와 개발 가이드](guide/index.md)의 목적별 경로에서 해당 모듈과
 최소 회귀 테스트를 함께 찾을 수 있다. 공용 pose/Jacobian/distance 계산은
 [기구학과 충돌 거리](guide/kinematics.md)에 따로 정리되어 있다.
 
@@ -150,8 +152,8 @@ wheel controller를 사용하지 않는다.
 | swerve controller plugin | `base_teleop.py` |
 | `ros2_control` | MuJoCo actuator `data.ctrl` |
 
-ROS2 관점에서 구조와 알고리즘을 더 깊게 보려면 [ROS2 관점의 시스템 해설](guide/ros2-guide.md)을
-읽는다.
+ROS2 관점에서 구조와 알고리즘을 더 깊게 보려면
+[통합 가이드의 ROS2 읽기 경로](guide/index.md#ros2-reading)를 따른다.
 
 ## 테스트 연결
 

@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 5 — 손 제어: `src/grasp.py` {: #part-5 }
 
@@ -13,7 +13,7 @@
 | 해결할 문제 | 많은 손가락 관절을 소수의 입력으로 움직이고, 물체를 실제 접촉력으로 잡았는지 판정해야 한다. |
 | 해결 방법 | `grasp`, `thumb` 두 synergy 값을 관절 범위에 보간하고, 캔과 닿은 손가락별 normal force를 합산해 grasp 조건을 검사한다. |
 | 사용 수식 | 먼저 \(f=f_{open}+s(1-f_{open})\)를 만든다. open이 range의 lo이면 \(q=lo+f(hi-lo)\), hi이면 \(q=hi-f(hi-lo)\)로 미러링한다. 총 접촉력은 \(F_{total}=\sum_iF_i\)다. 각 항과 판정 조건은 5.2와 5.3에서 설명한다. |
-| 코드 구현 과정 | `apply_grasp()` → `_set_joint_fraction()` → `_ramp_value()` → `_set_joint_ctrl()` 순서로 actuator 목표를 기록한다. 판정은 `get_finger_can_contacts()`가 힘을 모으고 `is_grasped()`가 손가락 수·총 힘·엄지 조건을 확인한다. |
+| 코드 구현 과정 | `_command_coefficients()`가 관절별 offset과 grasp/thumb slope를 model·side별로 한 번 계산한다. `apply_grasp()`는 매 substep `ctrl = offset + grasp*g_slope + thumb*t_slope`를 벡터로 기록한다. 판정은 `get_finger_can_contacts()`가 힘을 모으고 `is_grasped()`가 손가락 수·총 힘·엄지 조건을 확인한다. |
 | 수식 없이 사용하는 함수 | `_validate_side()`는 좌우 손 입력을 검증하고, `_resolve_joint_actuator()`는 `mj_util.find_actuator_for_joint()`로 joint와 actuator 연결을 찾고 캐시한다. `mujoco.mj_contactForce()`는 접촉력 원시값을 읽는다. |
 
 ## 5.1 grasp synergy란 무엇인가 {: #part-5-1 }
@@ -110,7 +110,10 @@ hi - \text{frac}\,(hi - lo) & \text{open\_at\_hi = True (왼손 엄지 -- range 
 \end{cases}
 \]
 
-이 두 식이 `grasp.py`의 `_ramp_value(lo, hi, frac, open_at_hi)` 함수 그 자체다.
+이 두 식을 전개하면 `offset + synergy * slope` 형태가 된다. 현재 구현은
+`_command_coefficients()`에서 관절별 offset과 slope를 한 번 계산해 캐싱하고,
+`apply_grasp()`에서 모든 actuator에 벡터식으로 적용한다. 보간 방향은
+`THUMB_CURL_OPEN_AT_HI`가 명시하므로 왼손 mirror range도 같은 affine 경로를 쓴다.
 
 ```mermaid
 flowchart TD
@@ -221,4 +224,4 @@ yaw_value = THUMB_YAW_REST[side] + thumb * (THUMB_YAW_CURL[side] - THUMB_YAW_RES
 
 ---
 
-[← Part 4](./04-runtime-architecture.md) · [전체 안내](../ros2-guide.md) · [Part 6 →](./06-inverse-kinematics.md)
+[← Part 4](./04-runtime-architecture.md) · [전체 안내](../index.md#ros2-reading) · [Part 6 →](./06-inverse-kinematics.md)

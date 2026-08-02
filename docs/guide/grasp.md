@@ -1,5 +1,10 @@
 # `src/grasp.py`
 
+!!! info "핵심 알고리즘 학습 순서 7/7"
+    팔과 base가 목표 pose를 추종한 뒤 손가락 actuator 명령과 실제 contact force로
+    파지를 완성하는 마지막 단계다. 전체 순서는
+    [핵심 알고리즘 학습 순서](index.md#algorithm-learning-order)에서 다시 볼 수 있다.
+
 손가락 synergy를 actuator target으로 변환하고, 접촉력으로 grasp 여부를 판정한다.
 
 ## Target 구조
@@ -21,48 +26,84 @@
 | `FINGER_BODY_GROUPS` | 접촉 body를 손가락 그룹으로 매핑 |
 | `BODY_TO_FINGER_GROUP` | 접촉 판정 때 재사용하는 body→finger 역매핑 |
 
-## 수식
+## 기호와 입력
 
-> **왜 `open_frac`만큼 미리 오므려 두는가**: `hand_only.xml`은 아직 테이블이 없어
-> 캔이 자유낙하하는데, 손가락 액추에이터는 일부러 힘을 약하게 만들어뒀다(접촉
-> 시 토크 포화로 순응 그립이 나오도록, ROS2 관점의 시스템 해설
-> [MuJoCo contact](ros2/02-mujoco-model-data.md#part-2-6)/[손 관절 지도](ros2/05-hand-control.md#part-5-2) 참고).
-> Range 전체(완전히 편 상태부터)를 다 오므리면 그 약한
-> 액추에이터가 다 닫기 전에 캔이 이미 손 밖으로 떨어진다 — 그래서 "펼침"
-> 자체를 range 끝이 아니라 캔 표면 근처로 당겨둔다.
+| 기호 | 범위·단위 | 코드 표현 |
+|---|---|---|
+| \(g\) | \([0,1]\), grasp synergy | `grasp` |
+| \(t\) | \([0,1]\), thumb synergy | `thumb` |
+| \(u\) | actuator position target 벡터 | `data.ctrl[actuator_ids]` |
+| \(b\) | synergy가 0일 때의 offset 벡터 | `offsets` |
+| \(c_g,c_t\) | grasp/thumb에 대한 slope 벡터 | `grasp_slopes`, `thumb_slopes` |
+| \([lo,hi]\) | rad · 각 관절의 유효 range | `model.jnt_range[joint_id]` |
 
-슬라이더 스칼라 \(s\in[0,1]\)(`grasp` 또는 `thumb`)를 관절 range \([lo,hi]\) 위의
-목표각으로 바꾸는 보간(`_ramp_value`), `open_frac`은 "완전히 편 상태에서도
-남겨두는 여유":
+## 수식 유도
+
+모든 손가락 actuator 명령은 두 synergy에 대한 affine 식 하나로 표현한다.
 
 \[
-\text{frac} = \text{open\_frac} + s\,(1-\text{open\_frac}), \qquad
-\theta =
-\begin{cases}
-lo + \text{frac}\,(hi-lo) & \text{open\_at\_hi=False} \\
-hi - \text{frac}\,(hi-lo) & \text{open\_at\_hi=True (왼손 엄지처럼 range가 미러링된 경우)}
-\end{cases}
+\boxed{u=b+c_g g+c_t t}
 \]
 
-```mermaid
-flowchart TD
-    S["slider s<br>0: open · 1: closed"] --> C["[0,1] clamp"]
-    C --> F["open_frac를 포함한<br>joint fraction 계산"]
-    F --> R{"관절 range가<br>어느 방향으로 열리는가?"}
-    R -->|오른손 엄지·일반 finger| LO["lo → hi 보간"]
-    R -->|미러링된 왼손 엄지| HI["hi → lo 보간"]
-    LO --> CTRL["actuator target θ"]
-    HI --> CTRL
-```
+검지·중지 관절에서 range 폭을 \(\Delta=hi-lo\), 미리 굽혀 두는 비율을
+\(f=\text{FINGER_OPEN_FRAC}\)라 하자. 보간 비율과 목표각은
 
-같은 slider 값이라도 미러링된 왼손 엄지는 range를 반대 방향으로 읽는다. 그림의
-분기 없이 항상 `lo → hi`로 보간하면 왼손 엄지는 open/close가 뒤집힌다.
+\[
+\operatorname{frac}=f+g(1-f)
+\]
 
-약지/새끼 코스메틱 curl은 `open_frac` 없이 `grasp` 스칼라에 비례해 자기 range의
-`RING_PINKY_MAX_FRAC`까지만 움직인다: \(\theta = lo + (s\cdot\text{RING\_PINKY\_MAX\_FRAC})(hi-lo)\).
+\[
+\theta=lo+\operatorname{frac}\,\Delta
+=(lo+f\Delta)+g(1-f)\Delta
+\]
 
-엄지 MCP-yaw는 같은 형태의 선형 램프이지만 대상이 range가 아니라 REST/CURL 두
-각도 사이다: \(\text{yaw}(s) = \text{yaw}_{rest} + s\,(\text{yaw}_{curl}-\text{yaw}_{rest})\).
+이므로 offset은 \(lo+f\Delta\), grasp slope는 \((1-f)\Delta\)다. 오른손 엄지
+curl도 \(g\) 대신 \(t\)를 써서 같은 방식으로 계산한다.
+
+왼손 엄지는 mirror range의 높은 쪽에서 열리므로 방향이 반대다.
+
+\[
+\theta=hi-[f+t(1-f)]\Delta
+=(hi-f\Delta)+t[-(1-f)\Delta]
+\]
+
+따라서 offset은 \(hi-f\Delta\), thumb slope는 음수다. 부호를 관절 이름이나
+range 값에서 추측하지 않고 `THUMB_CURL_OPEN_AT_HI`로 명시한다.
+
+엄지 yaw와 약지·새끼도 같은 affine 형태다.
+
+\[
+\theta_{yaw}(t)=\theta_{rest}
++t(\theta_{curl}-\theta_{rest})
+\]
+
+\[
+\theta_{ring/pinky}(g)=lo
++g\,\text{RING_PINKY_MAX_FRAC}\,(hi-lo)
+\]
+
+model의 joint range와 actuator 연결은 실행 중 바뀌지 않는다. 그래서
+`_command_coefficients()`가 \(b,c_g,c_t\)와 actuator id를 model·side별로 한 번
+계산해 캐싱하고, 매 physics substep의 `apply_grasp()`는 위 벡터식 한 번만 수행한다.
+
+파지 판정은 target 위치가 아니라 실제 contact normal force를 사용한다. 손가락 그룹
+\(k\)의 힘은 해당 contact들의 법선 성분을 합친 값이다.
+
+\[
+F_k=\sum_{c\in k}|f_{n,c}|
+\]
+
+기본 판정은 thumb 그룹을 포함한 서로 다른 두 그룹 이상이 접촉하고
+\(\sum_kF_k\ge0.05\,\mathrm N\)일 때만 참이다.
+
+## 수식에서 코드까지
+
+| 수식 단계 | 코드 표현 | 함수 |
+|---|---|---|
+| \(b,c_g,c_t\) 구성 | `offsets`, `grasp_slopes`, `thumb_slopes` | `_command_coefficients()` |
+| \(u=b+c_g g+c_t t\) | `offsets + grasp * grasp_slopes + thumb * thumb_slopes` | `apply_grasp()` |
+| \(F_k=\sum|f_n|\) | `forces[group] += abs(force_vec[0])` | `get_finger_can_contacts()` |
+| group 수·thumb·총 힘 조건 | `len(forces)`, `"thumb" in forces`, `sum(forces.values())` | `is_grasped()` |
 
 ## 함수
 
@@ -70,10 +111,8 @@ flowchart TD
 |---|---|
 | `_validate_side(side)` | 손 방향을 `l`/`r`로 제한하고 잘못된 입력을 명확히 거부 |
 | `_resolve_joint_actuator(model, joint_name)` | joint id와 actuator id를 찾고 캐싱 (actuator 탐색 자체는 `mj_util.find_actuator_for_joint` 공용 함수 사용) |
-| `_ramp_value(lo, hi, frac, open_at_hi=False)` | 관절 range를 frac(0~1) 비율로 보간 |
-| `_set_joint_ctrl(model, data, joint_name, value)` | 관절 이름 기준으로 actuator target 기록 |
-| `_set_joint_fraction(...)` | joint range 조회와 보간, actuator 기록을 한 단계로 처리 |
-| `apply_grasp(model, data, grasp, thumb, side="r")` | synergy 값을 손가락 actuator target으로 변환 |
+| `_command_coefficients(model, side)` | actuator id와 affine coefficient를 model·side별로 계산·캐싱 |
+| `apply_grasp(model, data, grasp, thumb, side="r")` | 두 synergy를 clamp하고 벡터 affine 식으로 actuator target 기록 |
 | `get_finger_can_contacts(model, data, side="r")` | 캔과 닿은 finger group별 normal force 합산 |
 | `is_grasped(model, data, min_fingers=2, min_total_force=0.05, require_thumb=True, side="r")` | 접촉력 기준 grasp 성공 여부 반환 |
 
@@ -81,25 +120,19 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["teleop_app._step_actuators<br>물리 substep마다 손 명령 실행"] --> B["apply_grasp(side, grasp, thumb)<br>grasp/thumb 값을 손가락 목표로 변환"]
-    B --> C["thumb pre-shape / yaw ramp<br>엄지 벌림과 회전 자세를 먼저 잡음"]
-    B --> D["thumb curl joints<br>엄지 굽힘 관절 목표 계산"]
-    B --> E["index/middle curl joints<br>검지/중지 grasp synergy 적용"]
-    B --> F["ring/pinky cosmetic curl<br>약지/새끼 시각 자세 동기화"]
-    C --> G["_set_joint_ctrl()<br>관절 이름으로 actuator 목표 기록"]
-    D --> H2["_set_joint_fraction()<br>range 조회 · 보간 · actuator 선택"]
-    E --> H2
-    H2 --> H
-    F --> H["_resolve_joint_actuator()<br>joint에 연결된 actuator 탐색/캐싱"]
-    H --> I["data.ctrl[finger actuator]<br>MuJoCo 제어 입력에 최종 반영"]
-    G --> I
+    A["teleop_app._step_actuators<br>physics substep"] --> B["apply_grasp()<br>g,t를 [0,1]로 clamp"]
+    B --> C["_command_coefficients()<br>model·side cache 조회"]
+    C --> D["u = offsets<br>+ g·grasp_slopes<br>+ t·thumb_slopes"]
+    D --> E["data.ctrl[actuator_ids]<br>벡터 일괄 기록"]
 
-    J["tests / grasp check<br>잡힘 여부 검사 시작"] --> K["is_grasped()<br>손가락 수와 접촉력 기준으로 판정"]
-    K --> L["get_finger_can_contacts()<br>캔과 닿은 손가락 그룹 수집"]
-    L --> M["mj_contactForce()<br>접촉 normal force 계산"]
-    M --> N["finger group force sum<br>손가락 그룹별 힘 합산"]
-    N --> O["grasp true/false<br>grasp 성공 여부 반환"]
+    J["grasp 판정"] --> K["get_finger_can_contacts()"]
+    K --> L["can contact만 선택"]
+    L --> M["mj_contactForce()<br>group별 normal force 합산"]
+    M --> N["is_grasped()<br>thumb · group 수 · 총 힘 검사"]
 ```
+
+coefficient cache는 고정된 model 정보만 저장하고 `data.ctrl` 값은 저장하지 않는다.
+따라서 매 substep의 synergy는 즉시 반영되면서 joint/actuator 이름 탐색만 반복하지 않는다.
 
 ## 사용 위치
 
@@ -115,3 +148,17 @@ grasp.apply_grasp(model, data, grasp=targets["grasp_l"], thumb=targets["thumb_l"
 | 읽기 | 쓰기 |
 |---|---|
 | `model.jnt_range`, `data.contact`, `mj_contactForce` | `data.ctrl[finger_actuator]` |
+
+## 검증
+
+```bash
+python3 tests/test_phase_1.py
+python3 tests/test_phase_2.py
+python3 tests/test_phase_4.py
+```
+
+Phase 1은 손가락 관절과 관통 한계, Phase 2는 contact-force 기반 pick 성공률,
+Phase 4는 양손 모델에서 좌우 mirror mapping과 실제 파지를 확인한다.
+
+[← 이전: 모바일 스워브 제어](base_teleop.md) ·
+[전체 학습 순서](index.md#algorithm-learning-order)

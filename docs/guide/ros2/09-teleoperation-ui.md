@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 9 — Cyclo Control UI: 3D 마커 텔레옵 {: #part-9 }
 
@@ -173,4 +173,4 @@ main** 버튼으로 두 배치를 즉시 오갈 수 있다.
 
 ---
 
-[← Part 8](./08-mobile-base.md) · [전체 안내](../ros2-guide.md) · [Part 10 →](./10-coordinate-frames.md)
+[← Part 8](./08-mobile-base.md) · [전체 안내](../index.md#ros2-reading) · [Part 10 →](./10-coordinate-frames.md)

@@ -18,8 +18,10 @@ MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
 import arm_control  # noqa: E402
 import base_teleop  # noqa: E402
+import bounded_optimization  # noqa: E402
 import grasp  # noqa: E402
 import kinematics  # noqa: E402
+import kinematics_math  # noqa: E402
 import teleop_app  # noqa: E402
 import teleop_targets  # noqa: E402
 import whole_body_ik  # noqa: E402
@@ -32,7 +34,9 @@ ORIENTATION_ERROR_LENGTH = 0.20
 def run_ros_free_dependency_gate():
     """Prevent an accidental ROS/MoveIt dependency from entering the runtime path."""
     runtime_files = (
-        "base_teleop.py", "kinematics.py", "whole_body_ik.py",
+        "base_teleop.py", "kinematics.py", "kinematics_math.py",
+        "kinematic_tree.py", "collision_kinematics.py",
+        "bimanual_kinematics.py", "bounded_optimization.py", "whole_body_ik.py",
         "teleop_targets.py", "teleop_app.py")
     forbidden = {
         "rclpy", "rospy", "geometry_msgs", "nav_msgs", "sensor_msgs", "tf2_ros",
@@ -56,16 +60,25 @@ def run_ros_free_dependency_gate():
 def run_tree_kinematics_dependency_gate():
     """Keep all runtime hand FK/Jacobians on the custom kinematic tree."""
     runtime_files = (
-        "kinematics.py", "whole_body_ik.py", "teleop_targets.py", "teleop_app.py")
+        "kinematics.py", "kinematics_math.py", "kinematic_tree.py",
+        "collision_kinematics.py", "bimanual_kinematics.py",
+        "bounded_optimization.py", "whole_body_ik.py",
+        "teleop_targets.py", "teleop_app.py")
     modules = {}
     for filename in runtime_files:
         source = (REPO_ROOT / "src" / filename).read_text(encoding="utf-8")
         modules[filename] = ast.parse(source, filename=filename)
-    module = modules["kinematics.py"]
+    # 구현 분리 후에도 tree와 solver가 각각 의도한 모듈에 있어야 한다.
+    expected_classes = {
+        "kinematic_tree.py": "KinematicTree",
+        "kinematics.py": "KinematicsSolver",
+    }
     solver_classes = {
-        node.name: node for node in module.body
-        if isinstance(node, ast.ClassDef)
-        and node.name in {"KinematicTree", "KinematicsSolver"}
+        filename: {
+            node.name for node in modules[filename].body
+            if isinstance(node, ast.ClassDef)
+        }
+        for filename in expected_classes
     }
     solver_forbidden = {"MjData", "mj_forward"}
     runtime_forbidden = {
@@ -79,11 +92,26 @@ def run_tree_kinematics_dependency_gate():
                 isinstance(child.value, ast.Name) and child.value.id == "mujoco")
             if child.attr in runtime_forbidden:
                 violations.add(f"{filename}:{child.attr}")
-            if filename == "kinematics.py" and is_mujoco_call:
+            if filename in {"kinematics.py", "kinematic_tree.py"} and is_mujoco_call:
                 if child.attr in solver_forbidden:
                     violations.add(f"{filename}:{child.attr}")
     violations = sorted(violations)
-    ok = set(solver_classes) == {"KinematicTree", "KinematicsSolver"} and not violations
+    classes_ok = all(
+        class_name in solver_classes[filename]
+        for filename, class_name in expected_classes.items())
+    expected_functions = {
+        "bounded_optimization.py": {
+            "bounded_least_squares", "bounded_least_squares_with_barriers"},
+        "bimanual_kinematics.py": {"capture_reference", "rigid_grasp_task"},
+    }
+    functions_ok = all(
+        function_names <= {
+            node.name for node in modules[filename].body
+            if isinstance(node, ast.FunctionDef)
+        }
+        for filename, function_names in expected_functions.items()
+    )
+    ok = classes_ok and functions_ok and not violations
     print(f"Tree-kinematics dependency gate: forbidden runtime FK={violations}: "
           f"{'OK' if ok else 'FAIL'}")
     return ok
@@ -194,7 +222,7 @@ def run_box_qp_gate():
         vector = rng.normal(size=8)
         lower = rng.uniform(-1.2, -0.1, size=3)
         upper = rng.uniform(0.1, 1.2, size=3)
-        solution = whole_body_ik._bounded_least_squares(
+        solution = bounded_optimization.bounded_least_squares(
             matrix, vector, lower, upper)
         objective = float(np.linalg.norm(matrix @ solution - vector) ** 2)
         optimum = _brute_box_least_squares(matrix, vector, lower, upper)
@@ -495,11 +523,13 @@ def run_rigid_grasp_physical_gate():
 
     right = app.whole_body_solver.site_state(app.data, "r")
     left = app.whole_body_solver.site_state(app.data, "l")
-    right_rotation = whole_body_ik._quaternion_matrix(right.quaternion)
+    right_rotation = kinematics_math.rotation_from_quaternion(right.quaternion)
     position_right = right_rotation.T @ (left.position - right.position)
-    rotation_right = right_rotation.T @ whole_body_ik._quaternion_matrix(left.quaternion)
-    current_relative_quaternion = whole_body_ik._matrix_quaternion(rotation_right)
-    reference_relative_quaternion = whole_body_ik._matrix_quaternion(
+    rotation_right = right_rotation.T @ kinematics_math.rotation_from_quaternion(
+        left.quaternion)
+    current_relative_quaternion = kinematics_math.quaternion_from_rotation(
+        rotation_right)
+    reference_relative_quaternion = kinematics_math.quaternion_from_rotation(
         reference["rotation_right"])
     position_drift = float(np.linalg.norm(
         position_right - reference["position_right"]))

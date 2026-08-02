@@ -1,4 +1,4 @@
-[← 전체 안내](../ros2-guide.md)
+[← 전체 안내](../index.md#ros2-reading)
 
 # Part 1 — 개념 지도: ROS2 세계관에서 이 프로젝트로 {: #part-1 }
 
@@ -95,4 +95,4 @@ graph LR
 
 ---
 
-[전체 안내](../ros2-guide.md) · [Part 2 →](./02-mujoco-model-data.md)
+[전체 안내](../index.md#ros2-reading) · [Part 2 →](./02-mujoco-model-data.md)
