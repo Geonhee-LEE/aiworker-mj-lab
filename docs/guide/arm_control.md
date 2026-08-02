@@ -1,4 +1,4 @@
-# `src/arm_control.py`
+# `src/ffw_sh5_grasp/control/arm.py`
 
 !!! info "핵심 알고리즘 학습 순서 5/7"
     [전신 IK](whole_body_ik.md)가 반환한 팔 목표각을 실제 actuator torque로 바꾸는
@@ -6,6 +6,9 @@
     [모바일 스워브 제어](base_teleop.md)다.
 
 팔 관절을 torque motor로 구동하는 제어기.
+
+`kp`, `kd` 기본값은 `config/default.yaml`의 `arm_control` 구역에서 조절한다.
+[YAML 파라미터 설정](../configuration.md)은 사용자 덮어쓰기와 검증 방법을 설명한다.
 
 ## 역할
 
@@ -50,7 +53,9 @@ clamp한 뒤 `data.ctrl`에 쓴다.
 아무리 올려도 0이 아니라 반비례로 줄어들 뿐이다. \(h(q,\dot q)\)를 더하면 평형
 조건의 양변에서 그 항이 상쇄돼 \(K_p(q_{des}-q)=0\), 즉 유한한 \(K_p\)에서도
 actuator 포화·모델 오차·외란이 없는 이상 조건에서 오차가 0인 평형점으로 바뀐다. 유도 과정은
-[팔 토크 제어 해설의 PD와 feedforward](ros2/07-arm-torque-control.md#part-7-2) 참고.
+각 항의 코드 입력·출력은
+[제어 API의 `ArmTorqueController`](../api/control.md#arm-torque-api)를
+참고한다.
 
 ## 수식에서 코드까지
 
@@ -90,7 +95,7 @@ flowchart TD
 
 ## 사용 위치
 
-`teleop_app.py`의 `_step_physics()`가 계산한 목표를 `_step_actuators()`가 양팔에 대해
+`application/teleop.py`의 `_step_physics()`가 계산한 목표를 `_step_actuators()`가 양팔에 대해
 매 물리 substep 적용한다.
 
 ```python

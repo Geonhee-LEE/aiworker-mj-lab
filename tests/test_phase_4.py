@@ -1,34 +1,26 @@
-"""Phase 4 -- full_scene (whole robot, fixed base) regression.
+"""Phase 4 전체 로봇 고정 베이스 장면 회귀 시험.
 
-models/full_scene.xml embeds the exact Phase 1-3 right-arm+hand physics (capsule
-collision, grasp synergy, IK site offset, HOME_Q) inside the full FFW-SH5 body: fixed
-base (freejoint removed), visual-only wheels (joints removed), lift_joint + head kept as
-real actuators, both arms as motor+feedforward torque control (src/arm_control.py, same
-fix as Phase 3), both hands with mirrored capsule collision. The arm_base translation
-(mobile-base+lift height vs. arm_hand.xml's fixed 1.0m) was folded
-into the table/can placement so every Phase 1-3 validated number (HOME_Q, grasp_target site
-offset, thumb pre-shape, capsule sizes) carries over unchanged for the right arm -- this is
-verified directly by part 1 below rather than assumed.
+``models/full_scene.xml``은 Phase 1~3에서 검증한 오른팔·손 물리를 전체 FFW-SH5에
+그대로 넣는다. capsule 충돌, 파지 시너지, IK site 오프셋과 HOME_Q를 유지하고, 베이스는
+고정하며 리프트와 머리는 실제 액추에이터로 남긴다. 양팔은 Phase 3과 같은 motor 및
+전향 토크 제어를 사용하고 양손 capsule 충돌은 대칭이다. 모바일 베이스와 리프트로
+달라진 arm_base 높이는 테이블과 캔 배치에 반영해 기존 검증값을 오른팔에 그대로
+사용한다. 이 가정은 아래 Part 1에서 직접 검증한다.
 
-Part 1 (hold regression): apply the "home" keyframe (both arms via arm_control's
-feedforward+PD torque law, lift/head/fingers via their own position actuators) and hold for
-5s. Asserts no divergence (max|qacc| bound, matching Phase 0's check) and that both arms'
-grasp_target site drifts less than 2mm from where the keyframe placed it -- this is the
-direct regression check for the arm_base translation/HOME_Q reuse reasoning above.
+Part 1은 ``home`` 키프레임에서 양팔에 전향 보상과 PD 토크를 적용하고 리프트, 머리와
+손가락은 각 position 액추에이터로 5초간 유지한다. Phase 0과 같은 최대 가속도 기준으로
+발산하지 않고, 양팔 ``grasp_target`` site가 키프레임 위치에서 2 mm 미만으로 움직이는지
+확인한다.
 
-Part 2 (integrated pick, script-driven, no teleop): identical sequence to
-tests/test_phase_3.py (home -> pre-grasp -> approach -> grasp -> lift) run on the right
-hand/can here, with the left arm, lift and head all held at their keyframe pose throughout
-via the same per-step torque/position control (proving the rest of the body doesn't
-interfere with the validated right-hand pipeline). Success rate must stay >= 7/10, matching
-Phase 3's bar.
+Part 2는 ``test_phase_3.py``와 같은 홈, 사전 파지, 접근, 파지, 들기 순서를 오른손과
+캔에 실행한다. 왼팔, 리프트와 머리는 매 스텝 키프레임 자세로 유지해 나머지 몸체가
+검증된 오른손 경로를 방해하지 않는지 확인한다. 성공률 기준은 Phase 3과 같은 7/10이다.
 
-The left hand's grasp synergy is mirrored geometry (see src/grasp.py), not independently
-regression-tested against its own can -- Part 1's hold check covers it (no divergence, small
-site drift) but Part 2 only exercises the right hand, honestly matching what's actually been
-validated.
+왼손 파지 시너지는 대칭 기하이며 별도 캔으로 독립 회귀 시험하지 않는다. Part 1의
+유지 검사는 발산과 site 이동을 확인하지만 Part 2는 실제 검증 범위에 맞게 오른손만
+시험한다.
 
-Run headless: `python3 tests/test_phase_4.py`
+Headless 실행: ``python3 tests/test_phase_4.py``
 """
 
 import pathlib
@@ -41,19 +33,17 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
-import arm_control  # noqa: E402
-import grasp  # noqa: E402
+from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
+from ffw_sh5_grasp.control import grasp  # noqa: E402
 import ik  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
 ARM_L = [f"arm_l_joint{i}" for i in range(1, 8)]
 
-# Session 8 (Phase 5 follow-up): matches the rest pose used by the sibling ffw-sh5-mujoco
-# repo's Controller.reset() (only joint4/elbow set to -90 deg, everything else 0)
-# rather than the old arm_hand.xml-derived
-# "already reaching for the can" pose. This is now just a generic ready/rest seed for IK
-# multistart, not tied to any particular can geometry -- solve_pose_multistart's random
-# restarts (not this seed) do the real work of finding the pregrasp/grasp configuration.
+# 관련 ffw-sh5-mujoco 저장소의 ``Controller.reset()`` 휴지 자세와 일치한다. 4번
+# 팔꿈치 관절만 -90도이고 나머지는 0도다. 이전 ``arm_hand.xml``에서 가져온 캔 접근
+# 자세와 달리 특정 캔 기하에 묶이지 않은 일반적인 IK 다중 시작 초기값이다. 실제 사전
+# 파지와 파지 자세 탐색은 이 초기값이 아니라 ``solve_pose_multistart`` 재시도가 담당한다.
 HOME_Q_R = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
 HOME_Q_L = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
 LIFT_HOME = -0.39
@@ -62,7 +52,7 @@ THUMB_PRESHAPE_L = {"finger_l_joint1": 0.131, "finger_l_joint2": 1.309}
 
 HOLD_DURATION = 5.0
 HOLD_QACC_LIMIT = 1e5
-HOLD_SITE_DRIFT_LIMIT = 0.002  # 2mm
+HOLD_SITE_DRIFT_LIMIT = 0.002  # 사이트 허용 표류량 2 mm
 
 N_IK_SAMPLES = 100
 IK_TEST_SPREAD = 0.2
@@ -91,10 +81,11 @@ def _reset_home(model, data):
 
 
 def _hold_whole_body(model, data, ctrl_r, ctrl_l, q_r, q_l, grasp_r=0.0, thumb_r=0.0):
-    """Every step: right arm torque-controlled to q_r, left arm to q_l (both via
-    arm_control's feedforward+PD), lift/head/fingers via their own position actuators
-    (ctrl already set once is enough for those, but left/right hand grasp needs
-    grasp.apply_grasp reapplied since it's the thing under test)."""
+    """매 스텝 오른팔은 q_r, 왼팔은 q_l로 전향 보상과 PD 토크 제어한다.
+
+    리프트, 머리와 손가락은 각 position 액추에이터를 사용한다. 이 액추에이터는 ctrl을
+    한 번 설정하면 되지만 시험 대상인 손 파지는 ``grasp.apply_grasp``를 다시 적용한다.
+    """
     ctrl_r.apply(data, q_r)
     ctrl_l.apply(data, q_l)
     grasp.apply_grasp(model, data, grasp=grasp_r, thumb=thumb_r, side="r")
@@ -134,7 +125,7 @@ def run_ik_unit_test(model, solver, rng):
     joint_ranges = np.array([model.jnt_range[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]
                               for n in ARM_R])
     scratch = mujoco.MjData(model)
-    _reset_home(model, scratch)  # seeds lift_joint and other upstream context joints
+    _reset_home(model, scratch)  # lift_joint와 상위 문맥 관절의 초기값도 함께 넣는다.
 
     successes = 0
     pos_errs, ori_errs = [], []
@@ -205,7 +196,7 @@ def run_pick_trial(model, data, solver, ctrl_r, ctrl_l, rng):
 
     grasp_target_pos = can_pos0 + GRASP_TARGET_OFFSET
     pregrasp_pos = grasp_target_pos + PRE_GRASP_OFFSET
-    ctx = data.qpos.copy()  # lift_joint etc. -- see ik.py's context_qpos note
+    ctx = data.qpos.copy()  # lift_joint 같은 상위 관절은 ik.py의 context_qpos 설명을 따른다.
     q_pregrasp, perr, oerr, ok1 = solver.solve_pose_multistart(HOME_Q_R, pregrasp_pos, target_quat, rng, context_qpos=ctx)
     q_grasp, perr2, oerr2, ok2 = solver.solve_pose_multistart(q_pregrasp, grasp_target_pos, target_quat, rng, context_qpos=ctx)
     if not (ok1 and ok2):

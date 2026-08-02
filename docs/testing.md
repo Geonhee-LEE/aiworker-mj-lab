@@ -7,6 +7,7 @@
 
 | 변경한 영역 | 최소 테스트 | 릴리스 전 추가 테스트 |
 |---|---|---|
+| YAML 설정·로더 | `test_config.py` | 관련 알고리즘 테스트 |
 | 문서만 | `mkdocs build --strict` | 내부 링크 검사 |
 | UI/target/mode | `test_phase_6.py` | `test_whole_body.py` |
 | IK/FK/kinematics | `test_phase_3.py`, `test_whole_body.py` | Phase 4, 6 |
@@ -18,6 +19,7 @@
 ## 빠른 핵심 검증
 
 ```bash
+python3 tests/test_config.py
 python3 tests/test_phase_6.py
 python3 tests/test_whole_body.py
 mkdocs build --strict
@@ -32,6 +34,7 @@ collision, 스워브와 실제 wheel-ground 추종을 빠르게 확인한다.
 for p in 0 1 2 3 4 5 6; do
   python3 "tests/test_phase_${p}.py"
 done
+python3 tests/test_config.py
 python3 tests/test_whole_body.py
 mkdocs build --strict
 ```

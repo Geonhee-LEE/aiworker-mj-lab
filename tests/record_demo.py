@@ -1,11 +1,11 @@
-"""Dev utility (not a Phase test): render the Phase 4 scripted pick-and-lift sequence on
-models/full_scene.xml to an animated GIF, contact force/point visualization on, camera
-following the right hand. This is the offline stand-in for Phase 4's "촬영" deliverable --
-the interactive src/teleop_app.py is for a human at the sliders, but
-this script drives the identical validated sequence from tests/test_phase_4.py
-headlessly so the demo doesn't depend on someone being at a keyboard/mouse.
+"""Phase 4의 스크립트 기반 파지·들기 동작을 GIF로 만드는 개발 도구.
 
-Usage: python3 tests/record_demo.py [out.gif]
+Phase 테스트 자체는 아니다. ``models/full_scene.xml``에서 접촉력과 접촉점을 표시하고
+카메라가 오른손을 따라가게 한다. 대화형 ``application/teleop.py``는 사용자가 직접
+슬라이더를 조작하지만, 이 스크립트는 ``test_phase_4.py``와 같은 검증 동작을
+headless로 실행해 키보드나 마우스 조작자 없이 데모를 만든다.
+
+사용법: ``python3 tests/record_demo.py [out.gif]``
 """
 
 import pathlib
@@ -19,13 +19,13 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
-import arm_control  # noqa: E402
-import grasp  # noqa: E402
+from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
+from ffw_sh5_grasp.control import grasp  # noqa: E402
 import ik  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
 ARM_L = [f"arm_l_joint{i}" for i in range(1, 8)]
-# Matches models/full_scene.xml's "home" keyframe (Session 8 Phase 5 follow-up).
+# ``models/full_scene.xml``의 ``home`` 키프레임과 일치한다.
 HOME_Q_R = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
 HOME_Q_L = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
 
@@ -38,7 +38,7 @@ POST_LIFT_HOLD = 2.0
 APPROACH_SPEED = 0.03
 
 FRAME_EVERY_S = 0.15
-GIF_FRAME_MS = 90  # ~11fps playback
+GIF_FRAME_MS = 90  # 약 11 fps로 재생한다.
 
 
 def _read_arm_q(model, data, joint_names):
@@ -68,9 +68,9 @@ class FrameGrabber:
         self.frames.append(Image.fromarray(self.renderer.render()))
 
     def save(self, path):
-        # Adaptive palette quantization -- this content (flat robot-arm shading, checker
-        # floor, few colors) loses essentially nothing visually but shrinks the GIF several
-        # times over vs. PIL's default per-frame full-color GIF encoding.
+        # 평평한 로봇 shading, 격자 바닥과 적은 색으로 구성되어 적응형 palette 양자화를
+        # 적용해도 시각적 손실이 거의 없다. PIL 기본 프레임별 full-color GIF보다 용량을
+        # 몇 배 줄일 수 있다.
         quantized = [f.quantize(colors=128, method=Image.MEDIANCUT) for f in self.frames]
         quantized[0].save(path, save_all=True, append_images=quantized[1:],
                            duration=GIF_FRAME_MS, loop=0, optimize=False)

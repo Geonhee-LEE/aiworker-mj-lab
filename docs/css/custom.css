@@ -1,4 +1,4 @@
-/* ffw-sh5-grasp docs — small tweaks on top of mkdocs-material */
+/* mkdocs-material에 적용하는 ffw-sh5-grasp 문서용 세부 조정 */
 
 :root {
   --md-text-font: "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
@@ -9,7 +9,7 @@
   line-height: 1.7;
 }
 
-/* keep long fromto="..." / friction="..." attribute lines from forcing horizontal scroll on mobile */
+/* 긴 fromto="..."·friction="..." 속성 때문에 모바일에서 가로 스크롤이 강제되지 않게 한다. */
 .md-typeset pre > code {
   white-space: pre;
   word-break: normal;
@@ -32,7 +32,7 @@
   font-style: italic;
 }
 
-/* phase progress badges on the guide index page */
+/* 가이드 목차의 단계별 진행 배지 */
 .phase-track {
   display: flex;
   flex-wrap: wrap;

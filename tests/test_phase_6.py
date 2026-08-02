@@ -1,11 +1,11 @@
-"""Phase 6 -- can-only Cyclo marker/UI integration gate.
+"""Phase 6 캔 전용 Cyclo 마커와 UI 통합 검사.
 
-The live teleop app now keeps one object workflow: can grasping plus Cyclo-style hand target
-control.  This test covers that contract: numeric X/Y/Z plus Roll/Pitch/Yaw targets are the
-control surface, visible markers are synced from those targets, and Bimanual MoveL can still
-capture both hand targets and move them through the virtual object marker.
+실시간 텔레옵 앱은 캔 파지와 Cyclo 방식 손 목표 제어라는 하나의 물체 흐름을 가진다.
+숫자 X/Y/Z와 Roll/Pitch/Yaw 목표가 제어 입력인지, 보이는 마커가 이 목표에서
+동기화되는지, 양손 MoveL이 양손 목표를 캡처해 가상 물체 마커로 이동할 수 있는지
+검사한다.
 
-Run headless: `python3 tests/test_phase_6.py`
+Headless 실행: ``python3 tests/test_phase_6.py``
 """
 
 import pathlib
@@ -19,8 +19,10 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
 import teleop_app  # noqa: E402
-import teleop_render  # noqa: E402
-import teleop_ui  # noqa: E402
+from ffw_sh5_grasp.control import base  # noqa: E402
+from ffw_sh5_grasp.kinematics import legacy  # noqa: E402
+from ffw_sh5_grasp.visualization import render as teleop_render  # noqa: E402
+from ffw_sh5_grasp.visualization import ui as teleop_ui  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
 ARM_L = [f"arm_l_joint{i}" for i in range(1, 8)]
@@ -273,7 +275,7 @@ def run_numeric_target_marker_sync_gate():
 
 
 def run_whole_body_toggle_gate():
-    """Mode changes preserve world goals and clear stale chassis commands."""
+    """모드 전환이 월드 목표를 보존하고 오래된 차체 명령을 지우는지 검사한다."""
     app = _make_sim_only_app()
     app.targets["pos_r"] = [0.025, -0.018, 0.012]
     app.targets["rpy_r"] = [7.0, -4.0, 5.0]
@@ -283,8 +285,8 @@ def run_whole_body_toggle_gate():
     app.targets["virtual_object_rpy"] = [2.0, -3.0, 8.0]
     hand_before = {side: app._target_world_pose(side) for side in ("r", "l")}
     virtual_before = app._virtual_object_world_pose()
-    app.whole_body_base_twist = teleop_app.base_teleop.BodyTwist(0.2, -0.1, 0.3)
-    app.commanded_base_twist = teleop_app.base_teleop.BodyTwist(0.2, -0.1, 0.3)
+    app.whole_body_base_twist = base.BodyTwist(0.2, -0.1, 0.3)
+    app.commanded_base_twist = base.BodyTwist(0.2, -0.1, 0.3)
 
     app.toggle_whole_body_control()
     off_mode = not app.whole_body_enabled
@@ -298,8 +300,8 @@ def run_whole_body_toggle_gate():
         np.allclose(virtual_before[0], virtual_off[0], atol=1e-10)
         and abs(np.dot(virtual_before[1], virtual_off[1])) > 1.0 - 1e-10)
     stale_command_cleared = (
-        app.commanded_base_twist == teleop_app.base_teleop.BodyTwist()
-        and app.whole_body_base_twist == teleop_app.base_teleop.BodyTwist())
+        app.commanded_base_twist == base.BodyTwist()
+        and app.whole_body_base_twist == base.BodyTwist())
     smoothed_synced = all(
         np.allclose(app.smoothed_pos[side], app.targets[f"pos_{side}"])
         and np.allclose(app.smoothed_rpy[side], app.targets[f"rpy_{side}"])
@@ -355,7 +357,7 @@ def run_whole_body_toggle_gate():
         {key: False for key in ("w", "a", "s", "d", "left", "right")})
     off_integration = (
         integration_app.lift_cmd == integration_app.targets["lift"]
-        and integration_app.commanded_base_twist == teleop_app.base_teleop.BodyTwist())
+        and integration_app.commanded_base_twist == base.BodyTwist())
 
     ok = (off_mode and off_pose_preserved and stale_command_cleared and smoothed_synced
           and round_trip and captured_round_trip and off_integration)
@@ -367,7 +369,7 @@ def run_whole_body_toggle_gate():
 
 
 def run_collision_visualization_gate():
-    """The V toggle must expose active CBF points without requiring a GL window."""
+    """GL 창 없이도 V 토글이 활성 CBF 점을 제공하는지 검사한다."""
     app = _make_sim_only_app()
     initially_off = (
         not app.collision_viz
@@ -422,8 +424,8 @@ def run_manual_xyz_rpy_ik_gate(model):
     key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     mujoco.mj_resetDataKeyframe(model, data, key_id)
     mujoco.mj_forward(model, data)
-    solver_r = teleop_app.ik.InverseKinematics(model, "grasp_target_r", ARM_R)
-    solver_l = teleop_app.ik.InverseKinematics(model, "grasp_target_l", ARM_L)
+    solver_r = legacy.InverseKinematics(model, "grasp_target_r", ARM_R)
+    solver_l = legacy.InverseKinematics(model, "grasp_target_l", ARM_L)
     site_r = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "grasp_target_r")
     site_l = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "grasp_target_l")
     cases = (
@@ -458,7 +460,7 @@ def run_manual_xyz_rpy_ik_gate(model):
 
 
 def run_split_ui_and_tree_gate():
-    """Tabbed workspaces stay compact and the tree filter follows hand chains."""
+    """탭 작업 공간이 간결하고 트리 필터가 손의 체인을 따르는지 검사한다."""
     app = _make_sim_only_app()
     windows = teleop_ui._ensure_window_state(app)
     titles = [spec["title"] for spec in teleop_ui.UI_WINDOW_SPECS.values()]

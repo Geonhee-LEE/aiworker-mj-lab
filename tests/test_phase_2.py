@@ -1,13 +1,12 @@
-"""Phase 2 -- fixed-hand grasp + lift (the core of this project).
+"""Phase 2 고정 손 파지와 들기 시험으로 프로젝트의 핵심 검증이다.
 
-For each of N_TRIALS: reset to the "pregrasp" keyframe with the can perturbed by +-5mm
-in x/y/z, ramp grasp+thumb from 0->1 (rate-limited, not a step function), confirm a
-force-based grasp (src/grasp.py:is_grasped), then raise the mocap anchor (and therefore the
-welded hand) 10cm at 2cm/s and hold for 5s. Success = the can rose with the hand (>= 8cm net
-lift, since some settle/compliance is expected) and slipped < 1cm in the hand's frame during
-the final hold.
+각 시험에서 캔의 x/y/z를 ±5 mm 움직인 뒤 ``pregrasp`` 키프레임으로 초기화한다.
+``grasp``와 ``thumb``을 계단 입력이 아닌 변화율 제한으로 0에서 1까지 올리고 접촉력
+기반 파지를 확인한다. 그 다음 mocap 기준과 용접된 손을 2 cm/s로 10 cm 올려 5초간
+유지한다. 정착과 유연성에 따른 처짐을 고려해 캔이 8 cm 이상 올라가고 마지막 유지
+중 손 좌표계 미끄러짐이 1 cm 미만이면 성공이다.
 
-Run headless: `python3 tests/test_phase_2.py`
+Headless 실행: ``python3 tests/test_phase_2.py``
 """
 
 import pathlib
@@ -20,23 +19,23 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "hand_only.xml"
 
-import grasp  # noqa: E402
+from ffw_sh5_grasp.control import grasp  # noqa: E402
 
 N_TRIALS = 10
-NOISE = 0.005  # +-5mm
-RAMP_TIME = 1.0  # s, grasp/thumb 0->1
-SETTLE_TIME = 1.0  # s, hold closed grasp before lifting
-LIFT_HEIGHT = 0.10  # m
-LIFT_SPEED = 0.02  # m/s (2cm/s)
-POST_LIFT_HOLD = 5.0  # s
-MIN_NET_LIFT = 0.08  # m -- some sag under load is expected, still counts as a real lift
-MAX_SLIP = 0.01  # m, measured in the hand's own frame over the post-lift hold
+NOISE = 0.005  # 배치 오차 ±5 mm
+RAMP_TIME = 1.0  # grasp와 thumb을 0에서 1로 올리는 시간(초)
+SETTLE_TIME = 1.0  # 들어 올리기 전 닫힌 파지를 유지하는 시간(초)
+LIFT_HEIGHT = 0.10  # 들기 높이(m)
+LIFT_SPEED = 0.02  # 들기 속도(m/s, 2 cm/s)
+POST_LIFT_HOLD = 5.0  # 들기 후 유지 시간(초)
+MIN_NET_LIFT = 0.08  # 하중에 따른 처짐을 고려한 실제 들기 최소 거리(m)
+MAX_SLIP = 0.01  # 들기 후 유지 중 손 좌표계에서 측정한 최대 미끄러짐(m)
 
-SUCCESS_RATE_TARGET = 0.8  # 8/10
+SUCCESS_RATE_TARGET = 0.8  # 목표 성공 횟수 8/10
 
 
 def hand_frame_offset(model, data, can_qadr):
-    """Can position relative to the (moving) hand base -- isolates slip from the lift itself."""
+    """들기 이동을 제외해 미끄러짐만 측정하도록 움직이는 손 기준 캔 위치를 반환한다."""
     hand_bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "hx5_r_base")
     return data.qpos[can_qadr : can_qadr + 3] - data.xpos[hand_bid]
 
@@ -56,7 +55,7 @@ def run_trial(model, data, rng):
 
     dt = model.opt.timestep
 
-    # 1) ramp grasp+thumb closed
+    # 1) grasp와 thumb을 서서히 닫는다.
     t = 0.0
     while t < RAMP_TIME:
         frac = t / RAMP_TIME
@@ -64,7 +63,7 @@ def run_trial(model, data, rng):
         mujoco.mj_step(model, data)
         t += dt
 
-    # 2) settle
+    # 2) 닫힌 상태로 정착시킨다.
     t = 0.0
     while t < SETTLE_TIME:
         grasp.apply_grasp(model, data, grasp=1.0, thumb=1.0)
@@ -74,9 +73,8 @@ def run_trial(model, data, rng):
     grasped_before_lift = grasp.is_grasped(model, data)
     can_z_before_lift = data.qpos[qadr + 2]
 
-    # 3) lift the mocap anchor at LIFT_SPEED -- the weld constraint drags hx5_r_base (and
-    # whatever it's holding) along; this is a mocap target update, not a qpos override of a
-    # dynamic body.
+    # 3) mocap 기준을 LIFT_SPEED로 올린다. 용접 제약이 hx5_r_base와 잡은 물체를 함께
+    # 끌어 올린다. 동적 body의 qpos 덮어쓰기가 아니라 mocap 목표 갱신이다.
     lift_duration = LIFT_HEIGHT / LIFT_SPEED
     t = 0.0
     while t < lift_duration:
@@ -86,7 +84,7 @@ def run_trial(model, data, rng):
         t += dt
     data.mocap_pos[mocap_id] = mocap_start + np.array([0, 0, LIFT_HEIGHT])
 
-    # 4) hold at full lift height, track slip in the hand's frame
+    # 4) 최대 높이를 유지하며 손 좌표계에서 미끄러짐을 추적한다.
     offsets = []
     t = 0.0
     while t < POST_LIFT_HOLD:

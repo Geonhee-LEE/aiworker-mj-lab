@@ -5,7 +5,7 @@
     이 문서에서 \(J\)의 역문제를 목적함수부터 관절 변화량까지 유도한다. 다음은
     [단일 팔 IK 구현](ik.md)이다.
 
-이 페이지는 `src/kinematics.py`의 `KinematicsSolver.solve_pose()`를 읽을 때 가장
+이 페이지는 `src/ffw_sh5_grasp/kinematics/solver.py`의 `KinematicsSolver.solve_pose()`를 읽을 때 가장
 헷갈리기 쉬운 두 질문에 답한다.
 
 1. DLS는 왜 특이점 근처에서 관절 움직임이 폭발하지 않게 하는가?
@@ -16,7 +16,7 @@
 자세 오차 좌표계는 [Quaternion 수학](quaternion-math.md)을 참고한다.
 
 !!! note "현재 텔레옵과 이 페이지의 관계"
-    현재 텔레옵은 [`src/whole_body_ik.py`](whole_body_ik.md)의 bounded solver를
+    현재 텔레옵은 [`src/ffw_sh5_grasp/control/whole_body.py`](whole_body_ik.md)의 bounded solver를
     사용한다. 여기서 설명하는 반복 DLS는 단일 팔 회귀·오프라인 경로지만, FK와
     Jacobian은 실시간 경로와 같은 `KinematicTree` 구현을 공유한다. `src/ik.py`는
     기존 `InverseKinematics` 이름만 제공한다.

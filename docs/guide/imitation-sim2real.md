@@ -19,7 +19,7 @@
 
 | 정책 출력 후보 | 기존 코드에 연결하는 곳 | 실기 전환성 | 권장 |
 |---|---|---:|---:|
-| 손 pose 변화량 + `grasp`/`thumb` | `teleop_targets` → `WholeBodyIK.solve()` | 높음 | 첫 버전 |
+| 손 pose 변화량 + `grasp`/`thumb` | `application.targets` → `WholeBodyIK.solve()` | 높음 | 첫 버전 |
 | base `BodyTwist` + 손 pose 변화량 | app arbitration → WBIK/swerve | 중간 | 이동 조작 데이터가 충분할 때 |
 | arm/lift 목표 위치 | `WholeBodyCommand` 다음 계층 | 중간 | controller 모방 연구용 |
 | wheel·finger actuator 값 또는 arm torque | `data.ctrl` 직전 | 낮음 | 초기 실기 배포에는 비권장 |
@@ -188,14 +188,14 @@ open-loop actuator replay는 작은 물리 차이가 계속 누적되므로 장�
 
 | 현재 구성 | 실기에서의 처리 |
 |---|---|
-| `teleop_targets.py`, `kinematics_math.py` | frame·단위 계약이 같으면 재사용 가능 |
+| `application/targets.py`, `kinematics/rotations.py` | frame·단위 계약이 같으면 재사용 가능 |
 | `KinematicTree`, `KinematicsSolver` | 실제 URDF/MJCF 관절축·zero·tool pose와 일치할 때만 재사용 |
 | `WholeBodyIK.solve(MjData, ...)` | 현재는 MuJoCo 상태 의존; shadow model adapter 또는 상태 인터페이스 분리가 필요 |
-| `collision_kinematics.py` | MuJoCo geom 상태 의존; calibrated shadow scene나 실기 collision source 필요 |
+| `kinematics/collision.py` | MuJoCo geom 상태 의존; calibrated shadow scene나 실기 collision source 필요 |
 | `SwerveDrive` | wheel 반지름·위치·부호·gear·feedback 단위를 실측한 뒤 재사용 검토 |
 | `ArmTorqueController.apply()` | `data.qfrc_bias`와 `data.ctrl`용이므로 실물 모터에 직접 사용 금지 |
 | `grasp.apply_grasp()` | 실제 hand actuator calibration과 current/force limit에 맞는 adapter 필요 |
-| `teleop_render.py`, `teleop_ui.py` | 운영 UI로 쓸 수 있지만 hardware I/O와 watchdog을 소유하면 안 됨 |
+| `visualization/render.py`, `visualization/ui.py` | 운영 UI로 쓸 수 있지만 hardware I/O와 watchdog을 소유하면 안 됨 |
 
 초기 프로토타입은 실제 joint sensor 값을 이름 기반으로 shadow `MjData.qpos/qvel`에
 복사하고, 모델의 파생 pose/geom 상태를 갱신한 뒤 WBIK를 호출하는 방식이 가능하다.
@@ -215,7 +215,7 @@ class RobotHardware:
 
 이 인터페이스 아래에서 vendor SDK, CAN/EtherCAT, ROS2 `hardware_interface` 중 무엇을
 쓰는지는 상위 policy와 무관해야 한다. ROS2와 현재 함수 호출 구조의 대응은
-[ROS2와 개념 지도](ros2/01-concepts.md)를 참고한다.
+[아키텍처의 ROS2 용어 대응표](../overview.md#ros2-concept-map)를 참고한다.
 
 ## 실기 전 반드시 맞출 것
 
@@ -307,5 +307,5 @@ simulation timestep과 MJCF 설정의 의미는 MuJoCo 공식
 확인한다. 실물 제어 주기는 simulation의 0.001 s를 그대로 복사하지 않고 실제 driver,
 network와 motor controller의 보장 주기에서 다시 정한다.
 
-[API 치트시트](cheatsheet.md)에서 현재 공개 함수를 찾고,
+[API 레퍼런스](../api/index.md)에서 현재 공개 함수를 찾고,
 [테스트와 검증](../testing.md)의 기존 simulation gate를 실기 전 최소 기준으로 사용한다.

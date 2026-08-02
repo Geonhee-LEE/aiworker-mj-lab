@@ -41,16 +41,16 @@
     <default class="visual">
       <geom type="mesh" contype="0" conaffinity="0" density="0" group="2"/>
     </default>
-    <!-- Arm links: plain mesh collision (self-collision fidelity isn't this phase's focus) -->
+    <!-- 팔 링크는 일반 메시 충돌을 사용한다. 이 단계에서는 자체 충돌 정밀도가 핵심이 아니다. -->
     <default class="arm_collision">
       <geom type="mesh" group="3"/>
     </default>
-    <!-- Hand collision: shadow_hand recipe, identical to models/hand_only.xml (Phase 1/2) -->
+    <!-- 손 충돌은 1·2단계의 models/hand_only.xml과 같은 shadow_hand 설정을 사용한다. -->
     <default class="collision">
       <geom group="3" contype="1" conaffinity="1" condim="3" solimp="0.5 0.99 0.0001" solref="0.005 1"/>
     </default>
 
-    <!-- DY-80 motor: arm joint 1, 2 -->
+    <!-- DY-80 모터: 팔 1·2번 관절 -->
     <default class="DY_80">
       <joint frictionloss="0.1" armature="0.5" damping="30.0"/>
       <position kp="600" dampratio="1" forcerange="-61.4 61.4"/>
@@ -61,7 +61,7 @@
         <joint axis="1 0 0" range="-3.14 0"/>
       </default>
     </default>
-    <!-- DY-70 motor: arm joint 3, 4, 5, 6 -->
+    <!-- DY-70 모터: 팔 3~6번 관절 -->
     <default class="DY_70">
       <joint frictionloss="0.1" armature="0.5" damping="20.0"/>
       <position kp="600" dampratio="1" forcerange="-31.7 31.7"/>
@@ -78,7 +78,7 @@
         <joint axis="0 1 0" range="-1.57 1.57"/>
       </default>
     </default>
-    <!-- DP-42 motor: arm joint 7 -->
+    <!-- DP-42 모터: 팔 7번 관절 -->
     <default class="DP_42">
       <joint frictionloss="0.1" armature="0.1" damping="3.0"/>
       <position kp="200" dampratio="1" forcerange="-5.1 5.1"/>
@@ -87,7 +87,7 @@
       </default>
     </default>
 
-    <!-- HX5-D20 5-finger hand (identical to models/hand_only.xml) -->
+    <!-- HX5-D20 오지형 손: models/hand_only.xml과 동일하다. -->
     <default class="finger">
       <joint frictionloss="0.05" armature="0.05" damping="1.0"/>
       <position kp="0.7" dampratio="1" forcerange="-1.0 1.0"/>
@@ -122,19 +122,17 @@
     <light pos="0 0 2.2" dir="0 0 -1" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
 
-    <!-- Table: top surface at z=0.65 -->
-    <!-- Narrow along X (arm-facing direction): the validated Phase 1/2 grasp geometry
-         needs the palm to dip below the fingertip/can height on its near side (the palm
-         sits "behind" the grasp point in this hand orientation) -- a full-width table
-         collided with the palm every time it reached down. Still
-         wide enough in Y and deep enough under the can to look and behave like a table. -->
+    <!-- 테이블 윗면의 높이는 z=0.65다. -->
+    <!-- 팔을 향하는 X축 방향 폭을 좁혔다. 1·2단계에서 검증한 파지 형상은 가까운 쪽의
+         손바닥이 손끝과 캔보다 낮아져야 한다. 이 손 방향에서는 손바닥이 파지점 뒤에 놓이므로
+         폭이 넓은 테이블에서는 손을 내릴 때마다 충돌했다. 다만 Y축 폭과 캔 아래 깊이는
+         실제 테이블처럼 보이고 동작할 만큼 유지했다. -->
     <geom name="table" type="box" size="0.08 0.15 0.05" pos="0.5 0.0 0.60" material="table_mat"/>
 
-    <!-- Can resting on the table (freejoint -- it always settles to table_top + its own
-         half-height = 0.705 regardless of spawn height, so "floating" it here wouldn't
-         work; the table-clearance fix lives in tests/test_phase_3.py's
-         GRASP_TARGET_OFFSET instead, which aims the IK target 3cm above the can's actual
-         resting center). -->
+    <!-- 캔은 자유 관절로 테이블 위에 놓인다. 초기 높이와 관계없이 테이블 윗면과 캔의
+         반높이를 더한 0.705에 안착하므로 여기서 띄워 배치하는 방식은 통하지 않는다.
+         테이블 여유 높이는 tests/test_phase_3.py의 GRASP_TARGET_OFFSET으로 보정하며,
+         실제 안착 중심보다 3 cm 높은 곳을 IK 목표로 삼는다. -->
     <body name="can" pos="0.5 0.0 0.705">
       <freejoint name="can_free"/>
       <inertial pos="0 0 0" mass="0.35" diaginertia="0.000448 0.000448 0.00019"/>
@@ -143,9 +141,9 @@
         solimp="0.5 0.99 0.0001" solref="0.005 1"/>
     </body>
 
-    <!-- Right arm: base rigidly fixed to world at ~1.0m (approximate FFW-SH5 shoulder
-         height) -- mobile base and lift column are out of scope for this
-         project (full_scene freezes the base too). -->
+    <!-- 오른팔 기준부는 FFW-SH5의 대략적인 어깨 높이인 1.0 m에서 월드에 고정한다.
+         이 모델에서는 이동 베이스와 승강 기둥을 다루지 않으며 full_scene에서도
+         해당 실험 시나리오에 따라 베이스를 고정할 수 있다. -->
     <body name="arm_base_link" pos="0 0 1.0">
       <geom type="box" size="0.06 0.06 0.06" rgba="0.2 0.2 0.2 1"/>
 
@@ -199,7 +197,7 @@
                     <geom mesh="arm_r_link7" class="arm_collision"/>
                     <site name="ee_site" pos="0.107944 0 -0.065588" quat="0.475435 -0.475435 0.523413 0.523413" size="0.005"/>
 
-                    <!-- Right hand (HX5-D20), identical subtree to models/hand_only.xml -->
+                    <!-- 오른손(HX5-D20): models/hand_only.xml과 동일한 하위 트리다. -->
                     <body name="hx5_r_base" pos="0 0 -0.078" quat="0 0.7071068 0.7071068 0">
                       <inertial pos="-0.00259546 0.00179263 0.0629577" mass="0.301852"
                         diaginertia="0.000542413 0.000389333 0.000210116"/>
@@ -207,22 +205,17 @@
                       <geom name="palm_collision" type="box" size="0.02421 0.05536 0.06126"
                         pos="-0.00321 -0.00121 0.06126" class="collision"/>
 
-                      <!-- IK target site. The Phase 1/2 validated can placement
-                           (models/hand_only.xml) is (0.105, 0.065, 0.16) in WORLD
-                           coordinates there, with hx5_r_base at world (0, 0, 0.15). That is
-                           NOT the same as a (0.105, 0.065, 0.16) offset in the palm's own
-                           LOCAL frame -- this site was defined with that exact bug for most
-                           of Phase 3 (copied the world-frame numbers directly), which is
-                           the actual root cause of the integrated pick failures, not arm
-                           precision (found by noticing: finger-to-can relative positions computed here
-                           didn't match hand_only.xml's at all, by a large *constant* offset
-                           across all three fingers -- the signature of a frame bug, not a
-                           joint/control error). Correct local offset, verified by direct
-                           computation (palm_R.T @ (can_world_pos - palm_world_pos)):
-                           (0.065, 0.01, 0.105). -->
+                      <!-- IK 목표 사이트다. 1·2단계에서 검증한 models/hand_only.xml에서는
+                           hx5_r_base가 월드 좌표 (0, 0, 0.15), 캔이 (0.105, 0.065, 0.16)에
+                           있다. 이 월드 좌표는 손바닥 로컬 좌표의 같은 오프셋과 다르다.
+                           3단계 초기에 월드 좌표를 그대로 복사한 좌표계 오류가 있었고, 이것이
+                           팔 정밀도가 아닌 통합 파지 실패의 실제 원인이었다. 세 손가락 모두에서
+                           hand_only.xml과 큰 고정 오프셋이 나타난 점으로 좌표계 오류임을 확인했다.
+                           palm_R.T @ (can_world_pos - palm_world_pos)로 직접 검산한 올바른
+                           로컬 오프셋은 (0.065, 0.01, 0.105)다. -->
                       <site name="grasp_target" pos="0.065 0.01 0.105" size="0.006" rgba="0 1 0 1"/>
 
-                      <!-- Thumb (4 joints) -->
+                      <!-- 엄지(관절 4개) -->
                       <body name="finger_r_link1" pos="-0.0125 0.03493 0.04475">
                         <inertial pos="0.0238075 0.00131524 0.000460355" mass="0.0408685"
                           diaginertia="2.88193e-06 9.43334e-06 9.65126e-06"/>
@@ -252,7 +245,7 @@
                         </body>
                       </body>
 
-                      <!-- Index finger (4 joints) -->
+                      <!-- 검지(관절 4개) -->
                       <body name="finger_r_link5" pos="-0.0015 0.03608 0.09575">
                         <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044"
                           diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
@@ -282,7 +275,7 @@
                         </body>
                       </body>
 
-                      <!-- Middle finger (4 joints) -->
+                      <!-- 중지(관절 4개) -->
                       <body name="finger_r_link9" pos="-0.0015 0.00908 0.10353">
                         <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044"
                           diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
@@ -312,7 +305,7 @@
                         </body>
                       </body>
 
-                      <!-- Ring finger (4 joints) -- locked at range=0 (Phase 2) -->
+                      <!-- 약지(관절 4개): 2단계에서 range=0으로 잠금 -->
                       <body name="finger_r_link13" pos="-0.0015 -0.01792 0.09775">
                         <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044"
                           diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
@@ -342,7 +335,7 @@
                         </body>
                       </body>
 
-                      <!-- Pinky finger (4 joints) -- locked at range=0 (Phase 2) -->
+                      <!-- 소지(관절 4개): 2단계에서 range=0으로 잠금 -->
                       <body name="finger_r_link17" pos="-0.0015 -0.04492 0.07875">
                         <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044"
                           diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
@@ -383,7 +376,7 @@
   </worldbody>
 
   <contact>
-    <!-- Hand self-collision excludes, identical rationale to models/hand_only.xml (Phase 2) -->
+    <!-- 손 자체 충돌 제외 조건은 2단계의 models/hand_only.xml과 같은 근거를 따른다. -->
     <exclude body1="finger_r_link1" body2="finger_r_link2"/>
     <exclude body1="finger_r_link2" body2="finger_r_link3"/>
     <exclude body1="finger_r_link3" body2="finger_r_link4"/>
@@ -413,18 +406,15 @@
     <exclude body1="hx5_r_base" body2="finger_r_link17"/>
     <exclude body1="hx5_r_base" body2="finger_r_link18"/>
     <exclude body1="arm_r_link7" body2="hx5_r_base"/>
-    <!-- palm_collision is a single solid box standing in for the real (narrower, curved)
-         palm mesh (Phase 2). In the validated Phase 1/2 grasp geometry the
-         palm sits behind and below the fingertip/grasp point, which puts the box's own bulk
-         right at table height when reaching for a can this close to the table surface --
-         real box, but not the real palm shape, so it isn't the thing this phase means to
-         test. Excluded rather than re-deriving whole-arm collision-free motion planning
-         (out of scope for this project). -->
+    <!-- palm_collision은 실제로는 더 좁고 굽은 손바닥 메시를 하나의 직육면체로 근사한
+         것이다. 1·2단계에서 검증한 파지 형상에서는 손바닥이 손끝과 파지점의 뒤쪽 아래에 있어,
+         테이블 가까운 캔에 접근하면 근사 상자의 부피가 테이블 높이와 겹친다. 실제 손바닥 형상이
+         아닌 근사 오차이며 이 단계의 검증 대상도 아니다. 프로젝트 범위를 벗어나는 전신 무충돌
+         경로 계획을 다시 구성하는 대신 이 충돌을 제외한다. -->
     <exclude body1="hx5_r_base" body2="world"/>
-    <!-- Ring/pinky are locked at range=0 (Phase 2's 3-point grasp fallback) -- fixed,
-         inert, out of the active grasp. Their exact resting collision against the
-         environment (not the can) isn't what this phase tests; excluded for the same
-         reason as the palm above. Still allowed to touch the can, matching Phase 1/2. -->
+    <!-- 약지와 소지는 2단계의 3점 파지 대안에 따라 range=0으로 잠겨 능동 파지에 참여하지
+         않는다. 환경과의 정지 충돌은 이 단계의 검증 대상이 아니므로 손바닥과 같은 이유로
+         제외한다. 다만 1·2단계와 같이 캔과의 접촉은 허용한다. -->
     <exclude body1="finger_r_link13" body2="world"/>
     <exclude body1="finger_r_link14" body2="world"/>
     <exclude body1="finger_r_link15" body2="world"/>
@@ -436,11 +426,11 @@
   </contact>
 
   <actuator>
-    <!-- Arm: pure torque (motor) actuators, driven every step by src/arm_control.py's
-         software PD + gravity/Coriolis feedforward (MuJoCo's built-in <position> actuator
-         wasn't accurate enough here: no integral, no
-         feedforward, and the per-joint dampratio=1 doesn't critically damp a coupled
-         7-link chain). ctrlrange matches the official forcerange values. -->
+    <!-- 팔은 순수 토크 모터 액추에이터를 사용하며, 매 스텝
+         src/ffw_sh5_grasp/control/arm.py의 소프트웨어 PD와 중력·코리올리 전향 보상으로
+         구동한다. MuJoCo 내장 <position> 액추에이터는 적분 및 전향 보상이 없고 관절별
+         dampratio=1만으로 결합된 7링크 체인을 임계 감쇠하지 못해 정밀도가 부족했다.
+         ctrlrange는 공식 forcerange 값과 일치한다. -->
     <motor name="arm_r_joint1" joint="arm_r_joint1" ctrlrange="-61.4 61.4"/>
     <motor name="arm_r_joint2" joint="arm_r_joint2" ctrlrange="-61.4 61.4"/>
     <motor name="arm_r_joint3" joint="arm_r_joint3" ctrlrange="-31.7 31.7"/>
@@ -463,13 +453,11 @@
     <position class="finger_tip" name="finger_r_joint12" joint="finger_r_joint12" inheritrange="1"/>
   </actuator>
 
-  <!-- "home": arm at a ready pose 10cm back / 20cm above the can (HOME_Q in
-       tests/test_phase_3.py, found via IK), well clear of the table. Recomputed after
-       fixing the grasp_target site definition bug: the site's
-       local offset was copy-pasted from hand_only.xml's can *world* position without
-       transforming into the palm's local frame, so every arm pose computed against it
-       before the fix targeted the wrong physical point on the hand. Hand in its Phase 2
-       pregrasp shape. -->
+  <!-- "home"은 tests/test_phase_3.py의 HOME_Q로, IK로 구한 캔보다 10 cm 뒤·20 cm 위의
+       준비 자세이며 테이블과 충분히 떨어져 있다. grasp_target 사이트의 로컬 오프셋에
+       hand_only.xml의 캔 월드 좌표를 변환 없이 복사했던 오류를 수정한 뒤 다시 계산했다.
+       수정 전의 팔 자세는 모두 손의 잘못된 물리 지점을 목표로 했다. 손은 2단계의 파지 전
+       자세를 사용한다. -->
   <keyframe>
     <key name="home"
       qpos="0.5 0.0 0.705  1 0 0 0

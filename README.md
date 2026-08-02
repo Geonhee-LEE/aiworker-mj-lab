@@ -46,11 +46,21 @@ collision avoidance를 하나의 Python 앱에서 실행합니다.
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install mujoco numpy glfw imgui-bundle
-python src/teleop_app.py
+python -m pip install mujoco numpy glfw imgui-bundle pyyaml
+python3 src/teleop_app.py
 ```
 
 보조 이미지/mesh 스크립트에는 `pillow`, `trimesh`가 추가로 필요합니다.
+
+실행·IK·제어·스워브·파지·UI 튜닝값은 한국어 주석이 포함된
+[`config/default.yaml`](config/default.yaml)에 있습니다. 일부 값만 바꾼 사용자
+파일은 다음처럼 적용합니다.
+
+```bash
+python3 src/teleop_app.py --config config/local.yaml
+```
+
+자세한 병합·검증 규칙은 [YAML 파라미터 설정](docs/configuration.md)을 참고합니다.
 
 ## 가장 중요한 조작
 
@@ -88,6 +98,7 @@ python3 tests/test_whole_body.py
 for p in 0 1 2 3 4 5 6; do
   python3 "tests/test_phase_${p}.py"
 done
+python3 tests/test_config.py
 python3 tests/test_whole_body.py
 ```
 
@@ -102,22 +113,35 @@ mkdocs serve
 ## 코드 지도
 
 ```text
+config/
+└── default.yaml                  # 한국어 주석 실행·알고리즘 기본 설정
 src/
-├── teleop_app.py        # app 조립, command arbitration, frame/physics loop
-├── teleop_ui.py         # ImGui widget와 mode/target 입력
-├── teleop_render.py     # GLFW/MuJoCo scene, camera, ImGuizmo, collision overlay
-├── teleop_targets.py    # target 좌표 변환, marker, Bimanual state
-├── kinematics.py        # 단일 site FK/IK 공개 진입점
-├── kinematics_math.py   # 회전 행렬·쿼터니언 수학
-├── kinematic_tree.py    # MJCF 트리와 FK/Jacobian
-├── collision_kinematics.py # collision distance gradient
-├── bimanual_kinematics.py # 양손 rigid-grasp 상대 pose/Jacobian
-├── bounded_optimization.py # BVLS와 collision soft barrier solver
-├── whole_body_ik.py     # WBIK task 조립, 상태·bound·명령 관리
-├── base_teleop.py       # BodyTwist, swerve IK/FK, reversal/steering controller
-├── arm_control.py       # 팔 PD + gravity/Coriolis feedforward torque
-├── grasp.py             # finger synergy와 contact-based grasp 판정
-└── ik.py                # 단일 팔 IK와 Phase 3/4 독립 회귀 경로
+├── teleop_app.py                 # 기존 실행 명령용 launcher
+├── kinematics.py                 # 기존 import 호환 facade
+├── ik.py                         # InverseKinematics 호환 facade
+└── ffw_sh5_grasp/
+    ├── config.py                 # YAML 병합·검증과 설정 조회
+    ├── application/
+    │   ├── teleop.py             # app 조립, command 중재, frame/physics loop
+    │   └── targets.py            # target 좌표 변환, marker, Bimanual state
+    ├── visualization/
+    │   ├── ui.py                 # ImGui widget와 mode/target 입력
+    │   └── render.py             # 장면·카메라·ImGuizmo·충돌 오버레이
+    ├── kinematics/
+    │   ├── solver.py             # 단일 site FK/IK 공개 진입점
+    │   ├── legacy.py             # 기존 InverseKinematics 이름의 호환 계층
+    │   ├── tree.py               # MJCF tree와 FK/Jacobian
+    │   ├── rotations.py          # 회전행렬·quaternion 수학
+    │   └── collision.py          # 충돌 거리 기울기
+    ├── control/
+    │   ├── whole_body.py         # WBIK task·bound·command 조립
+    │   ├── optimization.py       # BVLS와 soft barrier
+    │   ├── bimanual.py           # rigid-grasp 상대 task
+    │   ├── arm.py                # 팔 torque 제어
+    │   ├── base.py               # BodyTwist와 swerve 제어
+    │   └── grasp.py              # finger synergy와 접촉 판정
+    ├── mujoco_utils.py           # 공용 MuJoCo name/actuator helper
+    └── paths.py                  # 저장소와 모델 경로
 ```
 
 코드를 처음 읽는다면 [시스템 이해와 개발 가이드](docs/guide/index.md)의 목적별

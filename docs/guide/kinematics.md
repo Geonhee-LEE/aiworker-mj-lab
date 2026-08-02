@@ -40,10 +40,10 @@ flowchart LR
 
 | 파일 | 책임 | 상태 접근 |
 |---|---|---|
-| `kinematic_tree.py` | 불변 body–joint–site tree, FK와 point/site Jacobian | 전달받은 NumPy `qpos`만 읽음 |
-| `kinematics_math.py` | rotation matrix, quaternion, orientation error | 순수 배열 계산 |
-| `collision_kinematics.py` | geometry distance, 최근접점, distance gradient | live `MjData` read-only |
-| `kinematics.py` | `KinematicsSolver`와 기존 공개 API | tree에 계산 위임 |
+| `kinematics/tree.py` | 불변 body–joint–site tree, FK와 point/site Jacobian | 전달받은 NumPy `qpos`만 읽음 |
+| `kinematics/rotations.py` | rotation matrix, quaternion, orientation error | 순수 배열 계산 |
+| `kinematics/collision.py` | geometry distance, 최근접점, distance gradient | live `MjData` read-only |
+| `kinematics/solver.py` | `KinematicsSolver`와 기존 공개 API | tree에 계산 위임 |
 
 충돌 query만 현재 geometry pose/contact가 필요해 live `MjData`를 읽는다. 나머지는
 `qpos0` 또는 `context_qpos` 복사본으로 계산하며 live state를 수정하지 않는다.

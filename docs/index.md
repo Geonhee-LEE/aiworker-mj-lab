@@ -38,12 +38,18 @@ FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 ROS-free 텔
 
     - [시스템 이해와 개발 가이드](guide/index.md)
 
+=== "함수 사용법을 찾고 싶다"
+
+    입력·반환값·부작용과 호출 시점을 패키지별로 찾는다.
+
+    - [API 레퍼런스](api/index.md)
+
 === "ROS2 경험으로 이해하고 싶다"
 
-    기본 구조를 먼저 본 다음 ROS2 구성요소와 대응시킨다.
+    별도 중복 가이드 대신 한 장의 대응표로 용어를 바꾼 뒤 같은 모듈 문서를 읽는다.
 
     - [아키텍처와 데이터 흐름](overview.md)
-    - [통합 가이드의 ROS2 읽기 경로](guide/index.md#ros2-reading)
+    - [ROS2 용어 대응표](overview.md#ros2-concept-map)
 
 ## 한눈에 보는 동작 흐름
 

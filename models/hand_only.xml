@@ -29,19 +29,19 @@
   </asset>
 
   <default>
-    <!-- Visual meshes never collide; physical collision is capsules/box below (Phase 0 found
-         the official finger collision geoms are mesh-based, so Phase 1 replaces them). -->
+    <!-- 시각화 메시는 충돌에 사용하지 않는다. 공식 손가락 충돌 형상이 메시 기반임을
+         0단계에서 확인했으므로, 1단계부터 아래의 캡슐과 상자 형상으로 대체한다. -->
     <default class="visual">
       <geom type="mesh" contype="0" conaffinity="0" density="0" group="2"/>
     </default>
-    <!-- shadow_hand recipe: solimp/solref for hand collision geoms -->
+    <!-- shadow_hand 설정을 참고한 손 충돌 형상의 solimp/solref 값 -->
     <default class="collision">
       <geom group="3" contype="1" conaffinity="1" condim="3" solimp="0.5 0.99 0.0001" solref="0.005 1"/>
     </default>
 
     <default class="finger">
       <joint frictionloss="0.05" armature="0.05" damping="1.0"/>
-      <!-- shadow_hand-scale actuator: kp 0.5-2, forcerange +-1-2 N*m -->
+      <!-- shadow_hand 수준의 액추에이터 설정: kp 0.5~2, forcerange ±1~2 N·m -->
       <position kp="0.7" dampratio="1" forcerange="-1.0 1.0"/>
       <default class="thumb_r_cmc">
         <joint axis="1 0 0" range="-1.5708 1.5708"/>
@@ -74,9 +74,9 @@
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" pos="0 0 -0.3"/>
 
-    <!-- Mocap anchor: hx5_r_base is welded here via the equality constraint below.
-         This is the sanctioned MuJoCo idiom for "fixed to world" -- the physics engine
-         enforces the weld via constraint force, we never write hx5_r_base qpos directly. -->
+    <!-- 모션 캡처 기준점: 아래 등식 제약으로 hx5_r_base를 이 몸체에 용접한다.
+         이는 MuJoCo에서 물체를 월드에 고정하는 표준 방식이다. 물리 엔진이 제약력으로
+         용접을 유지하므로 hx5_r_base의 qpos를 직접 쓰지 않는다. -->
     <body name="hand_mocap" mocap="true" pos="0 0 0.15" quat="0.5 0.5 0.5 0.5">
       <geom type="box" size="0.008 0.008 0.008" rgba="1 0 0 0.4" contype="0" conaffinity="0"/>
     </body>
@@ -89,7 +89,7 @@
       <geom name="palm_collision" type="box" size="0.02421 0.05536 0.06126"
         pos="-0.00321 -0.00121 0.06126" class="collision"/>
 
-      <!-- Thumb (4 joints) -->
+      <!-- 엄지(관절 4개) -->
       <body name="finger_r_link1" pos="-0.0125 0.03493 0.04475">
         <inertial pos="0.0238075 0.00131524 0.000460355" mass="0.0408685"
           diaginertia="2.88193e-06 9.43334e-06 9.65126e-06"/>
@@ -113,14 +113,14 @@
                 diaginertia="1.11607e-05 2.80794e-06 1.13431e-05"/>
               <joint name="finger_r_joint4" class="thumb_r_ip"/>
               <geom type="mesh" mesh="hx5_r_thumb_tip" material="black" class="visual"/>
-              <!-- fingertip: measured radius + 1mm pad -->
+              <!-- 손끝: 측정 반지름에 1 mm 여유를 더함 -->
               <geom type="capsule" fromto="0 0.0025 0.0015  0 0.0415 0.0015" size="0.012" class="collision"/>
             </body>
           </body>
         </body>
       </body>
 
-      <!-- Index finger (4 joints) -->
+      <!-- 검지(관절 4개) -->
       <body name="finger_r_link5" pos="-0.0015 0.03608 0.09575">
         <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044"
           diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
@@ -150,7 +150,7 @@
         </body>
       </body>
 
-      <!-- Middle finger (4 joints) -->
+      <!-- 중지(관절 4개) -->
       <body name="finger_r_link9" pos="-0.0015 0.00908 0.10353">
         <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044"
           diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
@@ -180,8 +180,8 @@
         </body>
       </body>
 
-      <!-- Ring finger (4 joints) -- locked at range=0 (Phase 2: 3-point grasp
-           fallback, thumb+index+middle only) -->
+      <!-- 약지(관절 4개): 2단계의 엄지·검지·중지 3점 파지 대안에 따라
+           range=0으로 잠근다. -->
       <body name="finger_r_link13" pos="-0.0015 -0.01792 0.09775">
         <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044"
           diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
@@ -211,7 +211,7 @@
         </body>
       </body>
 
-      <!-- Pinky finger (4 joints) -- locked at range=0, see Ring finger comment above -->
+      <!-- 소지(관절 4개): range=0으로 잠근다. 위 약지 설명을 참고한다. -->
       <body name="finger_r_link17" pos="-0.0015 -0.04492 0.07875">
         <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044"
           diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
@@ -242,17 +242,15 @@
       </body>
     </body>
 
-    <!-- Static support so the can rests in place until grasped instead of free-falling
-         (hand_only has no table yet -- that's Phase 3). Without this, gravity pulls the can
-         out of the fingers' reach faster than the gentle force-limited actuators can close:
-         a real table will replace this in Phase 3. Sized to clear
-         palm_collision (world Y <= 0.021) and stay below the index/middle curl band
-         (world Z >= 0.159) so it doesn't interfere with the grasp itself. -->
+    <!-- 파지 전 캔이 자유 낙하하지 않도록 두는 정적 받침대다. hand_only에는 아직
+         3단계에서 추가할 테이블이 없다. 받침대가 없으면 힘 제한이 작은 액추에이터가
+         닫히기 전에 캔이 손가락 범위 밖으로 떨어진다. palm_collision(월드 Y <= 0.021)을
+         피하고 검지·중지 굽힘 영역(월드 Z >= 0.159)보다 낮게 두어 파지를 방해하지 않는다. -->
     <geom name="can_support" type="box" size="0.05 0.045 0.01" pos="0.105 0.085 0.095"
       rgba="0.3 0.3 0.3 1"/>
 
-    <!-- Can: freejoint, priority=1 so the can's contact params win over the finger geoms'
-         at every hand-can contact (shadow_hand recipe) -->
+    <!-- 캔: 자유 관절을 사용한다. 모든 손-캔 접촉에서 캔의 접촉 매개변수가 손가락
+         형상보다 우선하도록 priority=1을 지정했다(shadow_hand 설정 참고). -->
     <body name="can" pos="0.105 0.065 0.16">
       <freejoint name="can_free"/>
       <inertial pos="0 0 0" mass="0.35" diaginertia="0.000448 0.000448 0.00019"/>
@@ -266,11 +264,10 @@
     <weld body1="hx5_r_base" body2="hand_mocap" solref="0.005 1" solimp="0.9 0.95 0.001"/>
   </equality>
 
-  <!-- Anatomically-adjacent link pairs that always sit close together by design.
-       Parent-child pairs copied verbatim from the official ffw_sh5.xml <contact> section.
-       The finger_r_link5/9/13/17 (mcp) pairs are new: replacing mesh collision with fatter
-       capsule approximations (Phase 1) made adjacent fingers' mcp capsules overlap even
-       though the original meshes did not (Phase 2). -->
+  <!-- 구조상 항상 가까이 놓이는 해부학적 인접 링크 쌍이다. 부모-자식 쌍은 공식
+       ffw_sh5.xml의 <contact> 구역을 그대로 따랐다. finger_r_link5/9/13/17(MCP) 쌍은
+       새로 추가했다. 1단계에서 메시 충돌을 더 굵은 캡슐 근사로 바꾸자 원래 메시는
+       겹치지 않던 인접 손가락의 MCP 캡슐이 겹치는 현상을 2단계에서 확인했기 때문이다. -->
   <contact>
     <exclude body1="finger_r_link1" body2="finger_r_link2"/>
     <exclude body1="finger_r_link2" body2="finger_r_link3"/>
@@ -290,9 +287,9 @@
     <exclude body1="finger_r_link5" body2="finger_r_link9"/>
     <exclude body1="finger_r_link9" body2="finger_r_link13"/>
     <exclude body1="finger_r_link13" body2="finger_r_link17"/>
-    <!-- palm_collision is a crude single box proxy for the real palm mesh (which has
-         finger sockets carved out); at rest several mid-finger links clip into it.
-         Exclude palm-vs-any-finger-link broadly rather than chase individual pairs. -->
+    <!-- palm_collision은 손가락 결합부가 파인 실제 손바닥 메시를 하나의 상자로
+         단순 근사한 것이다. 정지 자세에서 일부 손가락 중간 링크가 상자 안으로 들어가므로,
+         개별 쌍을 나열하기보다 손바닥과 모든 손가락 링크 사이의 충돌을 넓게 제외한다. -->
     <exclude body1="hx5_r_base" body2="finger_r_link1"/>
     <exclude body1="hx5_r_base" body2="finger_r_link2"/>
     <exclude body1="hx5_r_base" body2="finger_r_link5"/>
@@ -318,16 +315,15 @@
     <position class="finger_pip" name="finger_r_joint10" joint="finger_r_joint10" inheritrange="1"/>
     <position class="finger_dip" name="finger_r_joint11" joint="finger_r_joint11" inheritrange="1"/>
     <position class="finger_tip" name="finger_r_joint12" joint="finger_r_joint12" inheritrange="1"/>
-    <!-- Ring/pinky (joint13-20) have no actuator: locked at range=0, see body comments above -->
+    <!-- 약지·소지(joint13~20)는 range=0으로 잠겨 있으므로 액추에이터가 없다. -->
   </actuator>
 
-  <!-- Phase 2 "pregrasp" (grasp=0, thumb=0 in src/grasp.py's synergy mapping): thumb
-       pre-shape (joint1 CMC, joint2 MCP-yaw) found by FK sweep so the thumb opposes the
-       index/middle convergence zone, PLUS index/middle/thumb curl already partway closed
-       (starting from full extension left ~10cm of empty travel
-       before any contact, giving the freely-falling can time to drop out of reach before
-       the gentle force-limited actuators could catch it. Pre-curling to within ~7mm of the
-       can keeps the final closing motion short). -->
+  <!-- 2단계의 "파지 전 자세"다. src/ffw_sh5_grasp/control/grasp.py의 시너지 매핑에서
+       grasp=0, thumb=0에 해당한다. FK 탐색으로 엄지의 사전 자세(joint1 CMC,
+       joint2 MCP-yaw)를 찾아 엄지가 검지·중지의 수렴 영역을 마주 보게 했다. 검지·중지·엄지도
+       일부 굽힌 상태로 시작한다. 완전히 편 자세에서는 접촉 전 빈 이동 거리가 약 10 cm라서,
+       힘 제한이 작은 액추에이터가 잡기 전에 캔이 범위 밖으로 떨어졌다. 캔과 약 7 mm 이내까지
+       미리 굽혀 최종 닫힘 동작을 짧게 유지한다. -->
   <keyframe>
     <key name="pregrasp"
       qpos="0 0 0.15  0.5 0.5 0.5 0.5

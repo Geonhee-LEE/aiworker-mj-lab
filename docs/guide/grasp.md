@@ -1,4 +1,4 @@
-# `src/grasp.py`
+# `src/ffw_sh5_grasp/control/grasp.py`
 
 !!! info "핵심 알고리즘 학습 순서 7/7"
     팔과 base가 목표 pose를 추종한 뒤 손가락 actuator 명령과 실제 contact force로
@@ -6,6 +6,9 @@
     [핵심 알고리즘 학습 순서](index.md#algorithm-learning-order)에서 다시 볼 수 있다.
 
 손가락 synergy를 actuator target으로 변환하고, 접촉력으로 grasp 여부를 판정한다.
+
+열림 비율, 엄지 각도와 접촉력 판정 임계값은 `config/default.yaml`의 `grasp` 구역에서
+조절한다. 사용자 파일 적용법은 [YAML 파라미터 설정](../configuration.md)에 있다.
 
 ## Target 구조
 
@@ -136,7 +139,7 @@ coefficient cache는 고정된 model 정보만 저장하고 `data.ctrl` 값은 �
 
 ## 사용 위치
 
-`teleop_app.py`의 `_step_actuators()`가 물리 substep마다 양손에 대해 호출한다.
+`application/teleop.py`의 `_step_actuators()`가 물리 substep마다 양손에 대해 호출한다.
 
 ```python
 grasp.apply_grasp(model, data, grasp=targets["grasp_r"], thumb=targets["thumb_r"], side="r")

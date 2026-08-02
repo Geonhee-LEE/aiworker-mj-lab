@@ -1,11 +1,12 @@
-"""Phase 0 — official model validation.
+"""Phase 0 공식 모델 검증.
 
-Loads the official ROBOTIS FFW-SH5 menagerie scene (unmodified) and:
-  1. Prints a model structure report (dof counts, joints, actuators, geoms, solver options).
-  2. Runs a 5s gravity-only, zero-control simulation and asserts it does not diverge.
-  3. Determines whether finger collision geoms are mesh- or primitive-based.
+수정하지 않은 공식 ROBOTIS FFW-SH5 menagerie 장면을 불러와 다음을 확인한다.
 
-Run headless: `python3 tests/test_phase_0.py`
+1. 자유도 수, 관절, 액추에이터, geom과 solver 옵션을 포함한 모델 구조를 출력한다.
+2. 중력만 있고 제어는 없는 시뮬레이션을 5초 실행해 발산하지 않는지 확인한다.
+3. 손가락 충돌 geom이 mesh인지 primitive인지 판정한다.
+
+Headless 실행: ``python3 tests/test_phase_0.py``
 """
 
 import pathlib
@@ -128,7 +129,7 @@ def build_report(model):
                 mesh_collision_count += 1
             else:
                 primitive_collision_count += 1
-            # geom bodies under finger_l_/finger_r_ or hx5_ base
+            # finger_l_, finger_r_ 또는 hx5_ 베이스 아래 body에 속한 geom만 확인한다.
             bid = model.geom_bodyid[gid]
             bname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, bid) or ""
             if bname.startswith("finger_") or bname.startswith("hx5_"):

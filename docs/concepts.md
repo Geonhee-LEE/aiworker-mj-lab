@@ -79,14 +79,14 @@ ON/OFF 전환 시 앱은 world pose를 먼저 저장하고 새 좌표계 값으�
 | 이름 | 입력 | 출력/변수 | 런타임 역할 |
 |---|---|---|---|
 | FK mode | J1~J7 slider | 지정한 팔 관절 목표 | 해당 팔 Cartesian solver 제외 |
-| `ik.py` | 한 손 world pose | 한 팔 7개 관절 위치 | Phase 3/4 독립 회귀와 단일 팔 solver |
-| `whole_body_ik.py` | 양손 world pose | base/lift/양팔 differential command | 현재 teleop IK 경로 |
-| `bimanual_kinematics.py` | 양손 pose/Jacobian | rigid-grasp 상대 task | WBIK 순수 계산 보조 |
-| `bounded_optimization.py` | task 행렬과 box/barrier | bounded 최소제곱 해 | WBIK 순수 수치 solver |
+| `kinematics/legacy.py` | 한 손 world pose | 한 팔 7개 관절 위치 | Phase 3/4 독립 회귀와 단일 팔 solver |
+| `control/whole_body.py` | 양손 world pose | base/lift/양팔 differential command | 현재 teleop IK 경로 |
+| `control/bimanual.py` | 양손 pose/Jacobian | rigid-grasp 상대 task | WBIK 순수 계산 보조 |
+| `control/optimization.py` | task 행렬과 box/barrier | bounded 최소제곱 해 | WBIK 순수 수치 solver |
 
 여기서 FK는 forward kinematics 계산 자체와 UI의 `FK mode`라는 표현이 겹친다. UI의
 FK mode는 “관절 slider를 직접 목표로 사용한다”는 뜻이고, 수학적 FK 계산은
-`kinematics.py`가 pose/Jacobian을 평가할 때 항상 사용한다.
+`kinematics/solver.py`가 pose/Jacobian을 평가할 때 항상 사용한다.
 
 ## 5. Whole-body IK가 하는 일
 
@@ -160,4 +160,4 @@ ROS node, topic, service, action, tf2, MoveIt, Pinocchio, FCL, OSQP 코드는 �
 10. collision/contact/gizmo/UI를 렌더링한다.
 
 이 순서를 코드에서 따라가려면 [아키텍처와 데이터 흐름](overview.md)과
-[`teleop_app.py` 가이드](guide/teleop_app.md)를 읽는다.
+[`application/teleop.py` 가이드](guide/teleop_app.md)를 읽는다.

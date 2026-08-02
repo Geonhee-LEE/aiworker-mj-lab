@@ -7,7 +7,7 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
       - '.github/workflows/gendoc.yml'
-  # Allows you to run this workflow manually from the Actions tab
+  # Actions 탭에서 이 작업 흐름을 수동으로 실행할 수 있게 한다.
   workflow_dispatch:
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
     name: Generate documentation
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # needed for mkdocs gh-deploy to push the built site to gh-pages
+      contents: write  # mkdocs gh-deploy가 빌드 결과를 gh-pages에 올리는 데 필요하다.
 
     steps:
       - uses: actions/checkout@v4

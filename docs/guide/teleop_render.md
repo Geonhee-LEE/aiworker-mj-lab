@@ -1,9 +1,12 @@
-# `src/teleop_render.py`
+# `src/ffw_sh5_grasp/visualization/render.py`
 
 GLFW 창, MuJoCo scene render, 카메라, 3D gizmo를 담당한다.
 
 UI·목표 상태와 gizmo가 연결되는 전체 흐름은
-[Part 9 — Cyclo Control UI](ros2/09-teleoperation-ui.md)에서 확인한다.
+[UI 패널](teleop_ui.md)과 [목표와 좌표 변환](teleop_targets.md)에서 확인한다.
+
+카메라 프리셋, 기즈모 크기와 충돌 표시 색·크기는 `config/default.yaml`의 `render`
+구역에서 조절한다. 적용법은 [YAML 파라미터 설정](../configuration.md)을 참고한다.
 
 ## 역할
 
@@ -61,7 +64,7 @@ flowchart TD
 ```text
 begin_frame()
 handle_camera_mouse()
-teleop_ui.draw_panel()
+ui.draw_panel()
 teleop_app._step_physics()
 render_scene()
 end_frame()

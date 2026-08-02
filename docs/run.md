@@ -95,7 +95,7 @@
 ### 3D gizmo
 
 marker에서 translation 화살표 또는 rotation ring을 drag한다. gizmo는 world pose를
-출력하고 `teleop_targets.py`가 현재 Whole-body mode의 target 좌표계로 역변환한다.
+출력하고 `application/targets.py`가 현재 Whole-body mode의 target 좌표계로 역변환한다.
 
 ## Control Center → Right Arm / Left Arm
 

@@ -21,7 +21,7 @@
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install mujoco numpy glfw imgui-bundle
+python -m pip install mujoco numpy glfw imgui-bundle pyyaml
 ```
 
 이미 시스템 환경에 설치되어 있다면 가상환경은 생략할 수 있다. 이미지 생성과 일부
@@ -48,8 +48,11 @@ python3 tests/test_whole_body.py
 ## 4. 앱 실행
 
 ```bash
-python src/teleop_app.py
+python3 src/teleop_app.py
 ```
+
+속도, IK·제어 이득, 파지와 UI 범위를 바꾸려면 코드를 수정하지 말고
+[YAML 파라미터 설정](configuration.md)에 따라 사용자 설정을 적용한다.
 
 정상이라면 주 창에는 3D 장면과 상태 창이 보이고, 두 워크스페이스가 주 창 오른쪽
 바깥의 별도 OS 창으로 보인다.

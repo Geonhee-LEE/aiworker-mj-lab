@@ -19,40 +19,27 @@
     <material name="grey" rgba="0.7 0.7 0.7 1"/>
     <material name="table_mat" rgba="0.55 0.4 0.3 1"/>
 
-    <!-- Can visual mesh + label texture (Session 8 후속 9, rewritten 후속 10 to use the
-         actual detailed STL instead of a bare substitute cylinder -- see below). Source
-         mesh: the sibling ffw-sh5-teleoperation repo's assets/soda_can_stl/soda_can.stl,
-         copied in (assets/soda_can/), not referenced by absolute path, matching how
-         assets/robotis_ffw was vendored in Phase 0. Label texture: the same repo's
-         soda_can_color2.png (4096x4096 UV atlas for the mesh's own -- MuJoCo-unreadable,
-         STL never carries UV -- layout); cropped out just the label island (the full
-         circumferential wrap, already doubled around 360 deg in the source art) and
-         downscaled to assets/soda_can/soda_can_label.png (1024px).
+    <!-- 캔 시각 메시와 라벨 텍스처다. 실제 세부 STL 대신 단순 원기둥을 쓰던 구성을
+         8차 작업 후속 10에서 교체했다. 원본 메시는 인접 ffw-sh5-teleoperation 저장소의
+         assets/soda_can_stl/soda_can.stl이며, 0단계의 robotis_ffw 자산과 같은 방식으로
+         절대 경로 없이 assets/soda_can/에 포함했다. 라벨은 같은 저장소의 4096×4096
+         UV 아틀라스 soda_can_color2.png에서 원주 라벨 영역만 잘라 1024 px의
+         assets/soda_can/soda_can_label.png로 축소했다. STL 형식 자체에는 UV가 없다.
 
-         Getting the label to actually wrap around the can took two attempts. First tried a
-         plain `type="cylinder"` primitive geom (not the real mesh at all), expecting
-         MuJoCo to auto-generate circumferential texture coordinates -- confirmed
-         empirically (dumped MuJoCo's own loaded texture pixel data to rule out a
-         load/decode bug first) that a primitive cylinder's auto-UV does not produce a
-         usable single wrap for a detailed 2D image; every viewing angle showed the same
-         compressed/aliased slice regardless of texture resolution or geom scale.
+         라벨을 캔 둘레에 정확히 감는 데 두 가지 방식을 시험했다. 첫 시도는 MuJoCo의
+         type="cylinder" 기본 형상이 원주 UV를 자동 생성할 것으로 기대했다. 로드된 텍스처
+         픽셀까지 확인해 디코딩 문제를 배제했지만, 해상도나 형상 크기와 관계없이 모든
+         시점에서 같은 압축·앨리어싱 조각이 보여 상세 2차원 라벨의 단일 랩에 부적합했다.
 
-         Second attempt (current): re-derive real UV coordinates for the actual soda_can.stl
-         geometry instead of substituting a bare cylinder, so the rendered can keeps the
-         mesh's rim/pull-tab/domed-top/concave-base detail. `tests/generate_can_label_mesh.py`
-         profiles the STL's own vertex radius vs. height (it's a near-perfect constant-radius
-         cylinder from about 5% to 92% of its height, with the rest of its ~15k vertices
-         concentrated in the complex top/bottom caps -- a face-normal heuristic was tried
-         first and rejected, because the tab/rim detail is
-         locally steep enough to fool it), splits the mesh's faces into that side band vs.
-         the two cap regions by height, and computes real UV for the side faces (u = angle
-         around the can's own axis, unwrapped per-face to avoid a seam artifact since this
-         is an irregular triangulation, not a hand-built regular grid; v = height fraction).
-         Produces two OBJs (OBJ, unlike STL, supports `vt` lines) sharing the STL's original
-         vertex positions exactly: can_side_detail.obj (label texture) and
-         can_cap_detail.obj (plain aluminum color, no meaningful UV needed). Verified with a
-         render sweep including a close-up on the pull-tab -- wraps cleanly, seamless
-         join between the two pieces since both come from the same source mesh. -->
+         현재 방식은 실제 soda_can.stl의 테두리, 풀탭, 볼록한 윗면, 오목한 밑면을 유지한
+         채 UV를 다시 계산한다. tests/generate_can_label_mesh.py가 높이에 따른 꼭짓점 반지름을
+         분석한다. 높이 약 5~92%는 거의 일정 반지름이고 나머지 약 1만 5천 꼭짓점은 복잡한
+         상·하단에 집중된다. 면 법선 기준은 탭과 테두리의 급한 국소 경사 때문에 오분류하여
+         제외했다. 높이를 기준으로 측면과 두 캡의 면을 나누고, 측면에는 u=캔 축 둘레 각도,
+         v=높이 비율로 UV를 계산한다. 불규칙 삼각형의 이음매를 피하려고 면마다 u를 펼친다.
+         STL과 꼭짓점 위치가 정확히 같은 두 OBJ를 생성한다. can_side_detail.obj에는 라벨을,
+         can_cap_detail.obj에는 UV가 필요 없는 알루미늄 색을 적용한다. 풀탭 근접 화면을 포함한
+         렌더 순회로 라벨 랩과 두 메시 사이의 이음매가 자연스러운지 확인했다. -->
     <texture type="2d" name="can_label" file="../assets/soda_can/soda_can_label.png"/>
     <material name="can_mat" texture="can_label" specular="0.3" shininess="0.4"/>
     <material name="can_cap_mat" rgba="0.82 0.82 0.85 1" specular="0.6" shininess="0.6"/>
@@ -103,7 +90,7 @@
   </asset>
 
 <default>
-    <!-- Wheel steering -->
+    <!-- 바퀴 조향 -->
     <default class="wheel_steer">
       <joint frictionloss="0.1" armature="0.5" damping="200.0"/>
       <position kp="5000" forcerange="-2000 2000"/>
@@ -117,40 +104,30 @@
         <joint axis="0 0 1" range="-6.28 6.28"/>
       </default>
     </default>
-    <!-- Wheel drive. kv raised from the vendored ffw_sh5.xml's 1 (Session 8 후속): a
-         velocity actuator only develops torque proportional to (ctrl - qvel), and at kv=1
-         the wheel's own rotational inertia is so much smaller than the ~100kg base+arms it
-         must accelerate via ground friction that it settles near its own target speed while
-         delivering nowhere near enough sustained torque to also move the base -- measured
-         directly, base crawled <2mm in 4s of "full speed" forward commands. kv=30 reaches
-         ~90% of the commanded cruise speed with no added instability (max|qacc| unchanged
-         from baseline).
-         Raised again 30->150 (Session 8 후속 8, alongside the wheel-floor solref retune to
-         "0.15 1" above) after a parameter sweep.  A later geometry audit found the remaining
-         rotation loss was not a drive-gain ceiling: at transverse steering the wheel-drive
-         collision cylinders intersected base_link's invisible box.  The explicit contact
-         exclusions near line 850 and the official +/-2pi steer range remove that internal
-         constraint.  kv=150 remains because it gives responsive straight driving with low
-         slip, but it is no longer being used to mask the geometry defect.  armature=0.8
-         models the geared drive's reflected rotor inertia: it lets a zero velocity target
-         park the wheels without the large chassis recoil produced by near-massless rotors. -->
+    <!-- 바퀴 구동 설정이다. 속도 액추에이터 토크는 (ctrl-qvel)에 비례한다. 포함된
+         ffw_sh5.xml의 kv=1에서는 바퀴 회전 관성이 지면 마찰로 가속해야 할 약 100 kg의
+         베이스·팔보다 매우 작아, 바퀴 속도만 목표에 가까워지고 베이스를 움직일 지속 토크가
+         부족했다. 최대 전진 명령 4초에도 이동량이 2 mm 미만이었다. kv=30에서는 max|qacc|의
+         불안정 증가 없이 명령 순항 속도의 약 90%에 도달했다.
+         매개변수 탐색과 바퀴-바닥 solref="0.15 1" 재조정 후 kv를 30에서 150으로 높였다.
+         이후 형상 점검에서 남은 회전 손실의 원인은 이득 한계가 아니라 횡방향 조향 시
+         wheel_drive 충돌 원기둥과 base_link의 보이지 않는 상자가 겹치는 문제로 밝혀졌다.
+         아래 접촉 제외와 공식 ±2π 조향 범위로 내부 제약을 제거했다. kv=150은 낮은 미끄럼과
+         민첩한 직진 응답을 위해 유지하되 형상 결함을 가리는 용도로 쓰지 않는다. armature=0.8은
+         감속 구동계의 환산 회전자 관성을 모델링하여, 무게가 거의 없는 회전자에서 생기던 큰
+         차체 반동 없이 속도 0 명령으로 바퀴를 정지시킨다. -->
     <default class="wheel_drive">
       <joint type="hinge" axis="0 1 0" damping="2" frictionloss="0.2" armature="0.8"/>
       <velocity kv="150" ctrlrange="-50 50" ctrllimited="true"/>
     </default>
-    <!-- Slider: lift_joint. kp raised from the official 10000 (Session 8, Phase 5 후속):
-         this is a plain <position> actuator with no gravity feedforward (same class of
-         issue Phase 3 hit with the arms, see src/arm_control.py), so it has a real
-         proportional-only static droop under load -- measured directly: qfrc_bias on this
-         DOF is ~323N regardless of arm pose (total system weight along the lift axis is
-         pose-invariant, confirmed empirically), so droop ~= 323/kp. This was invisible at
-         kp=10000 with the old "arms already reaching for the table" pose (converged to
-         <0.3mm quickly for reasons not fully explained -- possibly a lucky low-vibration
-         settling path) but became a ~30mm+ slowly-growing sag once the home pose changed to
-         match ffw-sh5-mujoco's rest pose (arms hanging, elbow -90 deg) -- same total load,
-         different transient dynamics exposed the same latent per-actuator weakness a much
-         higher kp (like arm_control.py's feedforward) fixes directly. kp=500000 keeps droop
-         under ~0.7mm with no added instability (max|qacc| unchanged). -->
+    <!-- 승강 관절 lift_joint 설정이다. 중력 전향 보상이 없는 일반 <position>
+         액추에이터라 하중 아래에서 비례 제어의 정상상태 처짐이 생긴다. 이는 팔에서 확인한
+         문제와 같으며 src/ffw_sh5_grasp/control/arm.py를 참고한다. 팔 자세와 관계없이 이
+         자유도의 qfrc_bias가 약 323 N이므로 처짐은 대략 323/kp다. 기존 테이블 접근 자세에서는
+         kp=10000도 0.3 mm 이내로 빠르게 수렴해 문제가 드러나지 않았지만, 팔을 내리고 팔꿈치를
+         -90도로 둔 ffw-sh5-mujoco 휴식 자세에서는 30 mm 이상 천천히 처졌다. 총하중은 같지만
+         과도 응답 차이가 잠재적인 액추에이터 약점을 드러낸 것이다. kp=500000은 max|qacc| 증가
+         없이 처짐을 약 0.7 mm 이내로 유지한다. -->
     <default class="slider">
       <joint type="slide" frictionloss="100.0" armature="10.0" damping="5000.0"/>
       <position kp="500000" forcerange="-100000 100000"/>
@@ -158,24 +135,19 @@
         <joint axis="0 0 1" range="-0.5 0.0"/>
       </default>
     </default>
-    <!-- Mobile base: planar virtual joint (Phase 5) -- 3 real DOF (slide x, slide y, hinge
-         yaw) on base_link replacing the freejoint the official model would otherwise need,
-         driven by velocity actuators (see src/base_teleop.py). This is the MuJoCo-native
-         equivalent of the sibling ffw-sh5-teleoperation repo's kinematic transform+sweep-test
-         base -- collision sliding against
-         obstacles (e.g. the table) comes free from the constraint solver instead of a
-         hand-rolled sweep test, and it does not touch qpos directly (ctrl only). -->
-    <!-- damping/frictionloss matter here beyond the usual
-         "avoid numerical stiffness" role: a pure <velocity> actuator has zero position
-         stiffness, so with damping alone a small constant disturbance (e.g. reaction force
-         from the arms settling into a held pose) drives the base to a nonzero *steady-state*
-         velocity instead of zero -- measured directly: a 5s arm-hold-only test (no drive
-         keys) drifted the base 63-67mm/3.75 degrees with damping alone. frictionloss adds
-         real static friction that fully cancels disturbances below its threshold. The
-         original 50/30 planar damping/friction left a long release transient. 800/180,
-         together with the wheel drive's reflected armature, parks the base in 0.20s and
-         the wheel rotors in 0.32s with 3.73mm chassis recoil. Straight speed remains
-         0.593m/s with 1.3% wheel slip. -->
+    <!-- 이동 베이스는 5단계에서 평면 가상 관절로 구성했다. 공식 모델의 자유 관절 대신
+         base_link에 X·Y 슬라이드와 yaw 회전의 실제 3자유도를 둔다. 이 관절은 직접 구동하지
+         않고 바퀴-지면 마찰로 움직인다. 인접 ffw-sh5-teleoperation 저장소의 운동학 변환과
+         수동 스윕 검사를 MuJoCo 제약 해석으로 옮긴 형태라, 테이블 같은 장애물과의 충돌
+         미끄러짐을 별도 스윕 코드 없이 처리하며 qpos를 직접 쓰지 않는다. 조향·구동 변환은
+         src/ffw_sh5_grasp/control/base.py를 참고한다. -->
+    <!-- 여기서 damping과 frictionloss는 단순한 수치 강성 방지 이상의 역할을 한다.
+         순수 속도 액추에이터는 위치 강성이 0이므로 감쇠만 있으면 팔 자세 유지 반력 같은 작은
+         일정 외란에도 베이스 정상상태 속도가 0이 되지 않는다. 구동 키 없이 팔만 5초 유지한
+         실험에서 감쇠만 썼을 때 63~67 mm와 3.75도 표류했다. frictionloss는 임계값 이하의
+         외란을 상쇄하는 실제 정지 마찰을 더한다. 기존 평면 감쇠/마찰 50/30은 해제 과도 응답이
+         길었다. 800/180과 바퀴 구동의 환산 armature를 함께 쓰면 차체 반동 3.73 mm로 베이스는
+         0.20초, 바퀴 회전자는 0.32초 안에 정지한다. 직진 속도는 0.593 m/s, 미끄럼은 1.3%다. -->
     <default class="base_planar">
       <joint type="slide" damping="800" frictionloss="180" armature="0.05"/>
       <velocity kv="800" ctrlrange="-1 1" ctrllimited="true" forcerange="-500 500"/>
@@ -184,7 +156,7 @@
       <joint type="hinge" axis="0 0 1" damping="20" frictionloss="10" armature="0.05"/>
       <velocity kv="200" ctrlrange="-3 3" ctrllimited="true" forcerange="-200 200"/>
     </default>
-    <!-- Head motor -->
+    <!-- 머리 모터 -->
     <default class="head">
       <joint frictionloss="0.1" armature="0.1" damping="5.0"/>
       <position kp="200" dampratio="1" forcerange="-10 10"/>
@@ -195,7 +167,7 @@
         <joint axis="0 0 1" range="-0.35 0.35"/>
       </default>
     </default>
-    <!-- DY-80 motor: arm joint 1, 2 -->
+    <!-- DY-80 모터: 팔 1·2번 관절 -->
     <default class="DY_80">
       <joint frictionloss="0.1" armature="0.5" damping="30.0"/>
       <position kp="600" dampratio="1" forcerange="-61.4 61.4"/>
@@ -212,7 +184,7 @@
         <joint axis="1 0 0" range="-3.14 0"/>
       </default>
     </default>
-    <!-- DY-70 motor: arm joint 3, 4, 5, 6 -->
+    <!-- DY-70 모터: 팔 3~6번 관절 -->
     <default class="DY_70">
       <joint frictionloss="0.1" armature="0.5" damping="20.0"/>
       <position kp="600" dampratio="1" forcerange="-31.7 31.7"/>
@@ -241,7 +213,7 @@
         <joint axis="0 1 0" range="-1.57 1.57"/>
       </default>
     </default>
-    <!-- DP-42 motor: arm joint 7 -->
+    <!-- DP-42 모터: 팔 7번 관절 -->
     <default class="DP_42">
       <joint frictionloss="0.1" armature="0.1" damping="3.0"/>
       <position kp="200" dampratio="1" forcerange="-5.1 5.1"/>
@@ -252,11 +224,11 @@
         <joint axis="1 0 0" range="-1.5804 1.8201"/>
       </default>
     </default>
-    <!-- HX5-D20 5-finger hand -->
+    <!-- HX5-D20 오지형 손 -->
     <default class="finger">
       <joint frictionloss="0.05" armature="0.05" damping="1.0"/>
       <position kp="20" dampratio="1" forcerange="-2.0 2.0"/>
-      <!-- Left Thumb joints -->
+      <!-- 왼손 엄지 관절 -->
       <default class="thumb_l_cmc">
         <joint axis="1 0 0" range="-1.5708 1.5708"/>
       </default>
@@ -269,7 +241,7 @@
       <default class="thumb_l_ip">
         <joint axis="1 0 0" range="-1.5708 0"/>
       </default>
-      <!-- Right Thumb joints -->
+      <!-- 오른손 엄지 관절 -->
       <default class="thumb_r_cmc">
         <joint axis="1 0 0" range="-1.5708 1.5708"/>
       </default>
@@ -282,33 +254,32 @@
       <default class="thumb_r_ip">
         <joint axis="1 0 0" range="0 1.5708"/>
       </default>
-      <!-- Finger MCP Roll (spread) -->
+      <!-- 손가락 MCP 롤(벌림) -->
       <default class="finger_mcp">
         <joint axis="1 0 0" range="-0.6109 0.6109"/>
       </default>
-      <!-- Finger MCP Pitch (flex) -->
+      <!-- 손가락 MCP 피치(굽힘) -->
       <default class="finger_pip">
         <joint axis="0 1 0" range="0 2.0071"/>
       </default>
-      <!-- Finger PIP -->
+      <!-- 손가락 PIP 관절 -->
       <default class="finger_dip">
         <joint axis="0 1 0" range="0 1.5708"/>
       </default>
-      <!-- Finger DIP -->
+      <!-- 손가락 DIP 관절 -->
       <default class="finger_tip">
         <joint axis="0 1 0" range="0 1.5708"/>
       </default>
     </default>
-    <!-- Visual / Collision -->
+    <!-- 시각화 및 충돌 형상 -->
     <default class="visual">
       <geom type="mesh" contype="0" conaffinity="0" density="0" group="2"/>
     </default>
     <default class="collision">
       <geom group="3" type="mesh"/>
     </default>
-    <!-- Hand capsule collision: shadow_hand recipe (Phase 1/2/3), distinct from the plain
-         mesh "collision" class above so this doesn't change contact behavior for the rest
-         of the body (arms, head, torso). -->
+    <!-- 손의 캡슐 충돌은 1~3단계의 shadow_hand 설정을 따른다. 위 일반 메시 collision
+         클래스와 분리해 팔·머리·몸통 등 나머지 몸체의 접촉 동작에는 영향을 주지 않는다. -->
     <default class="hand_collision">
       <geom group="3" contype="1" conaffinity="1" condim="3" solimp="0.5 0.99 0.0001" solref="0.005 1"/>
     </default>
@@ -316,18 +287,13 @@
 
   <worldbody>
     <light pos="0 0 2.2" dir="0 0 -1" directional="true"/>
-    <!-- z=0.148 (Session 8 후속, wheel-friction locomotion): the wheel collision cylinders'
-         own resting height (radius 0.09, center world z=0.2365 at the authored base_link/
-         wheel pose, measured directly via mj_forward) is exactly 0.1465, but placing the
-         floor at EXACTLY that height left it sitting at a numerically unstable zero-gap
-         boundary -- measured directly: with pos=0.1465 only the rear wheel kept a contact
-         (front-left/front-right silently dropped out of `data.contact`, all three wheels'
-         xpos identical to float precision) and the base could not move at all (>99% wheel
-         slip, since two of three contact patches simply weren't there). A deliberate ~1.5mm
-         overlap makes contact detection robust for all three wheels; verified directly
-         (wheel rolling speed now matches actual base velocity, no slip). Arm/table/can
-         height calibration (Phase 4) is untouched -- this only redefines where "the ground"
-         is, not where base_link/the arm sit. -->
+    <!-- 바닥 높이는 z=0.148이다. mj_forward로 측정한 작성 자세에서 바퀴 충돌 원기둥의
+         반지름은 0.09, 중심 월드 z는 0.2365이므로 정확한 안착 높이는 0.1465다. 그러나 바닥을
+         정확히 그 높이에 두면 수치적으로 불안정한 간격 0 경계가 된다. pos=0.1465에서는 뒤
+         바퀴 접촉만 남고 앞 두 바퀴가 data.contact에서 사라져 미끄럼이 99%를 넘고 베이스가
+         움직이지 않았다. 약 1.5 mm를 의도적으로 겹쳐 세 바퀴의 접촉 검출을 안정화했다.
+         실제 베이스 속도와 바퀴 구름 속도가 일치하는 것으로 검증했다. 이는 지면 위치만 다시
+         정의하며 4단계의 팔·테이블·캔 높이 보정이나 base_link와 팔 위치는 바꾸지 않는다. -->
     <geom name="floor" size="0 0 0.05" type="plane" pos="0 0 0.148" material="groundplane"/>
 
     <body name="base_link" pos="0 0 0.15">
@@ -336,20 +302,17 @@
       <joint name="base_yaw" class="base_yaw"/>
       <inertial pos="-0.0457 0.0066 0.1943" mass="35.99" diaginertia="0.65 0.65 0.96"/>
 
-      <!-- base_mobile_assy visual -->
+      <!-- base_mobile_assy 시각 형상 -->
       <geom type="mesh" mesh="base_mobile_assy" material="black" class="visual"/>
-      <!-- base_mobile_assy collision -->
+      <!-- base_mobile_assy 충돌 형상 -->
       <geom type="box" size="0.2 0.2 0.12" pos="0 0 0.24" rgba="0 0 0 0"/>
 
-      <!-- Left front wheel (steering + driving) -- real joints restored (Session 8 후속,
-           see src/base_teleop.py) from the vendored ffw_sh5.xml's own wheel_steer/wheel_drive
-           default classes (already present above, just unused since Phase 4 removed these
-           joints for simplicity). Ground contact is what actually propels the base now --
-           the base_x/base_y/base_yaw joints on base_link stay (keeps the base from tipping/
-           rolling, an intentional simplification vs. the vendored model's full 6dof
-           floating_base freejoint) but are no longer directly actuated; wheel-ground
-           friction, transmitted through these steer/drive joints, is what pushes base_link
-           along them now. -->
+      <!-- 왼쪽 앞바퀴의 조향·구동 관절이다. 단순화를 위해 4단계에서 제거했던 관절을 포함된
+           ffw_sh5.xml의 wheel_steer/wheel_drive 기본 클래스로 복원했다. 베이스는 이제 실제
+           지면 접촉으로 추진된다. base_link의 base_x/base_y/base_yaw는 전복과 롤을 막는 평면
+           제약으로 유지하지만 직접 구동하지 않는다. 공식 모델의 6자유도 floating_base보다
+           단순화한 구성이다. 조향·구동 관절을 거친 바퀴-지면 마찰이 base_link를 평면 관절을
+           따라 민다. src/ffw_sh5_grasp/control/base.py를 참고한다. -->
       <body name="left_wheel_steer" pos="0.1371 0.2554 0.27555">
         <inertial pos="0 0 0" mass="0.5" diaginertia="0.001 0.001 0.001"/>
         <joint name="left_wheel_steer_joint" class="left_wheel_steer"/>
@@ -361,7 +324,7 @@
         </body>
       </body>
 
-      <!-- Right front wheel (steering + driving) -->
+      <!-- 오른쪽 앞바퀴(조향 및 구동) -->
       <body name="right_wheel_steer" pos="0.1371 -0.2554 0.27555">
         <inertial pos="0 0 0" mass="0.5" diaginertia="0.001 0.001 0.001"/>
         <joint name="right_wheel_steer_joint" class="right_wheel_steer"/>
@@ -373,7 +336,7 @@
         </body>
       </body>
 
-      <!-- Rear wheel (steering + driving) -->
+      <!-- 뒤 바퀴(조향 및 구동) -->
       <body name="rear_wheel_steer" pos="-0.2899 0 0.27555">
         <inertial pos="0 0 0" mass="0.5" diaginertia="0.001 0.001 0.001"/>
         <joint name="rear_wheel_steer_joint" class="rear_wheel_steer"/>
@@ -385,20 +348,20 @@
         </body>
       </body>
 
-      <!-- Lift link -->
+      <!-- 승강 링크 -->
       <body name="lift_link" pos="0 0 0">
         <inertial pos="-0.12869878 -0.00001604 0.89456017" mass="17.9" diaginertia="1.5 1.5 0.05"/>
         <geom type="mesh" mesh="lift_link" material="grey" class="visual"/>
         <geom type="mesh" mesh="lift_link" class="collision"/>
 
-        <!-- arm_base_link -->
+        <!-- 팔 기준 링크 -->
         <body name="arm_base_link" pos="0.0055 0 1.4316">
           <inertial pos="-0.0460732 -2.28101e-05 -0.0270208" quat="0.295276 0.295528 -0.642514 0.642379" mass="8.72176" diaginertia="0.106112 0.0836519 0.0576143"/>
           <joint name="lift_joint" class="lift_joint"/>
           <geom type="mesh" mesh="body_arm_assy" material="white" class="visual"/>
           <geom type="mesh" mesh="body_arm_assy" class="collision"/>
 
-          <!-- Head -->
+          <!-- 머리 -->
           <body name="head_link1" pos="0.0494878 0 0.102123">
             <joint name="head_joint1" class="head_joint1"/>
             <geom type="mesh" mesh="head_link1" material="black" class="visual"/>
@@ -411,7 +374,7 @@
             </body>
           </body>
 
-          <!-- Left arm -->
+          <!-- 왼팔 -->
           <body name="arm_l_link1" pos="0 0.1045 0">
             <inertial pos="0.0162539 0.115097 0.000116015" quat="-0.229615 0.677745 0.212586 0.665391" mass="1.93395" diaginertia="0.00305502 0.0027509 0.00221577"/>
             <joint name="arm_l_joint1" class="arm_l_joint1"/>
@@ -455,14 +418,14 @@
                         <geom type="mesh" mesh="arm_l_link7" class="collision"/>
                         <geom size="0.0115 0.021 0.021" pos="0.107944 0 -0.065588" quat="0.475435 -0.475435 0.523413 0.523413" type="box"/>
 
-                        <!-- Left hand (HX5-D20) -->
+                        <!-- 왼손(HX5-D20) -->
                         <body name="hx5_l_base" pos="0 0 -0.078" quat="0 -0.7071068 0.7071068 0">
                           <inertial pos="-0.00262263 -0.00168363 0.0622837" mass="0.301852" diaginertia="0.000528544 0.000382320 0.000201250"/>
                           <geom type="mesh" mesh="hx5_l_base" material="black" class="visual"/>
                           <geom name="palm_l_collision" type="box" size="0.02421 0.05536 0.06126" pos="-0.00321 0.00121 0.06126" class="hand_collision"/>
                           <site name="grasp_target_l" pos="0.065 -0.01 0.105" size="0.006" rgba="0 1 0 1"/>
 
-                          <!-- Thumb (4 joints) -->
+                          <!-- 엄지(관절 4개) -->
                           <body name="finger_l_link1" pos="-0.0125 -0.03493 0.04475">
                             <inertial pos="0.0238075 -0.00138644 -1.72456e-05" mass="0.0408685" diaginertia="2.88272e-06 9.39968e-06 9.68571e-06"/>
                             <joint name="finger_l_joint1" class="thumb_l_cmc"/>
@@ -488,7 +451,7 @@
                             </body>
                           </body>
 
-                          <!-- Index finger (4 joints) -->
+                          <!-- 검지(관절 4개) -->
                           <body name="finger_l_link5" pos="-0.0015 -0.03608 0.09575">
                             <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044" diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
                             <joint name="finger_l_joint5" class="finger_mcp"/>
@@ -514,7 +477,7 @@
                             </body>
                           </body>
 
-                          <!-- Middle finger (4 joints) -->
+                          <!-- 중지(관절 4개) -->
                           <body name="finger_l_link9" pos="-0.0015 -0.00908 0.10353">
                             <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044" diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
                             <joint name="finger_l_joint9" class="finger_mcp"/>
@@ -540,7 +503,7 @@
                             </body>
                           </body>
 
-                          <!-- Ring finger (4 joints) -->
+                          <!-- 약지(관절 4개) -->
                           <body name="finger_l_link13" pos="-0.0015 0.01792 0.09775">
                             <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044" diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
                             <joint name="finger_l_joint13" class="finger_mcp" range="-0.0001 0.0001" limited="true"/>
@@ -566,7 +529,7 @@
                             </body>
                           </body>
 
-                          <!-- Pinky finger (4 joints) -->
+                          <!-- 소지(관절 4개) -->
                           <body name="finger_l_link17" pos="-0.0015 0.04492 0.07875">
                             <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044" diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
                             <joint name="finger_l_joint17" class="finger_mcp" range="-0.0001 0.0001" limited="true"/>
@@ -600,7 +563,7 @@
             </body>
           </body>
 
-          <!-- Right arm -->
+          <!-- 오른팔 -->
           <body name="arm_r_link1" pos="0 -0.1045 0">
             <inertial pos="0.0162454 -0.115083 -0.000116015" quat="0.212043 0.665609 -0.229062 0.677889" mass="1.93395" diaginertia="0.00305635 0.00275332 0.00221466"/>
             <joint name="arm_r_joint1" class="arm_r_joint1"/>
@@ -644,14 +607,14 @@
                         <geom type="mesh" mesh="arm_r_link7" class="collision"/>
                         <geom size="0.0115 0.021 0.021" pos="0.107944 0 -0.065588" quat="0.475435 -0.475435 0.523413 0.523413" type="box"/>
 
-                        <!-- Right hand (HX5-D20) -->
+                        <!-- 오른손(HX5-D20) -->
                         <body name="hx5_r_base" pos="0 0 -0.078" quat="0 0.7071068 0.7071068 0">
                           <inertial pos="-0.00259546 0.00179263 0.0629577" mass="0.301852" diaginertia="0.000542413 0.000389333 0.000210116"/>
                           <geom type="mesh" mesh="hx5_r_base" material="black" class="visual"/>
                           <geom name="palm_r_collision" type="box" size="0.02421 0.05536 0.06126" pos="-0.00321 -0.00121 0.06126" class="hand_collision"/>
                           <site name="grasp_target_r" pos="0.065 0.01 0.105" size="0.006" rgba="0 1 0 1"/>
 
-                          <!-- Thumb (4 joints) -->
+                          <!-- 엄지(관절 4개) -->
                           <body name="finger_r_link1" pos="-0.0125 0.03493 0.04475">
                             <inertial pos="0.0238075 0.00131524 0.000460355" mass="0.0408685" diaginertia="2.88193e-06 9.43334e-06 9.65126e-06"/>
                             <joint name="finger_r_joint1" class="thumb_r_cmc"/>
@@ -677,7 +640,7 @@
                             </body>
                           </body>
 
-                          <!-- Index finger (4 joints) -->
+                          <!-- 검지(관절 4개) -->
                           <body name="finger_r_link5" pos="-0.0015 0.03608 0.09575">
                             <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044" diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
                             <joint name="finger_r_joint5" class="finger_mcp"/>
@@ -703,7 +666,7 @@
                             </body>
                           </body>
 
-                          <!-- Middle finger (4 joints) -->
+                          <!-- 중지(관절 4개) -->
                           <body name="finger_r_link9" pos="-0.0015 0.00908 0.10353">
                             <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044" diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
                             <joint name="finger_r_joint9" class="finger_mcp"/>
@@ -729,7 +692,7 @@
                             </body>
                           </body>
 
-                          <!-- Ring finger (4 joints) -->
+                          <!-- 약지(관절 4개) -->
                           <body name="finger_r_link13" pos="-0.0015 -0.01792 0.09775">
                             <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044" diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
                             <joint name="finger_r_joint13" class="finger_mcp" range="-0.0001 0.0001" limited="true"/>
@@ -755,7 +718,7 @@
                             </body>
                           </body>
 
-                          <!-- Pinky finger (4 joints) -->
+                          <!-- 소지(관절 4개) -->
                           <body name="finger_r_link17" pos="-0.0015 -0.04492 0.07875">
                             <inertial pos="0.00519340 -1.81631e-05 0.0211155" mass="0.0388044" diaginertia="3.52499e-06 5.79216e-06 4.71268e-06"/>
                             <joint name="finger_r_joint17" class="finger_mcp" range="-0.0001 0.0001" limited="true"/>
@@ -792,24 +755,21 @@
       </body>
     </body>
   
-    <!-- Table + can: same relative geometry validated in Phase 1-3 (models/arm_hand.xml),
-         translated by the offset between arm_hand.xml's fixed arm_base (0,0,1.0) and this
-         scene's arm_base_link resting position with lift_joint at its "home" value -0.5
-         ((0.0055, 0, 1.0816)) -- so grasp_target's local offset,
-         the thumb pre-shape, HOME_Q and every capsule number above carry over unchanged. -->
-    <!-- Footprint enlarged (Session 8 후속, user request) from 0.08x0.15 -- height/position
-         unchanged (table top stays at exactly the same world z the can/grasp geometry was
-         validated against), only made to look more like an actual table. -->
+    <!-- 테이블과 캔은 1~3단계의 models/arm_hand.xml에서 검증한 상대 형상을 유지한다.
+         arm_hand.xml의 고정 arm_base (0,0,1.0)와 이 장면에서 lift_joint의 home 값 -0.5일 때
+         arm_base_link 안착 위치 (0.0055,0,1.0816)의 차이만큼 평행 이동했다. 따라서
+         grasp_target의 로컬 오프셋, 엄지 사전 자세, HOME_Q와 위 캡슐 수치는 그대로 사용한다. -->
+    <!-- 테이블 바닥 면적은 0.08×0.15에서 넓혔다. 높이와 위치는 바꾸지 않아 캔·파지 형상을
+         검증한 월드 z의 테이블 윗면을 그대로 유지하며, 외형만 실제 테이블에 가깝게 했다. -->
     <geom name="table" type="box" size="0.26 0.25 0.05" pos="0.4055 0.0 0.6816" material="table_mat"/>
     <body name="can" pos="0.5055 0.0 0.7866">
       <freejoint name="can_free"/>
       <inertial pos="0 0 0" mass="0.35" diaginertia="0.000448 0.000448 0.00019"/>
-      <!-- Real detailed-mesh visual, split into the labeled side + plain aluminum caps
-           (Session 8 후속 10, see <asset> comment for how these two meshes were derived
-           from the same soda_can.stl) -- two geoms sharing the STL's original vertex
-           positions exactly, so they join with no gap/seam, at no explicit pos/quat (same
-           convention the original single-mesh soda_can visual used: raw mesh-local
-           coordinates, scaled 1.1/1.1/0.7333 in <asset> to match can_geom below). -->
+      <!-- 실제 상세 메시를 라벨 측면과 알루미늄색 상·하단으로 나눈 시각 형상이다. 두 메시는
+           같은 soda_can.stl에서 생성해 원본 꼭짓점 위치를 정확히 공유하므로 틈이나 이음매 없이
+           결합된다. 기존 단일 soda_can 메시처럼 명시적 pos/quat 없이 메시 로컬 좌표를 쓰며,
+           아래 can_geom에 맞도록 <asset>에서 1.1/1.1/0.7333 배율을 적용한다. 생성 과정은
+           위 <asset> 주석을 참고한다. -->
       <geom type="mesh" mesh="can_side_detail" material="can_mat" class="visual"/>
       <geom type="mesh" mesh="can_cap_detail" material="can_cap_mat" class="visual"/>
       <geom name="can_geom" type="cylinder" size="0.033 0.055" rgba="0 0 0 0"
@@ -847,9 +807,9 @@
     <exclude body1="base_link" body2="left_wheel_steer"/>
     <exclude body1="base_link" body2="right_wheel_steer"/>
     <exclude body1="base_link" body2="rear_wheel_steer"/>
-    <!-- The collision cylinders live on the wheel_drive child bodies.  Excluding only the
-         steer parents does not cover these pairs: near +/-90deg the two front cylinders
-         otherwise intersect the base collision box by ~25mm and physically lock strafe. -->
+    <!-- 충돌 원기둥은 wheel_drive 자식 몸체에 있으므로 steer 부모만 제외하면 충분하지 않다.
+         제외하지 않을 경우 ±90도 부근에서 두 앞바퀴 원기둥이 베이스 충돌 상자와 약 25 mm
+         겹쳐 횡이동을 물리적으로 막는다. -->
     <exclude body1="base_link" body2="left_wheel_drive"/>
     <exclude body1="base_link" body2="right_wheel_drive"/>
     <exclude body1="base_link" body2="rear_wheel_drive"/>
@@ -857,7 +817,7 @@
     <exclude body1="lift_link" body2="arm_base_link"/>
     <exclude body1="arm_base_link" body2="arm_l_link1"/>
     <exclude body1="arm_base_link" body2="arm_r_link1"/>
-    <!-- Left hand -->
+    <!-- 왼손 -->
     <exclude body1="arm_l_link7" body2="hx5_l_base"/>
     <exclude body1="hx5_l_base" body2="finger_l_link1"/>
     <exclude body1="hx5_l_base" body2="finger_l_link2"/>
@@ -884,7 +844,7 @@
     <exclude body1="finger_l_link17" body2="finger_l_link18"/>
     <exclude body1="finger_l_link18" body2="finger_l_link19"/>
     <exclude body1="finger_l_link19" body2="finger_l_link20"/>
-    <!-- Right hand -->
+    <!-- 오른손 -->
     <exclude body1="arm_r_link7" body2="hx5_r_base"/>
     <exclude body1="hx5_r_base" body2="finger_r_link1"/>
     <exclude body1="hx5_r_base" body2="finger_r_link2"/>
@@ -912,60 +872,45 @@
     <exclude body1="finger_r_link18" body2="finger_r_link19"/>
     <exclude body1="finger_r_link19" body2="finger_r_link20"/>
   
-    <!-- Cross-finger MCP excludes (capsule approximation is fatter than the mesh, phase 2 finding) -->
+    <!-- 손가락 사이 MCP 충돌 제외: 캡슐 근사가 메시보다 굵다는 2단계 결과를 반영한다. -->
     <exclude body1="finger_l_link5" body2="finger_l_link9"/>
     <exclude body1="finger_l_link9" body2="finger_l_link13"/>
     <exclude body1="finger_l_link13" body2="finger_l_link17"/>
     <exclude body1="finger_r_link5" body2="finger_r_link9"/>
     <exclude body1="finger_r_link9" body2="finger_r_link13"/>
     <exclude body1="finger_r_link13" body2="finger_r_link17"/>
-    <!-- Palm collision box is the real base_unit mesh's own tight AABB (verified against
-         trimesh -- not a padded approximation), but the mesh isn't box-shaped, so the box
-         claims corner volume the real curved/tapered hand never occupies. The validated
-         pick pose points this box at the can's center from above-and-behind, which puts its
-         far corner *kinematically* ~11-12mm below the table top if IK is solved with no
-         collision at all (measured directly). A blanket
-         <exclude> against world (this repo's earlier fix, and arm_hand.xml's Phase 3
-         approach) hides this by removing ALL force, including a genuine deep push -- which is
-         exactly the "hand goes through the table" bug reported during manual teleop.
-         Fix: a per-pair solimp ramp, soft near dist=0 and reaching normal stiffness by
-         `width`. Because the arm is a stiff PD+gravity-feedforward torque controller
-         (src/arm_control.py, kp=600) rather than a compliant one, it pushes straight through
-         any resistance well short of a spring's nominal free length -- measured settled
-         penetration plateaus at only ~3-6mm even for width up to 30mm, nowhere near the
-         "no collision at all" 11-12mm figure. width=15mm was the smallest tested value that
-         reliably reproduces tests/test_phase_4.py's validated pick geometry (10/10, confirmed
-         across the full trial set, not just the trials that previously failed), while still
-         ramping to near-default stiffness for any push beyond that (so a deliberate manual
-         push settles a few mm in, not through the table). -->
+    <!-- 손바닥 충돌 상자는 실제 base_unit 메시의 여유 없는 AABB이며 trimesh로 검증했다.
+         그러나 실제 메시는 상자 모양이 아니라 굽고 가늘어지므로, 상자는 실제 손이 차지하지
+         않는 모서리 부피까지 포함한다. 검증한 파지 자세는 이 상자를 캔 중심의 뒤쪽 위에서
+         향하게 한다. 충돌 없이 IK를 풀면 먼 모서리가 운동학적으로 테이블 윗면보다 약 11~12 mm
+         내려간다. 월드와의 충돌을 전부 <exclude>하던 초기 방식은 실제 깊은 누름의 힘까지 없애
+         수동 조작에서 손이 테이블을 통과하는 문제를 만들었다.
+         해결책은 접촉 쌍별 solimp 램프다. dist=0 부근에서는 부드럽고 width에서 일반 강성에
+         도달한다. 팔은 순응 제어가 아니라 src/ffw_sh5_grasp/control/arm.py의 kp=600인 강한
+         PD·중력 전향 토크 제어이므로 스프링의 공칭 자유 길이보다 훨씬 짧은 저항도 밀어낸다.
+         실측 정착 침투량은 width가 30 mm여도 약 3~6 mm에서 멈춰, 무충돌 시 11~12 mm보다
+         작았다. width=15 mm는 tests/test_phase_4.py의 검증 파지를 전체 시험에서 10/10으로
+         재현한 최소값이며, 그보다 깊은 누름에서는 기본값에 가까운 강성으로 올라가 의도적인
+         수동 누름도 테이블을 통과하지 않고 몇 mm 안에서 멈춘다. -->
     <pair geom1="palm_l_collision" geom2="table" solref="0.005 1" solimp="0.0001 0.95 0.015"/>
     <pair geom1="palm_r_collision" geom2="table" solref="0.005 1" solimp="0.0001 0.95 0.015"/>
     <pair geom1="palm_l_collision" geom2="floor" solref="0.005 1" solimp="0.0001 0.95 0.015"/>
     <pair geom1="palm_r_collision" geom2="floor" solref="0.005 1" solimp="0.0001 0.95 0.015"/>
-    <!-- Wheel-floor contact (Session 8 후속 6, retuned 후속 8): base_link only has
-         base_x/base_y/base_yaw joints (Phase 4's deliberate simplification, no vertical or
-         tilt DOF -- see the wheel bodies' comment above), so the wheels' ~1.5mm floor
-         overlap (itself deliberate, to avoid numerically-unstable
-         exact-zero gaps) can never settle to a natural equilibrium depth the way it would
-         on a body that's actually free to sink under load -- there's no DOF for it to sink
-         into. With MuJoCo's default solref (0.02 1) at that fixed, unrelaxable 1.5mm depth,
-         the resulting restoring force measured ~27,500N total across the 3 wheels (2
-         contact points each) -- 28x the robot's actual 982N weight. That artificial
-         over-stiffness doesn't blow up (nothing to run away into) but makes every wheel
-         behave as if pinned into the ground far harder than its real load, which is why
-         steering felt sluggish (pivoting a wheel scrubbing against that much phantom normal
-         force needed far more torque than a realistically-loaded wheel would) and in-place
-         rotation barely happened at all. solref="0.15 1" (retuned from the first pass's
-         "0.1 1") plus wheel_drive's kv=150 (below, retuned from 30) remove the original
-         contact-stiffness bottleneck.  The later full-angle collision audit then found and
-         removed base_link-to-wheel_drive self contacts, which had been the remaining yaw
-         constraint.  The physical regression now checks zero internal contacts at 90deg,
-         transverse motion, combined translation/yaw, reversal, and about 94.5deg of in-place
-         rotation in 2s. -->
+    <!-- 바퀴-바닥 접촉 설정이다. base_link에는 4단계에서 의도적으로 단순화한
+         base_x/base_y/base_yaw만 있어 수직·기울기 자유도가 없다. 간격 0의 수치 불안정을
+         피하려고 만든 약 1.5 mm 바닥 겹침은 하중에 따라 가라앉아 자연 평형 깊이에 도달할
+         자유도가 없다. 이 고정 침투에 MuJoCo 기본 solref="0.02 1"을 쓰면 바퀴 3개, 각 2개
+         접점의 총 복원력이 약 27,500 N으로 측정되어 실제 로봇 무게 982 N의 28배가 된다.
+         시스템이 발산하지는 않지만 바퀴가 실제 하중보다 훨씬 강하게 지면에 박힌 것처럼 되어
+         조향이 둔해지고 제자리 회전이 거의 되지 않았다.
+         solref를 첫 조정값 "0.1 1"에서 "0.15 1"로 바꾸고 wheel_drive kv를 30에서 150으로
+         높여 초기 접촉 강성 병목을 제거했다. 이후 전 각도 충돌 점검으로 남은 yaw 제약이던
+         base_link-wheel_drive 자체 접촉도 제거했다. 물리 회귀 시험은 90도 조향 시 내부 접촉 0,
+         횡이동, 이동·회전 결합, 역전, 2초 동안 약 94.5도 제자리 회전을 확인한다. -->
     <pair geom1="left_wheel_collision" geom2="floor" solref="0.15 1"/>
     <pair geom1="right_wheel_collision" geom2="floor" solref="0.15 1"/>
     <pair geom1="rear_wheel_collision" geom2="floor" solref="0.15 1"/>
-    <!-- Ring/pinky locked at range=0 (3-point grasp fallback, Phase 2); excluded vs world same as palm -->
+    <!-- 약지·소지는 2단계의 3점 파지 대안에 따라 range=0으로 잠그며, 손바닥처럼 월드 충돌을 제외한다. -->
     <exclude body1="finger_l_link13" body2="world"/>
     <exclude body1="finger_l_link14" body2="world"/>
     <exclude body1="finger_l_link15" body2="world"/>
@@ -986,23 +931,22 @@
 
   <actuator>
 
-    <!-- Mobile base (Session 8 후속): base_x/base_y/base_yaw joints are no longer directly
-         actuated -- they're still there (base_link stays planar-constrained, no tipping)
-         but now only move in reaction to real wheel-ground friction, via the wheel
-         steer/drive actuators below. See src/base_teleop.py for the swerve-style per-wheel
-         steer angle + drive speed conversion from a desired body-frame velocity. -->
+    <!-- 이동 베이스의 base_x/base_y/base_yaw 관절은 직접 구동하지 않는다. 전복을 막는
+         평면 제약으로 남겨 두되, 아래 바퀴 조향·구동 액추에이터에서 전달되는 실제 바퀴-지면
+         마찰의 반작용으로만 움직인다. 몸체 기준 목표 속도를 각 바퀴의 스워브 조향각과 구동
+         속도로 바꾸는 과정은 src/ffw_sh5_grasp/control/base.py를 참고한다. -->
     <position class="left_wheel_steer" name="left_wheel_steer" joint="left_wheel_steer_joint" inheritrange="1"/>
     <position class="right_wheel_steer" name="right_wheel_steer" joint="right_wheel_steer_joint" inheritrange="1"/>
     <position class="rear_wheel_steer" name="rear_wheel_steer" joint="rear_wheel_steer_joint" inheritrange="1"/>
     <velocity class="wheel_drive" name="left_wheel_drive" joint="left_wheel_drive_joint"/>
     <velocity class="wheel_drive" name="right_wheel_drive" joint="right_wheel_drive_joint"/>
     <velocity class="wheel_drive" name="rear_wheel_drive" joint="rear_wheel_drive_joint"/>
-    <!-- Slider -->
+    <!-- 승강 장치 -->
     <position class="lift_joint" name="lift_joint" joint="lift_joint" inheritrange="1"/>
-    <!-- Head -->
+    <!-- 머리 -->
     <position class="head_joint1" name="head_joint1" joint="head_joint1" inheritrange="1"/>
     <position class="head_joint2" name="head_joint2" joint="head_joint2" inheritrange="1"/>
-    <!-- Left arm -->
+    <!-- 왼팔 -->
     <motor name="arm_l_joint1" joint="arm_l_joint1" ctrlrange="-61.4 61.4"/>
     <motor name="arm_l_joint2" joint="arm_l_joint2" ctrlrange="-61.4 61.4"/>
     <motor name="arm_l_joint3" joint="arm_l_joint3" ctrlrange="-31.7 31.7"/>
@@ -1010,7 +954,7 @@
     <motor name="arm_l_joint5" joint="arm_l_joint5" ctrlrange="-31.7 31.7"/>
     <motor name="arm_l_joint6" joint="arm_l_joint6" ctrlrange="-31.7 31.7"/>
     <motor name="arm_l_joint7" joint="arm_l_joint7" ctrlrange="-5.1 5.1"/>
-    <!-- Left hand fingers -->
+    <!-- 왼손 손가락 -->
     <position class="thumb_l_cmc" name="finger_l_joint1" joint="finger_l_joint1" inheritrange="1"/>
     <position class="thumb_l_mcp_yaw" name="finger_l_joint2" joint="finger_l_joint2" inheritrange="1"/>
     <position class="thumb_l_mcp_pitch" name="finger_l_joint3" joint="finger_l_joint3" inheritrange="1"/>
@@ -1023,30 +967,24 @@
     <position class="finger_pip" name="finger_l_joint10" joint="finger_l_joint10" inheritrange="1"/>
     <position class="finger_dip" name="finger_l_joint11" joint="finger_l_joint11" inheritrange="1"/>
     <position class="finger_tip" name="finger_l_joint12" joint="finger_l_joint12" inheritrange="1"/>
-    <!-- Left ring/pinky (Session 8 후속): pip/dip/tip range widened from the Phase 2
-         locked-at-0 fallback for a cosmetic curl driven by
-         grasp.py's RING_PINKY_CURL_JOINTS mapping -- they still never touch the can (no
-         actuator here overrides that, it's purely grasp.py's ctrl writes each step), this
-         is visual only. mcp (spread) stays locked at 0/unactuated, same as Phase 2 --
-         inheritrange can't attach to a zero-width range anyway (Session 2 finding), and no
-         spread is wanted here regardless.
-         grasp.py scales this curl by the live `grasp` scalar (0 at rest -> fully extended,
-         capped at 35% of range at grasp=1.0), not a flat constant -- a flat
-         35%-regardless-of-grasp constant (Session 8 후속 3's original
-         fix) was replaced because it left these two fingers visibly curled even at rest while every
-         other digit starts fully open, which is wrong on its own terms regardless of how it
-         looks mid-grasp. The keyframe below now leaves qpos/ctrl at 0 for these joints
-         (matching grasp=0's fully-extended rest state) since grasp.py re-commands them every
-         physics step from there. 35% remains the cap actually reached at grasp=1.0, same
-         cliff-tested value as before (20-40% all held tests/test_phase_4.py's pick at 10/10,
-         45%+ dropped to 0/10). -->
+    <!-- 왼손 약지·소지는 2단계에서 range=0으로 잠갔던 대안에서 벗어나, 외형상 굽힘을
+         표현하도록 PIP/DIP/TIP 범위를 넓혔다. src/ffw_sh5_grasp/control/grasp.py의
+         RING_PINKY_CURL_JOINTS 매핑이 매 스텝 ctrl을 쓸 뿐 여기서 액추에이터가 재정의되지는
+         않으며, 캔에는 닿지 않아 시각 효과만 낸다. MCP 벌림은 2단계처럼 0에 고정하고 구동하지
+         않는다. inheritrange는 폭 0 범위에 연결할 수 없고 벌림도 필요하지 않다.
+         굽힘은 고정 상수가 아니라 현재 grasp 값에 비례한다. 휴식 시 grasp=0이면 완전히 펴지고,
+         grasp=1.0에서 범위의 35%로 제한된다. 파지량과 무관하게 35%를 적용하던 초기 방식은
+         다른 손가락이 열린 휴식 상태에서도 두 손가락만 굽어 보여 교체했다. 아래 키프레임의
+         qpos/ctrl도 grasp=0의 완전 신전 상태에 맞춰 0이며, 이후 매 물리 스텝 다시 명령한다.
+         35% 상한은 tests/test_phase_4.py의 경계 시험 결과다. 20~40%는 파지 10/10을 유지했고
+         45% 이상은 0/10으로 떨어졌다. -->
     <position class="finger_pip" name="finger_l_joint14" joint="finger_l_joint14" inheritrange="1"/>
     <position class="finger_dip" name="finger_l_joint15" joint="finger_l_joint15" inheritrange="1"/>
     <position class="finger_tip" name="finger_l_joint16" joint="finger_l_joint16" inheritrange="1"/>
     <position class="finger_pip" name="finger_l_joint18" joint="finger_l_joint18" inheritrange="1"/>
     <position class="finger_dip" name="finger_l_joint19" joint="finger_l_joint19" inheritrange="1"/>
     <position class="finger_tip" name="finger_l_joint20" joint="finger_l_joint20" inheritrange="1"/>
-    <!-- Right arm -->
+    <!-- 오른팔 -->
     <motor name="arm_r_joint1" joint="arm_r_joint1" ctrlrange="-61.4 61.4"/>
     <motor name="arm_r_joint2" joint="arm_r_joint2" ctrlrange="-61.4 61.4"/>
     <motor name="arm_r_joint3" joint="arm_r_joint3" ctrlrange="-31.7 31.7"/>
@@ -1054,7 +992,7 @@
     <motor name="arm_r_joint5" joint="arm_r_joint5" ctrlrange="-31.7 31.7"/>
     <motor name="arm_r_joint6" joint="arm_r_joint6" ctrlrange="-31.7 31.7"/>
     <motor name="arm_r_joint7" joint="arm_r_joint7" ctrlrange="-5.1 5.1"/>
-    <!-- Right hand fingers -->
+    <!-- 오른손 손가락 -->
     <position class="thumb_r_cmc" name="finger_r_joint1" joint="finger_r_joint1" inheritrange="1"/>
     <position class="thumb_r_mcp_yaw" name="finger_r_joint2" joint="finger_r_joint2" inheritrange="1"/>
     <position class="thumb_r_mcp_pitch" name="finger_r_joint3" joint="finger_r_joint3" inheritrange="1"/>
@@ -1067,7 +1005,7 @@
     <position class="finger_pip" name="finger_r_joint10" joint="finger_r_joint10" inheritrange="1"/>
     <position class="finger_dip" name="finger_r_joint11" joint="finger_r_joint11" inheritrange="1"/>
     <position class="finger_tip" name="finger_r_joint12" joint="finger_r_joint12" inheritrange="1"/>
-    <!-- Right ring/pinky (Session 8 후속, see left hand comment above) -->
+    <!-- 오른손 약지·소지는 위 왼손 설명과 같은 설정을 사용한다. -->
     <position class="finger_pip" name="finger_r_joint14" joint="finger_r_joint14" inheritrange="1"/>
     <position class="finger_dip" name="finger_r_joint15" joint="finger_r_joint15" inheritrange="1"/>
     <position class="finger_tip" name="finger_r_joint16" joint="finger_r_joint16" inheritrange="1"/>

@@ -1,7 +1,8 @@
-"""Dev utility (not a Phase test): render an offscreen snapshot of a model for
-visual pose verification. Not part of the automated Phase test suite.
+"""모델 자세를 눈으로 확인할 offscreen snapshot을 렌더링하는 개발 도구.
 
-Usage: python3 tests/render_snapshot.py models/hand_only.xml /tmp/out.png [--grasp 0.5]
+자동 Phase 테스트에는 포함되지 않는다.
+
+사용법: ``python3 tests/render_snapshot.py models/hand_only.xml /tmp/out.png [--grasp 0.5]``
 """
 
 import sys
@@ -28,17 +29,16 @@ def main():
     data = mujoco.MjData(model)
     mujoco.mj_resetData(model, data)
 
-    # Curl joints only: thumb (mcp_pitch, ip) + each finger's (pip, dip, tip).
-    # Excludes thumb_cmc/mcp_yaw (pre-shape, left at 0) and finger_mcp (spread, left at 0).
+    # 엄지의 MCP pitch·IP와 각 손가락의 PIP·DIP·tip 굽힘 관절만 포함한다.
+    # 사전 자세인 thumb CMC·MCP yaw와 벌림 관절인 finger MCP는 0으로 두고 제외한다.
     CURL_JOINTS = {"finger_r_joint3", "finger_r_joint4"}
     for base in (5, 9, 13, 17):
         CURL_JOINTS.update({f"finger_r_joint{base+1}", f"finger_r_joint{base+2}", f"finger_r_joint{base+3}"})
 
     if kinematic:
-        # Pure FK pose check: directly set qpos for curl joints to a `grasp` fraction of
-        # their range, single mj_forward, no stepping. One-shot authoring/visualization
-        # snapshot, not part of the runtime simulator loop -- distinct from the project's
-        # ban on kinematic override during simulation.
+        # 순수 FK 자세 확인을 위해 굽힘 관절 qpos를 관절 범위의 ``grasp`` 비율로 직접
+        # 설정하고 스텝 진행 없이 ``mj_forward``를 한 번만 호출한다. 일회성 제작·시각화
+        # snapshot이므로 런타임 시뮬레이션의 기구학 덮어쓰기 금지 규칙과는 구분된다.
         for jid in range(model.njnt):
             name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jid)
             if name in CURL_JOINTS:

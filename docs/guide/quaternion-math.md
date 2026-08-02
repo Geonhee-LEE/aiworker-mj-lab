@@ -30,7 +30,7 @@ q=[w,x,y,z]^T=[w,\mathbf v]^T
 | \(R(q)\) | quaternion과 같은 회전을 나타내는 \(3×3\) 행렬 |
 | \(e_R\) | IK가 사용하는 3차원 axis-angle error vector |
 
-`kinematics_math.py`의 함수는 모델이나 solver 상태를 가지지 않는 순수 수학
+`kinematics/rotations.py`의 함수는 모델이나 solver 상태를 가지지 않는 순수 수학
 경계다.
 
 ## 2. 단위 Quaternion으로 정규화
@@ -255,7 +255,7 @@ flowchart LR
 ```
 
 FK 내부 합성에는 rotation matrix가 편하고, pose API·target 저장·보간에는 quaternion이
-편하다. `kinematics_math.py`가 두 표현 사이의 단일 변환 규칙을 제공하므로 단일 팔
+편하다. `kinematics/rotations.py`가 두 표현 사이의 단일 변환 규칙을 제공하므로 단일 팔
 IK와 전신 IK가 다른 부호나 곱셈 순서를 사용하지 않는다.
 
 ## 9. 수식과 코드의 대응

@@ -1,9 +1,10 @@
-"""One-off measurement script (Phase 1): AABB of each distinct HX5-D20 right-hand
-finger STL, in the mesh's local frame (matches MJCF <mesh> local frame since MJCF
-applies scale but no rotation to these meshes). Used to derive capsule collision
-geoms in models/hand_only.xml.
+"""Phase 1에서 한 번 사용하는 HX5-D20 오른손 mesh 측정 스크립트.
 
-Run: python3 tests/measure_hand_meshes.py
+서로 다른 손가락 STL의 AABB를 mesh 로컬 좌표계에서 구한다. MJCF가 이 mesh에 회전
+없이 scale만 적용하므로 MJCF ``<mesh>`` 로컬 좌표계와 같다. 측정값은
+``models/hand_only.xml``의 capsule 충돌 형상을 만드는 데 사용했다.
+
+실행: ``python3 tests/measure_hand_meshes.py``
 """
 
 import pathlib
@@ -12,7 +13,7 @@ import numpy as np
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 MESH_DIR = REPO_ROOT / "assets" / "robotis_ffw" / "assets" / "hx5_d20" / "hx5_d20_right"
-SCALE = 0.001  # matches MJCF <mesh scale="0.001 0.001 0.001">
+SCALE = 0.001  # MJCF의 ``<mesh scale="0.001 0.001 0.001">``와 일치한다.
 
 MESHES = [
     "hx5_d20_base_unit.stl",

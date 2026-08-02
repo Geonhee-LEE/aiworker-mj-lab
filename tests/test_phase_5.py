@@ -1,34 +1,27 @@
-"""Phase 5 -- mobile base locomotion (models/full_scene.xml gets 3 planar joints on
-base_link -- base_x/base_y/base_yaw, so it can translate/turn but not tip -- plus real
-steer+drive joints on all three wheels, restored from the vendored ffw_sh5.xml's own
-wheel_steer/wheel_drive default classes that Phase 4 had removed for simplicity). Scope for
-this phase, per user decision: driving only -- the existing can-pick task
-(tests/test_phase_4.py) is left untouched and re-passing against this same model file is
-itself part of this phase's regression bar.
+"""Phase 5 모바일 베이스 이동 검증.
 
-Session 8 후속 revised this from a direct virtual-joint velocity actuator (the original
-Phase 5 design) to genuine wheel-ground friction propulsion per user request: base_x/base_y/
-base_yaw are no longer directly actuated, only reacted through the wheels' steer/drive
-joints and their real contact with the floor. See src/base_teleop.py's `SwerveDrive` for the
-per-wheel steer-angle + drive-speed kinematics (needed because the vendored wheel_steer
-joints support the official approximately +/-2pi range; an injected narrow-range solver is
-covered separately in ``test_whole_body.py``.
+``models/full_scene.xml``의 base_link에 기울어지지 않으면서 병진·회전할 수 있는
+base_x/base_y/base_yaw 평면 관절 3개를 두고, 세 바퀴에는 실제 조향·구동 관절을
+사용한다. 이 단계의 범위는 주행이며 기존 Phase 4 캔 파지 과제는 그대로 유지한다.
+같은 모델에서 Phase 4가 다시 통과하는 것도 회귀 기준에 포함된다.
 
-Part 1 (unit, no MuJoCo): BaseTeleop's smoothing math (unchanged) plus ROBOTIS-style
-SwerveDrive behavior in isolation (pure forward/turn/strafe cases, checked against the
-known wheel mounting geometry, plus the 180deg reversal FSM).
+초기 설계의 가상 관절 직접 속도 액추에이터를 실제 바퀴와 지면 마찰 추진으로
+변경했다. base_x/base_y/base_yaw는 직접 구동하지 않고 바퀴 조향·구동 관절과 바닥
+접촉의 반작용으로만 움직인다. 바퀴별 조향각과 구동 속도 기구학은
+``control/base.py``의 ``SwerveDrive``에 있다. 공식 약 ±2π 범위와 별도로 주입한 좁은
+범위 solver는 ``test_whole_body.py``에서 검사한다.
 
-Part 2 (integration): drives the real simulated wheels via SwerveDrive's ctrl outputs
-(never qpos) and checks: (a) idle hold with no keys is stable (no creep -- this is the
-direct regression check for two real bugs found building this: a keyframe token-count typo,
-and a numerically-unstable exact-zero wheel/floor gap that silently dropped two of three
-wheels out of contact and produced ~99% wheel slip); (b) driving actually moves the base
-with the wheels rolling near-without-slipping (checked directly, not just "it moved") --
-this is the "moves via wheel friction, not a virtual actuator" regression check the user
-asked for; (c) driving toward the table still gets stopped by the (already-known,
-Session 8-documented) arm/table collision rather than tunneling through.
+Part 1은 MuJoCo 없이 ``BaseTeleop`` 평활화 수학과 ROBOTIS 방식 ``SwerveDrive``를
+독립 검사한다. 순수 전진, 회전, 횡이동과 180도 반전 상태 머신을 알려진 바퀴 장착
+기하와 비교한다.
 
-Run headless: `python3 tests/test_phase_5.py`
+Part 2는 qpos가 아닌 ``SwerveDrive``의 ctrl 출력으로 실제 시뮬레이션 바퀴를 구동한다.
+입력 없는 정지 상태가 흐르지 않는지, 바퀴가 거의 미끄러지지 않고 굴러 베이스를 실제로
+움직이는지, 테이블을 향해 주행할 때 팔·테이블 접촉으로 멈추고 관통하지 않는지 확인한다.
+이는 키프레임 토큰 수 오류와 바퀴·바닥 간격이 정확히 0이어서 접촉 두 개가 사라지고
+약 99% 미끄러짐이 생겼던 결함의 직접 회귀 시험이기도 하다.
+
+Headless 실행: ``python3 tests/test_phase_5.py``
 """
 
 import pathlib
@@ -41,9 +34,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
-import arm_control  # noqa: E402
-import base_teleop  # noqa: E402
-import grasp  # noqa: E402
+from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
+from ffw_sh5_grasp.control import base as base_teleop  # noqa: E402
+from ffw_sh5_grasp.control import grasp  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
 ARM_L = [f"arm_l_joint{i}" for i in range(1, 8)]
@@ -52,7 +45,7 @@ HOME_Q_L = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
 WHEELS = ("left_wheel", "right_wheel", "rear_wheel")
 
 QACC_LIMIT = 1e5
-IDLE_DRIFT_LIMIT = 0.002  # 2mm
+IDLE_DRIFT_LIMIT = 0.002  # 정지 상태 허용 표류량 2 mm
 
 
 def run_unit_tests():
@@ -83,7 +76,7 @@ def run_unit_tests():
           f"release_zero={release_time}s: {'OK' if response_ok else 'FAIL'}")
     ok &= response_ok
 
-    # SwerveDrive: pure forward -> every wheel faces forward (steer=0), same drive speed.
+    # 순수 전진에서는 모든 바퀴가 정면을 향하고 같은 속도로 구동되어야 한다.
     sd = base_teleop.SwerveDrive()
     for _ in range(300):
         cmds = sd.update({"w": True}, 0.01, yaw=0.0)
@@ -94,22 +87,22 @@ def run_unit_tests():
           f"drive speeds={[round(s,3) for s in speeds]}: {'OK' if ok_b else 'FAIL'}")
     ok &= ok_b
 
-    # SwerveDrive: pure in-place yaw -> rear wheel (directly behind center) points +-90deg,
-    # left/right wheels point symmetrically, all consistent with rotating about the origin.
+    # 제자리 회전에서는 중심 바로 뒤의 뒷바퀴가 ±90도를 향하고 좌우 바퀴가 대칭으로
+    # 원점 주위 회전에 맞게 정렬되어야 한다.
     sd2 = base_teleop.SwerveDrive()
     for _ in range(300):
         cmds2 = sd2.update({"left": True}, 0.01, yaw=0.0)
     rear_steer = cmds2["rear_wheel"][0]
     left_steer, right_steer = cmds2["left_wheel"][0], cmds2["right_wheel"][0]
     ok_c = (abs(abs(rear_steer) - np.pi / 2) < 0.02
-            and abs(left_steer + right_steer) < 0.02  # symmetric about 0
+            and abs(left_steer + right_steer) < 0.02  # 0을 기준으로 대칭이다.
             and abs(left_steer) > 0.01)
     print(f"  (c) SwerveDrive in-place yaw: rear={np.degrees(rear_steer):.1f}deg "
           f"left={np.degrees(left_steer):.1f}deg right={np.degrees(right_steer):.1f}deg: "
           f"{'OK' if ok_c else 'FAIL'}")
     ok &= ok_c
 
-    # SwerveDrive: pure strafe -> every wheel perpendicular to forward (+-90deg).
+    # 순수 횡이동에서는 모든 바퀴가 전진 방향에 수직인 ±90도를 향해야 한다.
     sd3 = base_teleop.SwerveDrive()
     for _ in range(300):
         cmds3 = sd3.update({"a": True}, 0.01, yaw=0.0)
@@ -244,7 +237,7 @@ def _run_twist_trial(model, twist, duration):
 
 
 def run_omnidirectional_regression(model):
-    """Physical strafe, yaw, combined twist, reversal, and internal-collision gates."""
+    """실제 횡이동, 회전, 결합 twist, 반전과 내부 충돌을 검사한다."""
     audit = mujoco.MjData(model)
     _reset_home(model, audit)
     rig = _make_rig(model)
@@ -298,10 +291,12 @@ def run_omnidirectional_regression(model):
 
 
 def run_idle_regression(model):
-    """No drive keys held at all -- this is the direct regression check for two bugs found
-    while building this: a dropped keyframe token and a numerically-unstable exact-zero
-    wheel/floor gap that silently dropped two of three wheels from `data.contact` -- both
-    showed up first as exactly this idle-hold test drifting when it shouldn't."""
+    """주행 키를 전혀 누르지 않은 상태가 흐르지 않는지 검사한다.
+
+    누락된 키프레임 토큰과 수치적으로 불안정한 0 바퀴·바닥 간격 때문에 세 바퀴 중
+    두 개가 ``data.contact``에서 사라졌던 두 결함을 직접 회귀 검사한다. 두 결함 모두
+    이 정지 유지 시험에서 예상치 못한 이동으로 처음 드러났다.
+    """
     data = mujoco.MjData(model)
     _reset_home(model, data)
     rig = _make_rig(model)
@@ -326,12 +321,13 @@ def run_idle_regression(model):
 
 
 def run_drive_test(model):
-    """Hold 's' (backward -- away from the table, a clean drive with nothing in the way,
-    unlike 'w' which rams the arm's already-reaching-for-the-table HOME_Q_R into the table
-    after ~0.5m; that case is exercised separately in run_collision_test) for 3s, release
-    for 2s. Checks the base actually moves AND that it does so by real wheel rolling (wheel
-    rim speed matches base speed within a small margin, i.e. not slipping) -- the direct
-    check that propulsion is genuinely friction-driven, not a leftover virtual actuator."""
+    """후진 키를 3초 누르고 2초 놓아 실제 바퀴 구름으로 이동하는지 검사한다.
+
+    후진은 장애물이 없는 테이블 반대 방향이다. 전진 중 테이블과 만나는 경우는 별도
+    ``run_collision_test``에서 다룬다. 베이스가 실제로 움직이는 것뿐 아니라 바퀴 둘레
+    속도와 베이스 속도가 작은 오차 안에서 일치해 미끄러지지 않는지도 확인한다. 남은
+    가상 액추에이터가 아니라 실제 마찰로 추진되는지 직접 검증한다.
+    """
     data = mujoco.MjData(model)
     _reset_home(model, data)
     rig = _make_rig(model)
@@ -351,7 +347,7 @@ def run_drive_test(model):
         max_qacc = max(max_qacc, _step(model, data, rig, drive, {}, 0.04))
     speed_released = float(np.linalg.norm(data.qvel[rig["base_x_dof"]:rig["base_x_dof"] + 2]))
 
-    distance = x0 - x_driven  # positive: moved backward, as commanded
+    distance = x0 - x_driven  # 양수면 명령대로 후진한 것이다.
     print(f"  Drive test: max|qacc|={max_qacc:.3f} (limit {QACC_LIMIT:.0e}), "
           f"distance after 3s='s'={distance*1000:.1f}mm, base speed while driven={abs(base_vx):.3f}m/s, "
           f"wheel rolling speed={rolling_speed:.3f}m/s (slip={slip*100:.1f}%), "
@@ -362,10 +358,11 @@ def run_drive_test(model):
 
 
 def run_collision_test(model):
-    """Hold 'w' (forward, toward the table the arm is already reaching for) for a generous
-    6s -- long enough that an unobstructed drive would travel well over a meter -- and check
-    the base does NOT get anywhere near that far: contact between the reaching arm/hand and
-    the table should block it well short ("베이스가 테이블 앞에서 정지, 관통 X")."""
+    """테이블 방향 전진 키를 6초 눌러 접촉으로 정지하고 관통하지 않는지 검사한다.
+
+    장애물이 없다면 1 m 이상 이동할 시간이지만, 뻗은 팔·손과 테이블의 접촉이 그보다
+    훨씬 앞에서 베이스를 막아야 한다.
+    """
     data = mujoco.MjData(model)
     _reset_home(model, data)
     rig = _make_rig(model)

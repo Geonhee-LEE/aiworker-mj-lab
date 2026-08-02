@@ -1,26 +1,21 @@
-"""Phase 3 -- arm_hand scene + 6DOF IK.
+"""Phase 3 ``arm_hand`` 장면과 6자유도 IK 검증.
 
-Part 0 (FK/Jacobian test): compare the public world-aligned geometric Jacobian against
-central finite differences, including normalized quaternion double-cover handling.
+Part 0은 공개된 월드 정렬 기하 Jacobian을 중앙 유한차분과 비교하고, 정규화된
+quaternion의 이중 덮개 처리도 확인한다.
 
-Part 1 (IK unit test): sample 100 random reachable poses via forward kinematics, starting
-from HOME_Q (a "ready" configuration near the table, not an arbitrary all-zero pose) and
-perturbing every joint by up to +-IK_TEST_SPREAD rad -- this is "the reachable workspace"
-in the sense this project means it: the region actually used while reaching for something on
-the table, not arbitrary/unlikely arm configurations across the full joint range (many of which
-require routing through singularities that no reasonable teleop session would ever visit).
-Each target is solved via solve_pose_multistart (home guess, then a few random restarts if
-that doesn't converge -- solve_pose alone can land in a local minimum for a large gap).
-Success requires >= 95% of targets converging to position error < 5mm and orientation error
-< 5 deg.
+Part 1은 정기구학으로 도달 가능한 자세 100개를 무작위 생성해 IK를 검사한다. 임의의
+영 자세가 아니라 테이블 근처 준비 자세인 ``HOME_Q``에서 시작해 각 관절을 최대
+``IK_TEST_SPREAD`` rad만큼 움직인다. 여기서 도달 가능 작업 공간은 전체 관절 범위의
+비현실적인 자세가 아니라 실제 테이블 물체에 접근할 때 사용하는 영역을 뜻한다.
+각 목표는 ``solve_pose_multistart``로 풀며 홈 초기값이 수렴하지 않으면 몇 개의 무작위
+초기값으로 재시도한다. 목표의 95% 이상이 위치 오차 5 mm, 자세 오차 5도 미만으로
+수렴해야 한다.
 
-Part 2 (integrated pick, script-driven, no teleop): home -> pre-grasp (above the can) ->
-straight-line approach (3cm/s) -> Phase 2's grasp sequence -> 10cm lift, run 10 times,
-success rate must be >= 7/10. This exercises the full pipeline without any autonomous
-perception/planning -- it's a regression harness for the arm+hand+IK integration, not a
-"skill".
+Part 2는 텔레옵 없이 스크립트로 홈, 캔 위 사전 파지, 3 cm/s 직선 접근, Phase 2
+파지, 10 cm 들기를 10번 실행한다. 성공률은 7/10 이상이어야 한다. 자율 인지나 계획
+기능이 아니라 팔·손·IK 통합을 검증하는 회귀 harness다.
 
-Run headless: `python3 tests/test_phase_3.py`
+Headless 실행: ``python3 tests/test_phase_3.py``
 """
 
 import pathlib
@@ -33,38 +28,33 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "arm_hand.xml"
 
-import arm_control  # noqa: E402
-import grasp  # noqa: E402
+from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
+from ffw_sh5_grasp.control import grasp  # noqa: E402
 import ik  # noqa: E402
 import kinematics  # noqa: E402
 
 ARM_JOINTS = [f"arm_r_joint{i}" for i in range(1, 8)]
 
-# "Ready" configuration 10cm back / 20cm above the can -- well clear of the table (see the
-# "home" keyframe in models/arm_hand.xml). Recomputed after fixing a grasp_target site
-# definition bug: the site was defined using the can's *world* coordinates from
-# hand_only.xml as if they were a *local* offset from the palm, which they
-# were not -- every HOME_Q/q_pregrasp/q_grasp computed before the fix targeted the wrong
-# physical point on the hand entirely.
+# 캔에서 뒤로 10 cm, 위로 20 cm 떨어져 테이블과 충분한 여유가 있는 준비 자세다.
+# ``grasp_target`` site를 수정한 뒤 다시 계산했다. 이전에는 ``hand_only.xml`` 캔의
+# 월드 좌표를 손바닥 로컬 오프셋으로 잘못 사용해 수정 전의 HOME_Q, q_pregrasp와
+# q_grasp가 모두 손의 잘못된 물리 지점을 목표로 삼았다.
 HOME_Q = np.array([-0.225, -0.394, 0.682, -2.613, -0.704, 0.843, -1.218])
-IK_TEST_SPREAD = 0.2  # rad per joint, defines "reachable workspace" for the unit test
+IK_TEST_SPREAD = 0.2  # 단위 시험의 도달 가능 작업 공간을 정하는 관절별 범위(rad)
 
 N_IK_SAMPLES = 100
-POS_TOL = 0.005  # 5mm
+POS_TOL = 0.005  # 위치 허용 오차 5 mm
 ORI_TOL_DEG = 5.0
 IK_SUCCESS_RATE_TARGET = 0.95
 
 N_PICK_TRIALS = 10
 PICK_SUCCESS_RATE_TARGET = 0.7
-APPROACH_SPEED = 0.03  # m/s
-PRE_GRASP_OFFSET = np.array([0.0, 0.0, 0.10])  # straight above the can, then descend
-# Before fixing models/arm_hand.xml's grasp_target site (it was defined using
-# hand_only.xml's can *world* coordinates as if they were a palm-*local* offset -- they
-# weren't), the resulting bad geometry made the middle finger's MCP
-# knuckle graze the table. Kept at zero now that the real fix (the site itself) is in;
-# a future can/table layout that reintroduces the clearance problem should raise this
-# instead of trying to "float" the can (it has a real freejoint -- it free-falls back to
-# table_top + its own half-height regardless of spawn height).
+APPROACH_SPEED = 0.03  # 접근 속도(m/s)
+PRE_GRASP_OFFSET = np.array([0.0, 0.0, 0.10])  # 캔 바로 위에서 시작해 아래로 접근한다.
+# ``grasp_target`` site가 캔의 월드 좌표를 손바닥 로컬 오프셋으로 잘못 사용했을 때는
+# 잘못된 기하 때문에 중지 MCP 관절이 테이블에 스쳤다. site 자체를 고친 현재 값은 0이다.
+# 향후 캔이나 테이블 배치에서 여유 문제가 다시 생기면 캔을 띄우지 말고 이 값을 높여야
+# 한다. 캔은 실제 freejoint가 있어 생성 높이와 무관하게 테이블 위로 자유 낙하한다.
 GRASP_TARGET_OFFSET = np.array([0.0, 0.0, 0.0])
 RAMP_TIME = 1.0
 SETTLE_TIME = 1.0
@@ -76,7 +66,7 @@ CAN_NOISE = 0.005
 
 
 def run_fk_jacobian_test(solver):
-    """Parsed-tree FK/Jacobian must match finite differences and engine pose."""
+    """파싱한 트리의 FK/Jacobian이 유한차분 및 엔진 자세와 일치하는지 검사한다."""
     state = solver.forward_kinematics(HOME_Q)
     epsilon = 1e-6
     numerical = np.zeros_like(state.jacobian)
@@ -159,10 +149,11 @@ def _read_arm_q(model, data):
 
 
 def _hold(model, data, controller, q_des, duration, dt, grasp_frac=None, thumb_frac=None):
-    """Step the sim for `duration` seconds, driving the arm to q_des via torque control
-    every step (motor actuators need fresh torque each step -- unlike the old <position>
-    actuators, there's nothing to "hold" a stale ctrl value) and optionally the hand via
-    grasp.apply_grasp at a constant fraction.
+    """``duration``초 동안 매 스텝 팔을 토크 제어해 ``q_des``로 구동한다.
+
+    motor 액추에이터는 이전 position 액추에이터와 달리 오래된 ctrl 값을 유지하는
+    기능이 없으므로 매 스텝 새 토크가 필요하다. 선택적으로 일정 비율의
+    ``grasp.apply_grasp``도 적용한다.
     """
     n = int(duration / dt)
     for _ in range(n):
@@ -173,7 +164,7 @@ def _hold(model, data, controller, q_des, duration, dt, grasp_frac=None, thumb_f
 
 
 def _move(model, data, controller, q_from, q_to, duration, dt, grasp_frac=None, thumb_frac=None):
-    """Like _hold, but ramps q_des linearly from q_from to q_to over `duration` seconds."""
+    """``_hold``와 같지만 ``duration``초 동안 q_des를 q_from에서 q_to로 선형 보간한다."""
     n = int(duration / dt)
     for i in range(n):
         frac = i / n
@@ -193,13 +184,12 @@ def run_pick_trial(model, data, solver, controller, rng):
     data.qpos[can_qadr : can_qadr + 3] = can_pos0
     mujoco.mj_forward(model, data)
 
-    target_quat = np.array([0.5, 0.5, 0.5, 0.5])  # matches models/hand_only.xml's validated grasp orientation
+    target_quat = np.array([0.5, 0.5, 0.5, 0.5])  # hand_only.xml에서 검증한 파지 자세다.
     dt = model.opt.timestep
 
-    # IK solve: pre-grasp (offset back along the approach axis) and final grasp pose.
-    # grasp_target_pos aims 3cm above the can's actual center (GRASP_TARGET_OFFSET) so the
-    # hand clears the table; can_pos0 itself (used for noise and lift measurement) is
-    # unaffected.
+    # 접근 축에서 뒤로 물러난 사전 파지와 최종 파지 자세의 IK를 푼다. grasp_target_pos는
+    # 손이 테이블과 간격을 두도록 실제 캔 중심보다 GRASP_TARGET_OFFSET만큼 위를 향한다.
+    # 잡음과 들기 측정에 쓰는 can_pos0 자체는 바꾸지 않는다.
     grasp_target_pos = can_pos0 + GRASP_TARGET_OFFSET
     pregrasp_pos = grasp_target_pos + PRE_GRASP_OFFSET
     q_pregrasp, perr, oerr, ok1 = solver.solve_pose_multistart(HOME_Q, pregrasp_pos, target_quat, rng)
@@ -209,21 +199,20 @@ def run_pick_trial(model, data, solver, controller, rng):
 
     q_home = _read_arm_q(model, data)
 
-    # 1) move arm to pre-grasp (torque control: gravity/Coriolis feedforward + PD, see
-    # src/arm_control.py -- this is what replaced the old <position>-actuator approach
-    # after diagnosing its ~15-20mm residual site error).
+    # 1) 중력·코리올리 전향 보상과 PD 토크 제어로 팔을 사전 파지 자세로 옮긴다.
+    # 기존 position 액추에이터에서 약 15~20 mm의 site 잔류 오차를 확인한 뒤 이 방식으로
+    # 교체했다.
     _move(model, data, controller, q_home, q_pregrasp, 3.0, dt, grasp_frac=0.0, thumb_frac=0.0)
     _hold(model, data, controller, q_pregrasp, 1.0, dt, grasp_frac=0.0, thumb_frac=0.0)
 
-    # 2) straight-line approach at APPROACH_SPEED from pre-grasp to grasp pose (interpolate
-    # in joint space between the two IK solutions -- both share the same target orientation
-    # and are close together, so this tracks a near-straight-line Cartesian path)
+    # 2) 사전 파지에서 파지 자세까지 APPROACH_SPEED로 직선에 가깝게 접근한다. 같은 목표
+    # 자세를 공유하고 가까이 있는 두 IK 해를 관절 공간에서 보간한다.
     approach_dist = np.linalg.norm(PRE_GRASP_OFFSET)
     approach_time = approach_dist / APPROACH_SPEED
     _move(model, data, controller, q_pregrasp, q_grasp, approach_time, dt, grasp_frac=0.0, thumb_frac=0.0)
     _hold(model, data, controller, q_grasp, 1.0, dt, grasp_frac=0.0, thumb_frac=0.0)
 
-    # 3) Phase 2 grasp sequence: ramp closed, settle (arm holds q_grasp throughout)
+    # 3) Phase 2 파지 순서대로 서서히 닫고 정착시키며 팔은 q_grasp를 유지한다.
     n = int(RAMP_TIME / dt)
     for i in range(n):
         frac = i / n
@@ -235,7 +224,7 @@ def run_pick_trial(model, data, solver, controller, rng):
     grasped = grasp.is_grasped(model, data)
     can_z_before_lift = data.qpos[can_qadr + 2]
 
-    # 4) lift: move the IK target itself up by LIFT_HEIGHT and re-solve, then servo there
+    # 4) IK 목표 자체를 LIFT_HEIGHT만큼 올려 다시 풀고 새 자세로 서보 제어한다.
     lift_target_pos = grasp_target_pos + np.array([0, 0, LIFT_HEIGHT])
     q_lift, _, _, _ = solver.solve_pose_multistart(q_grasp, lift_target_pos, target_quat, rng)
     lift_time = LIFT_HEIGHT / LIFT_SPEED

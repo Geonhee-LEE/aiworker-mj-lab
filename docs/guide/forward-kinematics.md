@@ -152,7 +152,7 @@ a_z&0&-a_x\\
 \end{bmatrix}
 \]
 
-이며 `kinematics_math.axis_rotation()`이 이 항들을 직접 배열로 만든다.
+이며 `rotations.axis_rotation()`이 이 항들을 직접 배열로 만든다.
 
 body-local 회전을 오른쪽에 합성하므로
 

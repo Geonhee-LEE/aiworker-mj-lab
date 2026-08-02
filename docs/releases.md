@@ -6,9 +6,9 @@
 
 ### 구조와 코드
 
-- `kinematics.py`를 공개 facade와 단일 팔 solver에 집중시키고, 회전 수학,
+- `kinematics/solver.py`를 공개 facade와 단일 팔 solver에 집중시키고, 회전 수학,
   MJCF tree/FK/Jacobian, collision distance gradient를 독립 모듈로 분리
-- `whole_body_ik.py`에서 BVLS/soft barrier와 양손 rigid-grasp 순수 계산을 분리
+- `control/whole_body.py`에서 BVLS/soft barrier와 양손 rigid-grasp 순수 계산을 분리
 - `KinematicTree`를 양손 solver가 공유해 모델 topology 중복 해석 제거
 - 기존 `kinematics` 공개 import와 `InverseKinematics` 호환 경로 유지
 - 사용하지 않는 wrapper·helper와 중복 ImGui 런타임 상태 파일 정리

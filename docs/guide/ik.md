@@ -5,14 +5,17 @@
     다음은 같은 pose/Jacobian을 18자유도로 확장하는
     [전신 IK와 충돌 회피](whole_body_ik.md)다.
 
-`src/kinematics.py`의 `KinematicsSolver`가 `kinematic_tree.py`의 FK/Jacobian을 사용해
+`src/ffw_sh5_grasp/kinematics/solver.py`의 `KinematicsSolver`가 `kinematics/tree.py`의 FK/Jacobian을 사용해
 단일 팔 IK를 제공한다. `src/ik.py`는 기존 호출 코드가 계속 동작하도록
 `InverseKinematics`라는 이름과 기본 상수만 다시 노출하는 얇은 호환 계층이다.
 
+조절값은 `config/default.yaml`의 `kinematics` 구역에 있으며 자세한 적용법은
+[YAML 파라미터 설정](../configuration.md)을 따른다.
+
 !!! note "현재 텔레옵 런타임은 whole-body IK 사용"
     반복 `solve_pose()`는 단일 팔 회귀 테스트와 오프라인 계산을 위한 경로다.
-    현재 `teleop_app.py`는 base, lift, 양팔을 한 번에 푸는
-    [`src/whole_body_ik.py`](whole_body_ik.md)를 사용하지만, 그 경로의 FK와 Jacobian도
+    현재 `application/teleop.py`는 base, lift, 양팔을 한 번에 푸는
+    [`src/ffw_sh5_grasp/control/whole_body.py`](whole_body_ik.md)를 사용하지만, 그 경로의 FK와 Jacobian도
     동일한 `KinematicTree`/`KinematicsSolver`에서 얻는다.
 
 ## 역할
@@ -26,7 +29,7 @@
 | 모델 입력 | 기존 `MjModel` 또는 `KinematicsSolver.from_mjcf(path, ...)` |
 | live data 접근 | 없음. 파싱한 불변 트리와 NumPy 배열만 사용 |
 
-[`src/kinematics.py`](kinematics.md)의 `forward_kinematics()` 한 번으로 정규화된 world pose와
+[`src/ffw_sh5_grasp/kinematics/solver.py`](kinematics.md)의 `forward_kinematics()` 한 번으로 정규화된 world pose와
 `LOCAL_WORLD_ALIGNED`에 해당하는 6×N geometric Jacobian을 함께 얻는다. 단일 팔 IK와
 whole-body IK가 같은 quaternion 부호 규칙과 회전 오차 좌표계를 사용하므로, 두 경로의
 FK/Jacobian 정의가 달라지는 문제를 막는다.
@@ -40,7 +43,8 @@ FK/Jacobian 정의가 달라지는 문제를 막는다.
 > 특이점에서 역행렬이 왜 폭발하는지, DLS가 이를 어떻게 제한하는지, damped
 > null-space 투영이 왜 위치 보존의 근사인지까지 단계별로 보려면
 > [DLS와 위치 우선 IK 수학](ik-math.md)을 먼저 읽는다. ROS2 관점의 전체 흐름은
-> [역기구학 시스템 해설](ros2/06-inverse-kinematics.md)에 이어진다.
+> 목적함수와 위치 우선 구조의 유도는 [DLS와 위치 우선 IK 수학](ik-math.md)에
+> 한 번만 정리한다.
 
 Damped least-squares(DLS) 한 스텝(`solve_pose` 내부, 위치 오차 \(e\), 위치 야코비안 \(J_p\),
 감쇠 \(\lambda\)) — \(\lambda\)가 없는 순수 pseudo-inverse는 특이 자세 근처에서
@@ -139,7 +143,7 @@ flowchart TD
 ## legacy 사용 위치
 
 기존 단일 팔 회귀 테스트와 독립적인 알고리즘 실험에서 사용한다. 현재
-`teleop_app.py`의 `_step_physics()`는 아래 호출 대신 `WholeBodyIK.solve()`를 사용한다.
+`application/teleop.py`의 `_step_physics()`는 아래 호출 대신 `WholeBodyIK.solve()`를 사용한다.
 
 ```python
 q_des, pos_err, ori_err = solver.solve_pose(
@@ -155,7 +159,7 @@ q_des, pos_err, ori_err = solver.solve_pose(
 - live simulation의 `data.qpos`를 직접 수정하지 않는다.
 - FK/IK 계산에서 `mujoco.mj_forward()`를 호출하지 않는다.
 - 계산 결과는 관절각 배열로 반환된다.
-- 실제 로봇 움직임은 `arm_control.py`가 actuator torque로 만든다.
+- 실제 로봇 움직임은 `control/arm.py`가 actuator torque로 만든다.
 
 `tests/test_phase_3.py`는 analytic Jacobian의 중앙 유한차분 일치, quaternion
 double-cover, 무작위 target 100개의 수렴률과 실제 pick을 함께 검사한다. 양팔 모델의

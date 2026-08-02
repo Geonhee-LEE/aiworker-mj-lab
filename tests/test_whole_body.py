@@ -1,6 +1,6 @@
-"""ROS-free mobile kinematics and whole-body IK regression gates.
+"""ROS 없는 모바일 기구학과 전신 IK 회귀 검사.
 
-Run headless: ``python3 tests/test_whole_body.py``.
+Headless 실행: ``python3 tests/test_whole_body.py``
 """
 
 import ast
@@ -16,15 +16,15 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
-import arm_control  # noqa: E402
-import base_teleop  # noqa: E402
-import bounded_optimization  # noqa: E402
-import grasp  # noqa: E402
+from ffw_sh5_grasp.application import targets as teleop_targets  # noqa: E402
+from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
+from ffw_sh5_grasp.control import base as base_teleop  # noqa: E402
+from ffw_sh5_grasp.control import grasp  # noqa: E402
+from ffw_sh5_grasp.control import optimization as bounded_optimization  # noqa: E402
+from ffw_sh5_grasp.control import whole_body as whole_body_ik  # noqa: E402
+from ffw_sh5_grasp.kinematics import rotations as kinematics_math  # noqa: E402
 import kinematics  # noqa: E402
-import kinematics_math  # noqa: E402
 import teleop_app  # noqa: E402
-import teleop_targets  # noqa: E402
-import whole_body_ik  # noqa: E402
 
 ARMS = {side: [f"arm_{side}_joint{i}" for i in range(1, 8)] for side in ("r", "l")}
 HOME = np.array([0.0, 0.0, 0.0, -np.pi / 2, 0.0, 0.0, 0.0])
@@ -32,12 +32,18 @@ ORIENTATION_ERROR_LENGTH = 0.20
 
 
 def run_ros_free_dependency_gate():
-    """Prevent an accidental ROS/MoveIt dependency from entering the runtime path."""
+    """런타임 경로에 ROS나 MoveIt 의존성이 실수로 들어오지 않게 검사한다."""
     runtime_files = (
-        "base_teleop.py", "kinematics.py", "kinematics_math.py",
-        "kinematic_tree.py", "collision_kinematics.py",
-        "bimanual_kinematics.py", "bounded_optimization.py", "whole_body_ik.py",
-        "teleop_targets.py", "teleop_app.py")
+        "ffw_sh5_grasp/control/base.py",
+        "ffw_sh5_grasp/control/bimanual.py",
+        "ffw_sh5_grasp/control/optimization.py",
+        "ffw_sh5_grasp/control/whole_body.py",
+        "ffw_sh5_grasp/kinematics/solver.py",
+        "ffw_sh5_grasp/kinematics/rotations.py",
+        "ffw_sh5_grasp/kinematics/tree.py",
+        "ffw_sh5_grasp/kinematics/collision.py",
+        "ffw_sh5_grasp/application/targets.py",
+        "ffw_sh5_grasp/application/teleop.py")
     forbidden = {
         "rclpy", "rospy", "geometry_msgs", "nav_msgs", "sensor_msgs", "tf2_ros",
         "moveit", "moveit_commander", "ament_index_python", "controller_manager",
@@ -58,20 +64,25 @@ def run_ros_free_dependency_gate():
 
 
 def run_tree_kinematics_dependency_gate():
-    """Keep all runtime hand FK/Jacobians on the custom kinematic tree."""
+    """런타임의 모든 손 FK/Jacobian이 자체 기구학 트리를 사용하는지 검사한다."""
     runtime_files = (
-        "kinematics.py", "kinematics_math.py", "kinematic_tree.py",
-        "collision_kinematics.py", "bimanual_kinematics.py",
-        "bounded_optimization.py", "whole_body_ik.py",
-        "teleop_targets.py", "teleop_app.py")
+        "ffw_sh5_grasp/kinematics/solver.py",
+        "ffw_sh5_grasp/kinematics/rotations.py",
+        "ffw_sh5_grasp/kinematics/tree.py",
+        "ffw_sh5_grasp/kinematics/collision.py",
+        "ffw_sh5_grasp/control/bimanual.py",
+        "ffw_sh5_grasp/control/optimization.py",
+        "ffw_sh5_grasp/control/whole_body.py",
+        "ffw_sh5_grasp/application/targets.py",
+        "ffw_sh5_grasp/application/teleop.py")
     modules = {}
     for filename in runtime_files:
         source = (REPO_ROOT / "src" / filename).read_text(encoding="utf-8")
         modules[filename] = ast.parse(source, filename=filename)
     # 구현 분리 후에도 tree와 solver가 각각 의도한 모듈에 있어야 한다.
     expected_classes = {
-        "kinematic_tree.py": "KinematicTree",
-        "kinematics.py": "KinematicsSolver",
+        "ffw_sh5_grasp/kinematics/tree.py": "KinematicTree",
+        "ffw_sh5_grasp/kinematics/solver.py": "KinematicsSolver",
     }
     solver_classes = {
         filename: {
@@ -92,7 +103,9 @@ def run_tree_kinematics_dependency_gate():
                 isinstance(child.value, ast.Name) and child.value.id == "mujoco")
             if child.attr in runtime_forbidden:
                 violations.add(f"{filename}:{child.attr}")
-            if filename in {"kinematics.py", "kinematic_tree.py"} and is_mujoco_call:
+            if filename in {
+                    "ffw_sh5_grasp/kinematics/solver.py",
+                    "ffw_sh5_grasp/kinematics/tree.py"} and is_mujoco_call:
                 if child.attr in solver_forbidden:
                     violations.add(f"{filename}:{child.attr}")
     violations = sorted(violations)
@@ -100,9 +113,10 @@ def run_tree_kinematics_dependency_gate():
         class_name in solver_classes[filename]
         for filename, class_name in expected_classes.items())
     expected_functions = {
-        "bounded_optimization.py": {
+        "ffw_sh5_grasp/control/optimization.py": {
             "bounded_least_squares", "bounded_least_squares_with_barriers"},
-        "bimanual_kinematics.py": {"capture_reference", "rigid_grasp_task"},
+        "ffw_sh5_grasp/control/bimanual.py": {
+            "capture_reference", "rigid_grasp_task"},
     }
     functions_ok = all(
         function_names <= {
@@ -140,7 +154,7 @@ def _target_poses(data, sites, delta):
 
 
 def _pose_error_metric(data, targets, sites):
-    """Position error plus orientation error mapped to an equivalent 20cm lever arm."""
+    """위치 오차와 자세 오차를 20 cm 등가 지레팔 기준으로 합산한다."""
     total = 0.0
     for side, site in sites.items():
         target_pos, target_quat = targets[side]
@@ -181,8 +195,8 @@ def run_swerve_kinematics_gate():
         and max(abs(speed) for _angle, speed in saturated.values())
         <= base_teleop.WHEEL_SPEED_LIMIT[1] + 1e-12
     )
-    # 100 degrees is outside this model's +90 degree steering limit, but the same rolling
-    # direction is representable as -80 degrees with reversed wheel rotation.
+    # 100도는 이 모델의 +90도 조향 한계를 넘지만 같은 구름 방향은 바퀴 회전을 반대로
+    # 한 -80도로 표현할 수 있다.
     angle, direction = limited_kin._nearest_feasible_state(0.0, np.radians(100.0))
     equivalent_ok = abs(np.degrees(angle) + 80.0) < 1e-9 and direction == -1.0
     ok = feasible and max_roundtrip < 1e-10 and saturation_ok and equivalent_ok
@@ -193,7 +207,7 @@ def run_swerve_kinematics_gate():
 
 
 def _brute_box_least_squares(matrix, vector, lower, upper):
-    """Enumerate the 3-variable active sets used to validate the NumPy box-QP solver."""
+    """NumPy box-QP solver 검증에 사용할 3변수 active set을 모두 열거한다."""
     best = np.inf
     for state in itertools.product((-1, 0, 1), repeat=matrix.shape[1]):
         fixed = np.array([value != 0 for value in state])
@@ -214,7 +228,7 @@ def _brute_box_least_squares(matrix, vector, lower, upper):
 
 
 def run_box_qp_gate():
-    """The dependency-free bounded solver must reach the true convex box optimum."""
+    """외부 의존성 없는 bounded solver가 실제 convex box 최적해에 도달하는지 검사한다."""
     rng = np.random.default_rng(20260719)
     worst_gap = 0.0
     for _ in range(25):
@@ -234,7 +248,7 @@ def run_box_qp_gate():
 
 
 def run_joint_limit_cbf_gate(model):
-    """Cyclo-style barrier bounds must slow approach and recover outside the margin."""
+    """Cyclo 방식 barrier 경계가 접근을 감속하고 margin 밖에서 복귀시키는지 검사한다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     solver = whole_body_ik.WholeBodyIK(
@@ -286,7 +300,7 @@ def _self_collision_fixture(model):
 
 
 def run_collision_gradient_gate(model):
-    """Closest-point Jacobian must match a numerical signed-distance derivative."""
+    """최근접점 Jacobian이 수치 signed-distance 미분과 일치하는지 검사한다."""
     data, solver, pair = _self_collision_fixture(model)
     result = kinematics.collision_distance_gradient(
         model, data, pair, solver.kinematic_tree, solver.joint_ids, 0.10)
@@ -305,8 +319,8 @@ def run_collision_gradient_gate(model):
             distances.append(perturbed.distance)
         numerical[index] = (distances[1] - distances[0]) / (2.0 * step)
     error = float(np.max(np.abs(result.gradient - numerical)))
-    # Palm boxes trigger unstable GJK feature switching in MuJoCo 3.10, so their dedicated
-    # conservative sphere proxy must remain continuous under the same finite-difference test.
+    # 손바닥 box는 MuJoCo 3.10에서 불안정한 GJK feature 전환을 일으키므로 전용 보수적
+    # sphere 근사가 같은 유한차분 시험에서 연속성을 유지해야 한다.
     arm_indices = np.r_[solver.side_indices["r"], solver.side_indices["l"]]
     data.qpos[solver.qpos_adrs[arm_indices]] = HAND_COLLISION_Q
     mujoco.mj_forward(model, data)
@@ -344,7 +358,7 @@ def run_collision_gradient_gate(model):
 
 
 def run_self_collision_cbf_gate(model):
-    """An inward hand request inside 10 mm must become a separating velocity."""
+    """10 mm 안쪽의 내향 손 명령이 분리 속도로 바뀌는지 검사한다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     probe_solver = whole_body_ik.WholeBodyIK(
@@ -390,7 +404,7 @@ def run_self_collision_cbf_gate(model):
 
 
 def run_table_collision_cbf_gate(model):
-    """A downward dual-hand request must not cross the relaxed 10 mm margin."""
+    """양손 하향 명령이 완화된 10 mm margin을 넘지 않는지 검사한다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     probe = whole_body_ik.WholeBodyIK(
@@ -416,7 +430,7 @@ def run_table_collision_cbf_gate(model):
         constraint.distance for constraint, _bound in constraints
     ]) + 0.04 * (matrix @ safe.generalized_velocity)
 
-    # Collision checking is still comfortably inside the 25 Hz UI's 40 ms frame budget.
+    # 충돌 검사는 25 Hz UI의 프레임 예산 40 ms보다 충분히 빨라야 한다.
     for _ in range(10):
         safe_solver.solve(data, targets, 0.04)
     start = time.perf_counter()
@@ -440,7 +454,7 @@ def run_table_collision_cbf_gate(model):
 
 
 def run_collision_inactive_regression_gate(model):
-    """Far from obstacles, enabling collision avoidance must be output-neutral."""
+    """장애물에서 멀 때 충돌 회피 활성화가 출력에 영향을 주지 않는지 검사한다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     sites = _sites(model)
@@ -462,7 +476,7 @@ def run_collision_inactive_regression_gate(model):
 
 
 def run_rigid_grasp_gate(model):
-    """Captured hand relation must override conflicting independent hand requests."""
+    """캡처한 양손 관계가 충돌하는 독립 손 명령보다 우선하는지 검사한다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     sites = _sites(model)
@@ -493,7 +507,7 @@ def run_rigid_grasp_gate(model):
 
 
 def run_rigid_grasp_physical_gate():
-    """Virtual-object MoveL must preserve the captured relation through real dynamics."""
+    """가상 물체 MoveL이 실제 동역학에서도 캡처한 관계를 보존하는지 검사한다."""
     app = teleop_app.TeleopApp.__new__(teleop_app.TeleopApp)
     app._setup_sim()
     app.q_des_r = teleop_app.HOME_Q_R.copy()
@@ -573,7 +587,7 @@ def run_world_anchor_gate():
 
 
 def run_manual_handover_gate():
-    """Manual base motion must carry targets and release without a return command."""
+    """수동 베이스 이동이 목표를 운반하고 복귀 명령 없이 제어권을 넘기는지 검사한다."""
     app = teleop_app.TeleopApp.__new__(teleop_app.TeleopApp)
     app._setup_sim()
     targets_before = {side: app._target_world_pose(side) for side in ("r", "l")}
@@ -640,7 +654,7 @@ def run_manual_handover_gate():
 
 
 def run_manual_release_physical_gate():
-    """End-to-end release must stop chassis and wheel rotation without a rebound."""
+    """전체 경로의 입력 해제가 반동 없이 차체와 바퀴 회전을 멈추는지 검사한다."""
     app = teleop_app.TeleopApp.__new__(teleop_app.TeleopApp)
     app._setup_sim()
     app.q_des_r = teleop_app.HOME_Q_R.copy()
@@ -726,7 +740,7 @@ def run_whole_body_solver_gate(model):
 
 
 def run_arm_only_solver_gate(model):
-    """OFF must be a hard base/lift gate while preserving useful arm IK."""
+    """OFF가 유효한 팔 IK는 유지하면서 베이스와 리프트를 완전히 막는지 검사한다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     sites = _sites(model)
@@ -766,7 +780,7 @@ def run_arm_only_solver_gate(model):
 
 
 def run_solver_latency_gate(model, solve_count=200):
-    """Keep the bounded QP comfortably below the 25 Hz application's frame budget."""
+    """Bounded QP가 25 Hz 앱의 프레임 예산보다 충분히 빠른지 검사한다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     sites = _sites(model)
@@ -786,7 +800,7 @@ def run_solver_latency_gate(model, solve_count=200):
 
 
 def run_randomized_whole_body_gate(model, trial_count=40):
-    """Repeated one-step descent/read-only/bound checks across XYZ and yaw targets."""
+    """XYZ와 yaw 목표에서 한 스텝 하강, 읽기 전용과 경계를 반복 검사한다."""
     rng = np.random.default_rng(20260718)
     successes = 0
     worst_ratio = 0.0
@@ -835,7 +849,7 @@ def run_randomized_whole_body_gate(model, trial_count=40):
 
 def _physical_whole_body_trial(model, delta, duration=1.5, yaw_delta=0.0,
                                rotate_positions=False):
-    """Run one dual-hand target through arm/lift and real wheel-ground contact."""
+    """양손 목표 하나를 팔·리프트와 실제 바퀴·지면 접촉으로 실행한다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     sites = _sites(model)
@@ -950,7 +964,7 @@ def _physical_whole_body_trial(model, delta, duration=1.5, yaw_delta=0.0,
 
 
 def run_physical_whole_body_gate(model):
-    """Exercise common translation, lateral, vertical and yaw whole-body targets."""
+    """일반적인 전후·좌우·수직 이동과 yaw 전신 목표를 검사한다."""
     trials = {
         "longitudinal": _physical_whole_body_trial(
             model, [-0.25, 0.0, 0.08], duration=2.0),

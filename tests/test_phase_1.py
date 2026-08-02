@@ -1,12 +1,10 @@
-"""Phase 1 — hand_only scene + collision validation.
+"""Phase 1 ``hand_only`` 장면과 충돌 검증.
 
-Runs the penetration test: close all finger curl joints at max
-actuator authority toward the can, 20 times, and record the worst
-finger-vs-can contact penetration depth (`contact.dist`, negative = overlap).
+모든 손가락 굽힘 관절을 최대 액추에이터 힘으로 캔을 향해 닫는 시험을 20번 수행하고,
+손가락과 캔 사이의 최악 접촉 침투 깊이를 기록한다. ``contact.dist``의 음수는 겹침을
+뜻한다. 같은 rollout에서 달성한 실시간 배율도 출력한다.
 
-Also reports the achieved real-time factor for the same rollout.
-
-Run headless: `python3 tests/test_phase_1.py`
+Headless 실행: ``python3 tests/test_phase_1.py``
 """
 
 import pathlib
@@ -21,15 +19,15 @@ MODEL_PATH = REPO_ROOT / "models" / "hand_only.xml"
 
 N_TRIALS = 20
 SIM_SECONDS = 1.5
-PENETRATION_LIMIT = 0.002  # 2mm
+PENETRATION_LIMIT = 0.002  # 허용 침투 깊이 2 mm
 RTF_TARGET = 0.5
 
-# Curl joints only: thumb (mcp_pitch, ip) + each finger's (pip, dip, tip).
+# 엄지 MCP pitch·IP와 각 손가락 PIP·DIP·tip 굽힘 관절만 포함한다.
 CURL_JOINTS = {"finger_r_joint3", "finger_r_joint4"}
 for base in (5, 9, 13, 17):
     CURL_JOINTS.update({f"finger_r_joint{base+1}", f"finger_r_joint{base+2}", f"finger_r_joint{base+3}"})
 
-CAN_INIT_POS = np.array([0.105, 0.065, 0.16])  # matches models/hand_only.xml can body pos (Phase 2)
+CAN_INIT_POS = np.array([0.105, 0.065, 0.16])  # ``hand_only.xml``의 Phase 2 캔 위치와 같다.
 CAN_INIT_QUAT = np.array([1.0, 0.0, 0.0, 0.0])
 
 
@@ -44,8 +42,8 @@ def actuator_for_joint(model, jid):
 
 
 def reset_trial(model, data):
-    # Phase 1 tests the closing motion itself, not placement robustness (that's Phase 2's
-    # +-5mm randomized grasp+lift test) -- deterministic can pose, repeated for consistency.
+    # Phase 1은 배치 강건성이 아니라 닫힘 동작 자체를 검사한다. 배치 강건성은 Phase 2의
+    # ±5 mm 무작위 파지·들기 시험에서 다루므로 여기서는 일관된 고정 캔 자세를 반복한다.
     mujoco.mj_resetData(model, data)
     can_jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "can_free")
     qadr = model.jnt_qposadr[can_jid]
@@ -61,7 +59,7 @@ def close_hand(model, data):
         if name in CURL_JOINTS:
             aid = actuator_for_joint(model, jid)
             if aid is None:
-                continue  # locked joint (range=0), no actuator -- see Phase 2 NOTES
+                continue  # 범위가 0인 잠긴 관절에는 액추에이터가 없다.
             hi = model.jnt_range[jid][1]
             data.ctrl[aid] = hi
 
@@ -76,7 +74,7 @@ def worst_finger_can_penetration(model, data):
         other = c.geom1 if c.geom2 == can_gid else c.geom2
         bname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, model.geom_bodyid[other]) or ""
         if not (bname.startswith("finger_r_") or bname == "hx5_r_base"):
-            continue  # ignore can-vs-floor once it falls; only hand-can contacts matter here
+            continue  # 캔이 떨어진 뒤의 바닥 접촉은 무시하고 손과 캔 접촉만 본다.
         if c.dist < worst:
             worst = c.dist
     return worst

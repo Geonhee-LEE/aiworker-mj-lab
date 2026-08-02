@@ -1,4 +1,4 @@
-# `src/whole_body_ik.py`
+# `src/ffw_sh5_grasp/control/whole_body.py`
 
 !!! info "핵심 알고리즘 학습 순서 4/7"
     [단일 팔 IK](ik.md)의 \(J\Delta q\approx e\)를 base·lift·양팔과 safety
@@ -8,6 +8,10 @@
 손 target을 팔만으로 맞추지 않고 모바일 베이스 3축, 리프트 1축, 양팔 14축을 한
 문제에서 푸는 ROS 비의존 differential whole-body IK다.
 
+작업 가중치, 속도 한계와 관절·충돌 CBF 값은 `config/default.yaml`의
+`whole_body_ik`, `optimization` 구역에서 조절한다. 적용·검증 규칙은
+[YAML 파라미터 설정](../configuration.md)을 참고한다.
+
 ## 모듈 구성
 
 `WholeBodyIK`가 모든 수학을 직접 소유하지 않도록 상태를 쓰는 제어 로직과 순수 계산을
@@ -15,18 +19,19 @@
 
 | 파일 | 책임 |
 |---|---|
-| `whole_body_ik.py` | robot state, task row, 속도/관절 bound와 최종 command 조립 |
-| `bounded_optimization.py` | 모델을 모르는 BVLS와 collision soft-barrier 수치 해법 |
-| `bimanual_kinematics.py` | rigid-grasp reference와 상대 pose/Jacobian 계산 |
-| `kinematics_math.py` | 회전 행렬·쿼터니언·각도·벡터 공용 함수 |
-| `collision_kinematics.py` | geometry signed distance와 gradient 계산 |
+| `control/whole_body.py` | robot state, task row, 속도/관절 bound와 최종 command 조립 |
+| `control/optimization.py` | 모델을 모르는 BVLS와 collision soft-barrier 수치 해법 |
+| `control/bimanual.py` | rigid-grasp reference와 상대 pose/Jacobian 계산 |
+| `kinematics/rotations.py` | 회전 행렬·쿼터니언·각도·벡터 공용 함수 |
+| `kinematics/collision.py` | geometry signed distance와 gradient 계산 |
 
 기존 디버그 코드에서 사용하던 `_bounded_least_squares()`, `_quaternion_matrix()` 등의
-이름은 `whole_body_ik.py`에 호환 별칭으로 남지만 실제 구현은 각 전용 모듈에 하나만
+이름은 `control/whole_body.py`에 호환 별칭으로 남지만 실제 구현은 각 전용 모듈에 하나만
 존재한다.
 
 ROS2/MoveIt 관점의 개념 비교와 legacy DLS 식의 역할은
-[Part 6 — 전신 IK와 단일 팔 DLS IK](ros2/06-inverse-kinematics.md)를 함께 본다.
+[DLS와 위치 우선 IK 수학](ik-math.md)과 [단일 팔 IK](ik.md)를 먼저 보면,
+같은 pose task가 18축 bounded 문제로 확장되는 차이를 확인할 수 있다.
 
 ## 제어 변수와 출력
 
@@ -146,7 +151,7 @@ flowchart LR
 
 ## Reactive collision avoidance
 
-`collision_kinematics.default_collision_pairs()`는 WBIK가 실제로 움직일 수 있는 geometry만
+`collision.default_collision_pairs()`는 WBIK가 실제로 움직일 수 있는 geometry만
 고른다. 양팔 사이, 한 팔의 비인접 link, 팔과 base/lift/상체/head, 팔/손과 table을
 포함한다. 반면 wheel-floor 접촉, 손가락-object 접촉, can은 의도된 물리/그립
 접촉이므로 제외한다. 경로를 미리 만드는 motion planner가 아니라 매 제어 frame의
@@ -294,14 +299,14 @@ workspace constraint 2개가 활성화된 solve는 약 0.95 ms다. 회귀 gate�
 |---|---|---|
 | \(\dot x_i^*=K e_i-D\dot x_i\) | `desired`, `clip_norm()` | `WholeBodyIK.solve()` |
 | weighted task를 \(A\dot q\approx b\)로 적층 | `rows`, `rhs`, `matrix`, `vector` | `WholeBodyIK.solve()` |
-| \(\dot q_{min}\le\dot q\le\dot q_{max}\) | `lower`, `upper`, `_velocity_bounds()` | `whole_body_ik.py` |
-| box-constrained \(\min\|A\dot q-b\|^2\) | `bounded_least_squares()` | `bounded_optimization.py` |
-| \(\nabla d\,\dot q\ge-\alpha(d-d_{safe})\) | `_collision_constraints()` | `whole_body_ik.py` |
-| CBF soft slack penalty | `bounded_least_squares_with_barriers()` | `bounded_optimization.py` |
-| 양손 상대 pose 보존 | `rigid_grasp_task()` | `bimanual_kinematics.py` |
+| \(\dot q_{min}\le\dot q\le\dot q_{max}\) | `lower`, `upper`, `_velocity_bounds()` | `control/whole_body.py` |
+| box-constrained \(\min\|A\dot q-b\|^2\) | `bounded_least_squares()` | `control/optimization.py` |
+| \(\nabla d\,\dot q\ge-\alpha(d-d_{safe})\) | `_collision_constraints()` | `control/whole_body.py` |
+| CBF soft slack penalty | `bounded_least_squares_with_barriers()` | `control/optimization.py` |
+| 양손 상대 pose 보존 | `rigid_grasp_task()` | `control/bimanual.py` |
 
 각 행을 만드는 정책은 `WholeBodyIK`, robot model을 모르는 수치 최적화는
-`bounded_optimization`, 상대 pose 기하는 `bimanual_kinematics`에 둔다. 이 경계로
+`optimization`, 상대 pose 기하는 `bimanual`에 둔다. 이 경계로
 수식의 한 항이 여러 파일에 중복 구현되지 않는다.
 
 ## 함수 흐름

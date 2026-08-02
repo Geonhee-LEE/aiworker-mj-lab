@@ -6,23 +6,53 @@
 
 ## 읽기 경로 선택
 
-시스템 개념, 코드 중심 설명과 ROS2 관점 설명을 별도 가이드로 나누지 않는다. 아래에서
-익숙한 출발점을 고른 뒤 모두 같은 아키텍처와 모듈별 문서로 이어진다.
+시스템 개념, 코드 중심 설명과 ROS2 용어 대응을 별도 가이드로 반복하지 않는다.
+아래에서 출발점을 고른 뒤 모두 같은 아키텍처와 모듈별 문서로 이어진다.
 
 | 목적 | 권장 순서 |
 |---|---|
 | 시스템 동작 이해하기 | [동작 원리](../concepts.md) → [아키텍처와 데이터 흐름](../overview.md) |
 | 처음 코드를 읽기 | [동작 원리](../concepts.md) → [아키텍처](../overview.md) → 이 페이지의 코드 계층 |
 | 수정할 파일 찾기 | [수정 목적별 경로](#change-paths) → 해당 모듈 가이드 → [테스트](../testing.md) |
-| ROS2 경험으로 이해하기 | [ROS2 관점으로 읽기](#ros2-reading)에서 목적별 Part 선택 |
+| 제어값 조정하기 | [YAML 파라미터 설정](../configuration.md) → 해당 알고리즘 문서 → 물리 회귀 테스트 |
+| ROS2 경험으로 이해하기 | [아키텍처의 ROS2 대응표](../overview.md#ros2-concept-map)로 용어를 바꾼 뒤 같은 모듈 문서 읽기 |
 | 제어 수학 이해하기 | [핵심 알고리즘 학습 순서](#algorithm-learning-order)를 1번부터 따라가기 |
-| 좌표계·3D 조작 이해하기 | [목표와 좌표 변환](teleop_targets.md) → [ROS2 Part 9·10](#coordinate-reading) |
+| 좌표계·3D 조작 이해하기 | [목표와 좌표 변환](teleop_targets.md) → [UI 패널](teleop_ui.md) → [렌더링과 Gizmo](teleop_render.md) |
 | 모방학습·실기 전환 준비 | [모방학습 데이터와 실기 전환](imitation-sim2real.md) |
 
 !!! tip "사용법을 찾는 중이라면"
     키와 버튼은 [화면과 조작](../run.md), 모드 조합은
     [모드 선택](../control-modes.md), 증상 진단은
     [문제 해결](../troubleshooting.md)이 더 빠르다.
+
+## 문서 계층과 코드 계층
+
+왼쪽 내비게이션은 `src/ffw_sh5_grasp/`의 책임 경계를 그대로 따른다. 문서를 찾을
+때는 수정하려는 코드의 상위 패키지와 같은 이름의 분류를 먼저 연다.
+
+```text
+시스템 이해와 개발
+├── 시스템 기초                  # 공통 상태와 전체 데이터 흐름
+├── 애플리케이션 ↔ application/ # 앱 조립, target과 좌표 변환
+├── 시각화       ↔ visualization/ # UI·장면·카메라·기즈모
+├── 기구학과 수학 ↔ kinematics/  # tree, FK/Jacobian, 회전, 충돌, IK
+├── 제어          ↔ control/      # WBIK·팔·베이스·파지
+├── 검증과 확장                  # 테스트, 개발 규칙, 모방학습·실기
+└── API 참고                     # 함수별 입력·출력·사용 시점
+```
+
+| 문서 분류 | 대응 코드 | 먼저 찾을 내용 |
+|---|---|---|
+| 애플리케이션 | `application/` | 실행 루프, 명령 우선순위, target·좌표계 |
+| 시각화 | `visualization/` | ImGui 입력, MuJoCo scene, gizmo와 overlay |
+| 기구학과 수학 | `kinematics/` | tree, FK/Jacobian, quaternion, collision, 단일 팔 IK |
+| 제어 | `control/` | 전신 IK 조립, 수치 최적화, 팔·베이스·손 명령 |
+| 검증과 확장 | `tests/`, 향후 adapter/recorder | 회귀 기준, 변경 규칙, 데이터·실기 전환 |
+
+이 분류는 **파일을 찾는 순서**다. 처음부터 학습할 때는 패키지 알파벳순이 아니라
+입력과 수식의 의존 관계를 따라야 하므로 아래의 완독 순서와 알고리즘 학습 순서를
+사용한다. 예를 들어 `application/targets.py`를 먼저 읽어 IK 입력인 world pose를
+이해한 다음 `kinematics/`와 `control/`로 내려간다.
 
 ## 전체 완독 순서
 
@@ -31,14 +61,15 @@
 
 1. [빠른 시작](../getting-started.md)으로 실제 화면과 기본 동작을 확인한다.
 2. [동작 원리](../concepts.md) → [아키텍처와 데이터 흐름](../overview.md) →
-   [MuJoCo 기본 용어](00-basics.md)로 상태와 모듈 경계를 잡는다.
+   [MuJoCo 기본 용어](00-basics.md) → [YAML 파라미터 설정](../configuration.md)으로
+   상태, 모듈 경계와 조절값의 위치를 잡는다.
 3. [목표와 좌표 변환](teleop_targets.md)에서 UI 입력이 world hand pose가 되는
    과정을 읽는다.
 4. [핵심 알고리즘 학습 순서](#algorithm-learning-order)의 1A~7을 읽어
    world pose가 관절·바퀴·손가락 명령으로 바뀌는 수학을 따라간다.
 5. [앱 조립과 물리 루프](teleop_app.md) → [UI 패널](teleop_ui.md) →
    [렌더링과 Gizmo](teleop_render.md)로 실제 한 frame의 호출 관계를 확인한다.
-6. [API 치트시트](cheatsheet.md)에서 작업별 공개 함수를 고르고,
+6. [API 레퍼런스](../api/index.md)에서 작업별 공개 함수를 고르고,
    [개발 체크리스트](pitfalls.md)와 [테스트와 검증](../testing.md)으로 마무리한다.
 
 이후 데이터를 수집하거나 실물 로봇으로 확장할 때만
@@ -46,8 +77,9 @@
 구현과 아직 추가해야 할 recorder·hardware adapter의 경계를 구분한다.
 
 이 경로를 마치면 **입력 → 좌표 변환 → 기구학/IK → actuator 명령 → 물리 → 렌더링**을
-파일과 함수 단위로 추적할 수 있다. ROS2 비교가 필요한 독자만 관련 Part 링크를
-보조 설명으로 읽으면 되며, 같은 내용을 처음부터 다시 읽을 필요는 없다.
+파일과 함수 단위로 추적할 수 있다. ROS2 경험자는
+[한 장의 대응표](../overview.md#ros2-concept-map)로 용어만 대응하면 같은 설명을
+중복해서 읽을 필요가 없다.
 
 ## 핵심 알고리즘 학습 순서 { #algorithm-learning-order }
 
@@ -101,35 +133,41 @@ flowchart LR
 
 | 필요한 기반 지식 | 부연 설명 |
 |---|---|
-| `MjModel`, `MjData`, `qpos`, `qvel`, `ctrl`, contact | [MuJoCo 기본 용어](00-basics.md), [Part 2 — MuJoCo model과 data](ros2/02-mujoco-model-data.md) |
+| `MjModel`, `MjData`, `qpos`, `qvel`, `ctrl`, contact | [MuJoCo 기본 용어](00-basics.md) |
 | body–joint–site 관계와 조상 경로 | [Kinematic Tree](kinematic-tree.md) |
 | 회전행렬, Rodrigues 식, geometric Jacobian | [FK와 Jacobian](forward-kinematics.md) |
 | quaternion 곱·역·부호·자세 오차 | [Quaternion과 자세 오차](quaternion-math.md) |
 | least-squares, DLS, SVD, null space | [DLS와 위치 우선 IK 수학](ik-math.md) |
 | signed distance, gradient, CBF 경계 | [Collision distance와 gradient](collision-kinematics.md), [전신 IK의 collision avoidance](whole_body_ik.md#reactive-collision-avoidance) |
-| world/base/startup-anchor 좌표계 | [목표와 좌표 변환](teleop_targets.md), [Part 10 — 좌표계](ros2/10-coordinate-frames.md) |
+| world/base/startup-anchor 좌표계 | [목표와 좌표 변환](teleop_targets.md) |
 | actuator, bias force, contact force | [팔 토크 제어](arm_control.md), [손 파지와 접촉 판정](grasp.md) |
 
 ## 코드 계층
 
 ```mermaid
 flowchart TB
-    subgraph App["애플리케이션 계층"]
-        UI["teleop_ui.py<br>입력 widget"]
-        RENDER["teleop_render.py<br>scene · camera · gizmo"]
-        APP["teleop_app.py<br>조립 · 명령 선택 · frame loop"]
-        TARGETS["teleop_targets.py<br>target 상태 · 좌표 변환"]
+    subgraph App["애플리케이션"]
+        APP["application/teleop.py<br>조립 · 명령 선택 · frame loop"]
+        TARGETS["application/targets.py<br>target 상태 · 좌표 변환"]
     end
 
-    subgraph Control["제어 알고리즘"]
-        WBIK["whole_body_ik.py<br>bounded IK · CBF"]
-        BASE["base_teleop.py<br>body twist · swerve"]
-        ARM["arm_control.py<br>팔 torque"]
-        GRASP["grasp.py<br>손가락 synergy · contact"]
-        IK["ik.py<br>단일 팔 IK 호환 이름"]
+    subgraph Visual["시각화"]
+        UI["visualization/ui.py<br>입력 widget"]
+        RENDER["visualization/render.py<br>scene · camera · gizmo"]
     end
 
-    KIN["kinematics 모듈군<br>math · tree · solver · collision"]
+    subgraph Kinematics["기구학과 수학"]
+        KIN["kinematics 모듈군<br>rotation · tree · solver · collision"]
+        IK["kinematics/legacy.py<br>단일 팔 IK 호환 이름"]
+    end
+
+    subgraph Control["제어"]
+        WBIK["control/whole_body.py<br>bounded IK · CBF"]
+        BASE["control/base.py<br>body twist · swerve"]
+        ARM["control/arm.py<br>팔 torque"]
+        GRASP["control/grasp.py<br>손가락 synergy · contact"]
+    end
+
     PHYS[("MuJoCo model/data")]
 
     UI --> APP
@@ -148,14 +186,15 @@ flowchart TB
     PHYS --> RENDER
 ```
 
-의존 방향의 핵심은 `teleop_app.py`가 조립을 담당하고, 계산 모듈은 UI나 renderer를
-알지 않는다는 점이다. `kinematics.py`는 단일 팔 IK와 전신 IK가 함께 사용하는 가장
+의존 방향의 핵심은 `application/teleop.py`가 조립을 담당하고, 계산 모듈은 UI나 renderer를
+알지 않는다는 점이다. `kinematics/solver.py`는 단일 팔 IK와 전신 IK가 함께 사용하는 가장
 낮은 수학 계층이다.
 
 ## 수정 목적별 경로 { #change-paths }
 
 | 수정 목적 | 먼저 볼 문서 | 함께 볼 문서 | 최소 회귀 |
 |---|---|---|---|
+| 이득·속도·범위 조정 | [YAML 파라미터 설정](../configuration.md) | 해당 알고리즘 문서 | Config + 해당 Phase |
 | 손 pose/Jacobian | [FK와 Jacobian](forward-kinematics.md) | [Kinematic Tree](kinematic-tree.md), [Quaternion](quaternion-math.md) | Phase 3, Whole-body |
 | 단일 팔 IK | [단일 팔 IK](ik.md) | [DLS와 위치 우선 IK 수학](ik-math.md), [기구학](kinematics.md) | Phase 3, 4 |
 | 전신 IK·관절 한계·충돌 | [전신 IK와 충돌 회피](whole_body_ik.md) | [목표와 좌표 변환](teleop_targets.md) | Whole-body, Phase 6 |
@@ -170,87 +209,31 @@ flowchart TB
 
 | 파일 | 한 문장 책임 | 주요 쓰기 대상 |
 |---|---|---|
-| `teleop_app.py` | 모듈을 초기화하고 frame별 최종 명령을 선택 | app 상태, `data.ctrl`, physics step |
-| `teleop_ui.py` | ImGui 입력을 target과 mode 상태로 변환 | app target/mode |
-| `teleop_render.py` | scene, camera, gizmo, collision overlay 렌더링 | render state, gizmo target |
-| `teleop_targets.py` | UI 값과 world pose를 왕복 변환 | target/marker state |
-| `kinematics.py` | 단일 팔 IK와 기존 공개 API 진입점 | 트리·충돌 세부 구현 없음 |
-| `kinematic_tree.py` | MJCF 트리, FK와 Jacobian | live data 접근 없음 |
-| `kinematics_math.py` | 회전 행렬과 쿼터니언 수학 | 모델·solver 상태 없음 |
-| `collision_kinematics.py` | signed-distance gradient | target/solver 정책 없음 |
-| `bimanual_kinematics.py` | rigid-grasp 상대 pose와 Jacobian 계산 | actuator·solver 상태 없음 |
-| `bounded_optimization.py` | box BVLS와 soft barrier 계산 | robot model 상태 없음 |
-| `whole_body_ik.py` | WBIK task·bound·상태를 조립하고 command 계산 | 반환 command만 |
-| `base_teleop.py` | body twist를 steer/drive command로 변환 | controller 내부 상태 |
-| `arm_control.py` | 목표 관절각을 torque로 변환 | arm `data.ctrl` |
-| `grasp.py` | synergy를 finger command로 바꾸고 contact force 판정 | finger `data.ctrl` |
-| `ik.py` | 기존 `InverseKinematics` import를 공용 `KinematicsSolver`에 연결 | 없음 |
-| `mj_util.py` | joint에서 actuator를 찾는 공용 MuJoCo helper | 없음 |
+| `config.py` | 기본·사용자 YAML을 병합하고 구조·자료형을 검증 | 불변 설정 스냅샷 |
+| `application/teleop.py` | 모듈을 초기화하고 frame별 최종 명령을 선택 | app 상태, `data.ctrl`, physics step |
+| `visualization/ui.py` | ImGui 입력을 target과 mode 상태로 변환 | app target/mode |
+| `visualization/render.py` | scene, camera, gizmo, collision overlay 렌더링 | render state, gizmo target |
+| `application/targets.py` | UI 값과 world pose를 왕복 변환 | target/marker state |
+| `kinematics/solver.py` | 단일 팔 IK와 기존 공개 API 진입점 | 트리·충돌 세부 구현 없음 |
+| `kinematics/tree.py` | MJCF 트리, FK와 Jacobian | live data 접근 없음 |
+| `kinematics/rotations.py` | 회전 행렬과 쿼터니언 수학 | 모델·solver 상태 없음 |
+| `kinematics/collision.py` | signed-distance gradient | target/solver 정책 없음 |
+| `control/bimanual.py` | rigid-grasp 상대 pose와 Jacobian 계산 | actuator·solver 상태 없음 |
+| `control/optimization.py` | box BVLS와 soft barrier 계산 | robot model 상태 없음 |
+| `control/whole_body.py` | WBIK task·bound·상태를 조립하고 command 계산 | 반환 command만 |
+| `control/base.py` | body twist를 steer/drive command로 변환 | controller 내부 상태 |
+| `control/arm.py` | 목표 관절각을 torque로 변환 | arm `data.ctrl` |
+| `control/grasp.py` | synergy를 finger command로 바꾸고 contact force 판정 | finger `data.ctrl` |
+| `kinematics/legacy.py` | 기존 `InverseKinematics` import를 공용 `KinematicsSolver`에 연결 | 없음 |
+| `mujoco_utils.py` | joint에서 actuator를 찾는 공용 MuJoCo helper | 없음 |
 
-파일을 찾은 다음에는 [API 치트시트](cheatsheet.md)의 **상황별 첫 함수** 표를 사용한다.
-그 표는 직접 호출해도 되는 진입점, 반환값, 다음 단계와 상세 문서를 함께 적는다.
+표의 경로는 모두 `src/ffw_sh5_grasp/` 기준이다. `src/teleop_app.py`는 실행 launcher,
+`src/kinematics.py`와 `src/ik.py`는 기존 import 호환 facade로만 남긴다.
+
+파일을 찾은 다음에는 [API 레퍼런스](../api/index.md)에서 해당 패키지를 연다.
+각 함수의 직관적 목적, 입력, 반환값, 부작용과 사용 시점을 같은 형식으로 적었다.
 이름이 `_`로 시작하는 함수는 모듈 내부 구현이므로 새 호출부에서는 공개 함수나
 `TeleopApp`의 공개 메서드를 우선한다.
-
-## ROS2 관점으로 읽기 { #ros2-reading }
-
-ROS2/Gazebo 경험이 있다면 아래 Part에서 익숙한 node, topic, tf2, MoveIt,
-`ros2_control` 개념을 현재 MuJoCo 단일 프로세스 구조와 대응해 볼 수 있다. 별도의
-시스템이 아니라 위 코드 계층을 다른 관점으로 설명하는 심화 트랙이다.
-
-| 목적 | 권장 Part |
-|---|---|
-| ROS2와 전체 구조 차이 | Part 1 → 2 → 4 |
-| 제어 알고리즘 | Part 5 → 6 → 7 → 8 |
-| 3D 조작과 좌표계 | Part 9 → 10 |
-| 검증과 유지보수 | Part 11 → 13 → 14 |
-| 설치와 직접 실행 | Part 12 |
-
-### 시작과 구조
-
-| 페이지 | 내용 |
-|---|---|
-| [Part 1 — ROS2와 개념 지도](ros2/01-concepts.md) | node·topic·tf·controller와 현재 구조 비교 |
-| [Part 2 — MuJoCo model과 data](ros2/02-mujoco-model-data.md) | MJCF, actuator, contact, 물리 상태 |
-| [Part 3 — 프로젝트 정체성](ros2/03-project-identity.md) | 목표, 불변식, Phase 이력 |
-| [Part 4 — 런타임 아키텍처](ros2/04-runtime-architecture.md) | 파일 지도와 한 frame의 실행 순서 |
-
-### 제어 알고리즘
-
-| 페이지 | 내용 |
-|---|---|
-| [Part 5 — 손 제어](ros2/05-hand-control.md) | grasp synergy, 관절 보간, 접촉 판정 |
-| [Part 6 — 전신 IK와 단일 팔 DLS IK](ros2/06-inverse-kinematics.md) | bounded WBIK, legacy DLS, task priority와 회전 오차 |
-| [Part 7 — 팔 토크 제어](ros2/07-arm-torque-control.md) | PD와 bias force feedforward |
-| [Part 8 — 모바일 베이스](ros2/08-mobile-base.md) | 스워브 역기구학과 feedback 제어 |
-
-### 조작과 좌표계 { #coordinate-reading }
-
-| 페이지 | 내용 |
-|---|---|
-| [Part 9 — 3D 텔레오퍼레이션 UI](ros2/09-teleoperation-ui.md) | MoveL, bimanual 상태, gizmo |
-| [Part 10 — 좌표계](ros2/10-coordinate-frames.md) | startup anchor, world target, 변환 함수 |
-
-### 검증과 참고
-
-| 페이지 | 내용 |
-|---|---|
-| [Part 11 — 테스트와 검증](ros2/11-testing.md) | Phase gate와 release 전략 |
-| [Part 12 — 직접 실행](ros2/12-running.md) | 설치와 실행 명령 |
-| [Part 13 — 버그 사례집](ros2/13-bug-cases.md) | 실제 결함과 일반화된 교훈 |
-| [Part 14 — 용어와 개념 찾아보기](ros2/14-glossary.md) | 익숙한 용어에서 현재 구현으로 이동 |
-
-이 프로젝트는 ROS2 node가 아니라 `python3 src/teleop_app.py`로 실행되는 단일
-프로세스 프로그램이다. 입력이 target을 갱신하고, whole-body IK와 actuator
-controller가 `data.ctrl`을 만든 다음 MuJoCo physics와 rendering을 순서대로 수행한다.
-
-```text
-입력 → target 갱신 → whole-body IK
-    → 팔·손·바퀴 actuator command → mj_step → rendering
-```
-
-DLS, SVD gain, null-space projector의 수식은 중복 전개하지 않고
-[DLS와 위치 우선 IK 수학](ik-math.md)에 한 흐름으로 정리한다.
 
 ## 완독 후 수학 이해 범위
 
@@ -292,4 +275,4 @@ DLS, SVD gain, null-space projector의 수식은 중복 전개하지 않고
 3. 최종적으로 [테스트와 검증](../testing.md)의 전체 suite를 실행한다.
 4. 문서를 바꿨다면 `mkdocs build --strict`도 실행한다.
 
-짧은 함수 서명과 기본값은 [API 치트시트](cheatsheet.md)에서 찾을 수 있다.
+함수별 목적·입력·반환값은 [API 레퍼런스](../api/index.md)에서 찾을 수 있다.

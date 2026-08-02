@@ -1,11 +1,14 @@
-# `src/teleop_ui.py`
+# `src/ffw_sh5_grasp/visualization/ui.py`
 
 ImGui 기반 텔레옵 UI를 그린다. 자주 쓰는 조작은 `Control Center`, 읽기 중심 도구는
 `Diagnostics` 탭으로 묶는다. 두 워크스페이스만 **네이티브 OS 창**으로 분리되므로
 메인 MuJoCo 창 밖으로 이동할 수 있으면서 작업 표시줄과 화면은 복잡해지지 않는다.
 
 MoveL/Bimanual MoveL 상태 전이 안에서 이 패널이 맡는 위치는
-[Part 9 — Cyclo Control UI](ros2/09-teleoperation-ui.md)에서 확인한다.
+[목표와 좌표 변환](teleop_targets.md)과 [렌더링과 Gizmo](teleop_render.md)에서 확인한다.
+
+조그 간격, 슬라이더 범위와 창 초기 배치는 `config/default.yaml`의 `ui` 구역에서
+조절한다. 사용자 설정 방법은 [YAML 파라미터 설정](../configuration.md)을 참고한다.
 
 ## 역할
 
@@ -98,7 +101,7 @@ outside**는 현재 배치 파일과 관계없이 다시 외부로 내보내고,
 각 워크스페이스 오른쪽 위 `×`로 닫아도 상태 창의 **Workspaces** 체크박스로 다시 열
 수 있다. **Show all**, **Control only**, **Hide all**은 표시 상태를 일괄 변경하며 창의
 위치와 크기는 ImGui 설정에 저장된다. 실제 OS 창 생성과 context 전환은
-[`teleop_render.py`](teleop_render.md)가 담당한다.
+[`visualization/render.py`](teleop_render.md)가 담당한다.
 
 ## 기구학 트리 창
 
@@ -115,8 +118,8 @@ finger, 물체를 포함한 전체 모델 트리를 탐색한다.
 
 - UI는 `app.targets`와 app 상태만 바꾼다.
 - `mj_step`, IK solve, actuator command는 수행하지 않는다.
-- 실제 반영은 `teleop_app.py`의 `_step_physics()`에서 한다.
+- 실제 반영은 `application/teleop.py`의 `_step_physics()`에서 한다.
 - **Whole-body Control** 버튼은 `toggle_whole_body_control()`을 호출하고 상태줄에는
   `ON` 또는 `OFF (arm-only)`와 실제 body command가 표시된다.
 - `Move time`은 현재 UI 호환용 상태값이며 trajectory scheduler에는 연결되지 않는다.
-  목표 응답은 `teleop_app.py`의 frame rate limit과 controller gain이 결정한다.
+  목표 응답은 `application/teleop.py`의 frame rate limit과 controller gain이 결정한다.

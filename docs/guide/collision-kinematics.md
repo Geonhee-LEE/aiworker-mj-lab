@@ -7,7 +7,7 @@
 
 ## 1. 문제와 경계
 
-`collision_kinematics.py`는 geometry pair마다 다음 값을 만든다.
+`kinematics/collision.py`는 geometry pair마다 다음 값을 만든다.
 
 | 출력 | 의미 |
 |---|---|
@@ -16,7 +16,7 @@
 | `gradient` | controlled velocity에 대한 \(\nabla_q d\) |
 
 이 모듈은 “어떤 속도를 선택할지” 결정하지 않는다. `WholeBodyIK`가 gradient를
-collision CBF로 바꾸고, `bounded_optimization.py`가 안전한 속도를 푼다.
+collision CBF로 바꾸고, `control/optimization.py`가 안전한 속도를 푼다.
 
 일반 tree FK와 달리 geometry의 현재 world pose와 contact normal이 필요하므로
 기구학 모듈 중 이 파일만 live `MjData`를 읽는다. 그래도 `data.qpos`나 `data.ctrl`을
@@ -228,11 +228,11 @@ pair 수를 늘리는 것이 항상 안전한 것은 아니다. 필요한 접촉
 
 | 단계 | 담당 |
 |---|---|
-| \(d,p_A,p_B\) query | `collision_kinematics.py` |
-| \(J_A,J_B,\nabla d\) | `KinematicTree` + `collision_kinematics.py` |
-| CBF lower bound | `whole_body_ik.py` |
-| soft constrained solve | `bounded_optimization.py` |
-| 선과 색상 표시 | `teleop_render.py` |
+| \(d,p_A,p_B\) query | `kinematics/collision.py` |
+| \(J_A,J_B,\nabla d\) | `KinematicTree` + `kinematics/collision.py` |
+| CBF lower bound | `control/whole_body.py` |
+| soft constrained solve | `control/optimization.py` |
+| 선과 색상 표시 | `visualization/render.py` |
 
 렌더링과 controller가 같은 `CollisionConstraint`를 사용하므로 화면의 선과 safety
 판단이 다른 distance implementation을 쓰지 않는다.

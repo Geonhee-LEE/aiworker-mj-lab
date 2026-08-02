@@ -1,4 +1,4 @@
-# `src/base_teleop.py`
+# `src/ffw_sh5_grasp/control/base.py`
 
 !!! info "핵심 알고리즘 학습 순서 6/7"
     [전신 IK](whole_body_ik.md)가 반환한 `BodyTwist`를 실제 세 wheel module 명령으로
@@ -7,6 +7,9 @@
 
 body-frame 속도 명령을 ROBOTIS AI Worker식 스워브 바퀴 명령으로 변환한다. 키보드는
 가능한 입력원 중 하나일 뿐이며 whole-body IK도 같은 `BodyTwist` 경로를 사용한다.
+
+주행 속도, 스워브 형상, 조향·반전 제어값은 `config/default.yaml`의 `base` 구역에
+있다. 바꾼 뒤 필요한 물리 회귀는 [YAML 파라미터 설정](../configuration.md)을 따른다.
 
 ## 역할
 
@@ -64,13 +67,13 @@ s_i = \sqrt{v_{i,x}^2+v_{i,y}^2}, \quad
 이 극좌표 변환이 필요한 이유는 스워브 모듈이 "방향(조향각) + 그 방향으로의
 속력(구동)"이라는 두 액추에이터로만 이 속도 벡터를 낼 수 있기 때문이다 —
 180도 반전 최적화, 정렬 게이팅, 반전 시퀀스(FSM)의 물리적 근거까지 포함한 전체
-설명은 [모바일 베이스 해설의 스워브 역기구학](ros2/08-mobile-base.md#part-8-3) 참고.
+수식과 구현의 대응은 아래 [수식에서 코드까지](#equation-to-code)에서 이어진다.
 
 런타임 조향 범위는 공식 AI Worker 설정과 같은 약 ±2π다. 그래도 알고리즘은 좁은
 범위에도 동작하도록 후보를 먼저 범위로 거른다. `test_whole_body.py`는 별도의 ±1.58
 rad kinematics를 주입해 100° 요청이 -80° 조향 + 역구동으로 표현되는지도 확인한다.
 
-## 수식에서 코드까지
+## 수식에서 코드까지 { #equation-to-code }
 
 | 수식 단계 | 코드 표현 | 위치 |
 |---|---|---|
@@ -162,7 +165,7 @@ flowchart TD
 
 ## 사용 위치
 
-`teleop_app.py`가 매 render frame마다 키보드 명령과 whole-body IK 명령을 중재한 뒤
+`application/teleop.py`가 매 render frame마다 키보드 명령과 whole-body IK 명령을 중재한 뒤
 `update_twist()`를 호출한다. 반환 wheel command는 물리 substep마다 `data.ctrl`에
 반복 적용된다. ROS message, node, controller manager는 사용하지 않는다.
 

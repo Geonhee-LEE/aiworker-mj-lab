@@ -1,4 +1,4 @@
-# `src/teleop_targets.py`
+# `src/ffw_sh5_grasp/application/targets.py`
 
 UI target, 3D marker/gizmo pose, IK world pose 사이의 변환을 담당한다.
 
@@ -19,7 +19,8 @@ UI target, 3D marker/gizmo pose, IK world pose 사이의 변환을 담당한다.
 > **왜 startup anchor가 필요한가**: 입력 축은 로봇 시작 방향의 앞/옆/위를
 > 유지하되 최종 target world pose는 고정돼야 한다. 현재 base pose에 target을 붙이면
 > whole-body IK가 베이스를 움직일 때 goal도 똑같이 움직여 오차가 줄지 않는다. 자세한 이유는
-> [좌표계 해설의 변환 함수 지도](ros2/10-coordinate-frames.md#part-10-3) 참고.
+> 각 변환의 입력·출력은 [애플리케이션 API](../api/application.md)에서
+> 한 표로 찾을 수 있다.
 
 startup-anchor 위치 \((x,y,z)\) → world 위치, 앱 시작 시 캡처한 베이스 pose
 \((x_{b0},y_{b0},\theta_{b0})\)만큼 2D 회전 후 평행이동한다:
@@ -105,7 +106,7 @@ flowchart TD
     E --> G["target_world_quat()<br>target RPY를 world quaternion으로 변환"]
     F --> H["IK target world pose<br>IK solver에 넘길 최종 목표"]
     G --> H
-    H --> I["teleop_app -> whole_body_ik.solve()<br>world pose를 base/lift/양팔 명령으로 변환"]
+    H --> I["teleop → whole_body.solve()<br>world pose를 base/lift/양팔 명령으로 변환"]
 
     J["Capture Grasp<br>양손 상대 관계 저장 시작"] --> K["capture_grasp()<br>현재 양손 pose를 virtual object 기준으로 캡처"]
     K --> L["sync_virtual_object_to_hand_targets()<br>virtual object를 양손 중앙에 배치"]
@@ -138,6 +139,6 @@ Release Grasp
 
 ## 사용 위치
 
-- `teleop_app.py`: target wrapper와 물리 step에서 호출
-- `teleop_render.py`: gizmo pose 조회/반영 wrapper를 통해 사용
-- `teleop_ui.py`: capture/release/apply 메서드를 통해 사용
+- `application/teleop.py`: target wrapper와 물리 step에서 호출
+- `visualization/render.py`: gizmo pose 조회/반영 wrapper를 통해 사용
+- `visualization/ui.py`: capture/release/apply 메서드를 통해 사용
