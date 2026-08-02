@@ -4,11 +4,15 @@
 받아 pose, Jacobian, IK 해, 충돌 거리 미분을 계산한다. Quaternion은 MuJoCo 순서인
 `(w, x, y, z)`, Jacobian은 위 3행이 선속도이고 아래 3행이 각속도다.
 
-## 회전 유틸리티 `kinematics.rotations`
+## 회전 유틸리티 `kinematics.rotations` { #rotation-utilities }
 
 | 함수 | 직관적인 기능 | 입력 | 반환 |
 |---|---|---|---|
 | `normalize_quaternion(quaternion)` | 길이와 부호가 제각각인 quaternion을 안정적인 대표값으로 만든다 | 4-vector | 단위 `wxyz`; 잘못된 0-norm은 identity |
+| `multiply_quaternions(*quaternions)` | 여러 회전을 적힌 순서대로 합성한다 | 하나 이상의 `wxyz` | 합성된 `wxyz` |
+| `inverse_quaternion(quaternion)` | 한 회전의 반대 방향 회전을 만든다 | 단위 `wxyz` | 켤레 `wxyz` |
+| `rpy_deg_to_quat(rpy_deg)` | 사람이 읽는 Roll/Pitch/Yaw를 solver 자세로 바꾼다 | degree 3-vector | `wxyz` quaternion |
+| `quat_to_rpy_deg(quaternion)` | solver 자세를 UI 각도로 바꾼다 | `wxyz` quaternion | degree `[roll, pitch, yaw]` |
 | `shortest_orientation_error(target_quaternion, current_quaternion)` | 현재 자세에서 목표 자세로 가는 가장 짧은 회전 화살표를 구한다 | target/current `wxyz` | world-frame axis-angle 3-vector, rad |
 | `rotation_from_quaternion(quaternion)` | quaternion을 점·축 계산용 회전행렬로 바꾼다 | `wxyz` | (3\times3) 행렬 |
 | `quaternion_from_rotation(rotation)` | 회전행렬을 정규화된 MuJoCo quaternion으로 바꾼다 | (3\times3) 행렬 | 단위 `wxyz` |
@@ -32,7 +36,6 @@
 | `position` | world 위치, shape `(3,)`, m |
 | `quaternion` | world 자세, shape `(4,)`, `wxyz` |
 | `jacobian` | 선택한 관절에 대한 geometric Jacobian, shape `(6, N)` |
-| `joint_frames` | 충돌 point Jacobian에 재사용할 관절별 world 축·anchor cache |
 
 `KinematicJoint`, `KinematicBody`, `KinematicSite`는 MuJoCo model에서 복사한 불변 구조
 레코드다. 각각 관절 축/범위, body 고정변환/부모, site 고정변환을 보관한다.

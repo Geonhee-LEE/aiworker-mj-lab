@@ -19,7 +19,9 @@ from imgui_bundle import imguizmo
 import mujoco
 import numpy as np
 
+from ..application import targets
 from ..config import SETTINGS
+from ..kinematics import rotations
 
 
 CAMERA_PRESETS = (
@@ -139,17 +141,17 @@ def handle_camera_mouse(app, io):
                               -MOUSE_ZOOM_SCALE * io.mouse_wheel, app.scene, app.cam)
 
 
-def pose_to_imguizmo_matrix(app, world_pos, world_quat):
+def pose_to_imguizmo_matrix(world_pos, world_quat):
     mat = np.eye(4)
-    mat[:3, :3] = app._quat_to_mat(world_quat)
+    mat[:3, :3] = rotations.rotation_from_quaternion(world_quat)
     mat[:3, 3] = world_pos
     return imguizmo.im_guizmo.Matrix16(mat.astype(float).reshape(16, order="F"))
 
 
-def imguizmo_matrix_to_pose(app, matrix):
+def imguizmo_matrix_to_pose(matrix):
     mat = np.array(matrix.values, dtype=float).reshape((4, 4), order="F")
     world_pos = mat[:3, 3].copy()
-    world_quat = app._mat_to_quat(mat[:3, :3])
+    world_quat = rotations.quaternion_from_rotation(mat[:3, :3])
     return world_pos, world_quat
 
 
@@ -201,9 +203,9 @@ def draw_transform_gizmo(app, viewport):
     종횡비는 MuJoCo 프레임버퍼에서 가져오되 그리기 기준은 ImGui 주 뷰포트 사각형으로
     잡는다.
     """
-    target = app._active_gizmo_target()
-    world_pos, world_quat = app._gizmo_target_world_pose(target)
-    object_matrix = pose_to_imguizmo_matrix(app, world_pos, world_quat)
+    target = targets.active_gizmo_target(app)
+    world_pos, world_quat = targets.gizmo_target_world_pose(app, target)
+    object_matrix = pose_to_imguizmo_matrix(world_pos, world_quat)
     view_matrix, proj_matrix = _imguizmo_camera_matrices(app, viewport)
     main_viewport = imgui.get_main_viewport()
 
@@ -223,8 +225,9 @@ def draw_transform_gizmo(app, viewport):
         object_matrix)
     app.gizmo_mouse_active = bool(gizmo.is_using_any() or gizmo.is_over())
     if changed_translate or changed_rotate:
-        new_pos, new_quat = imguizmo_matrix_to_pose(app, object_matrix)
-        app._set_gizmo_target_world_pose(target, new_pos, new_quat)
+        new_pos, new_quat = imguizmo_matrix_to_pose(object_matrix)
+        targets.set_gizmo_target_world_pose(
+            app, target, new_pos, new_quat)
 
 
 def collision_visualization_data(app):
@@ -284,7 +287,7 @@ def _append_collision_overlay(app, constraints):
 
 
 def render_scene(app):
-    app._sync_ik_mocaps_from_targets()
+    targets.sync_ik_mocaps_from_targets(app)
     app.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = app.contact_viz
     app.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = app.contact_viz
     # 모델 충돌 형상은 3번 그룹에 있고 MuJoCo 기본 옵션에서는 숨겨진다. CBF 겹침

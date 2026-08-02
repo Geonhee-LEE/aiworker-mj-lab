@@ -122,10 +122,6 @@ def _ik_err_text(app, side):
     return "FK"
 
 
-def _note_manual_pose_edit(app):
-    return None
-
-
 def _clamp(value, lo, hi):
     return min(hi, max(lo, value))
 
@@ -173,7 +169,6 @@ def _apply_cartesian_jog(app, side, pos_delta=(0.0, 0.0, 0.0), rpy_delta=(0.0, 0
             pos[i] = _clamp(pos[i] + pos_delta[i], *VIRTUAL_POS_RANGE)
             rpy[i] = _clamp(rpy[i] + rpy_delta[i], *HAND_RPY_RANGE)
         app.apply_virtual_object_target()
-        _note_manual_pose_edit(app)
         return
 
     sides = ("l", "r") if side == "both" else (side,)
@@ -186,7 +181,6 @@ def _apply_cartesian_jog(app, side, pos_delta=(0.0, 0.0, 0.0), rpy_delta=(0.0, 0
             pos[i] += pos_delta[i]
             rpy[i] += rpy_delta[i]
         _clamp_pose_targets(app.targets, s)
-    _note_manual_pose_edit(app)
 
 
 def _repeat_button(label):
@@ -205,18 +199,16 @@ def _draw_jog_row(app, title, axis_labels, step, is_rotation=False):
         if _repeat_button(neg):
             delta = [0.0, 0.0, 0.0]
             delta[i] = -step
-            if is_rotation:
-                _apply_cartesian_jog(app, app.jog_side, rpy_delta=delta)
-            else:
-                _apply_cartesian_jog(app, app.jog_side, pos_delta=delta)
+            _apply_cartesian_jog(
+                app, app.jog_side,
+                **({"rpy_delta": delta} if is_rotation else {"pos_delta": delta}))
         imgui.same_line()
         if _repeat_button(pos):
             delta = [0.0, 0.0, 0.0]
             delta[i] = step
-            if is_rotation:
-                _apply_cartesian_jog(app, app.jog_side, rpy_delta=delta)
-            else:
-                _apply_cartesian_jog(app, app.jog_side, pos_delta=delta)
+            _apply_cartesian_jog(
+                app, app.jog_side,
+                **({"rpy_delta": delta} if is_rotation else {"pos_delta": delta}))
 
 
 def _active_marker_choices(app):
@@ -283,10 +275,7 @@ def _draw_cyclo_control_panel(app):
         else:
             for side in (("l", "r") if app.jog_side == "both" else (app.jog_side,)):
                 if app.arm_mode[side] == "ik":
-                    app.targets[f"rpy_{side}"][0] = 0.0
-                    app.targets[f"rpy_{side}"][1] = 0.0
-                    app.targets[f"rpy_{side}"][2] = 0.0
-        _note_manual_pose_edit(app)
+                    app.targets[f"rpy_{side}"][:] = [0.0, 0.0, 0.0]
 
     if app.cyclo_controller == "bimanual_movel" and app.cyclo_grasp_captured:
         imgui.separator()
@@ -295,7 +284,6 @@ def _draw_cyclo_control_panel(app):
         rpy = app.targets["virtual_object_rpy"]
         def apply_virtual_edit():
             app.apply_virtual_object_target()
-            _note_manual_pose_edit(app)
         _draw_vector_sliders(
             "virtual_object_pos", pos, POS_AXES, *VIRTUAL_POS_RANGE,
             "%.3f m", apply_virtual_edit)
@@ -333,14 +321,12 @@ def _draw_ik_pose_controls(app, targets, side):
     rpy = targets[f"rpy_{side}"]
     imgui.text("Position offset from home (startup/world anchor)")
     _draw_vector_sliders(f"{side}_pos", pos, POS_AXES,
-                         HAND_POS_OFFSET_RANGE[0], HAND_POS_OFFSET_RANGE[1], "%.3f m",
-                         lambda: _note_manual_pose_edit(app))
+                         HAND_POS_OFFSET_RANGE[0], HAND_POS_OFFSET_RANGE[1], "%.3f m")
     imgui.text("Orientation RPY (home-relative)")
-    _draw_vector_sliders(f"{side}_rpy", rpy, RPY_AXES, *HAND_RPY_RANGE, "%.1f deg",
-                         lambda: _note_manual_pose_edit(app))
+    _draw_vector_sliders(
+        f"{side}_rpy", rpy, RPY_AXES, *HAND_RPY_RANGE, "%.1f deg")
     if imgui.button(f"Reset RPY##{side}"):
         rpy[0], rpy[1], rpy[2] = 0.0, 0.0, 0.0
-        _note_manual_pose_edit(app)
 
 
 def _draw_fk_joint_controls(app, side):

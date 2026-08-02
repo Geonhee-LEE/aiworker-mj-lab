@@ -87,7 +87,7 @@ flowchart TB
 | `arm_mode` | arm panel | active solver side 또는 FK slider |
 | `cyclo_grasp_captured` | Capture/Release | virtual-object target과 rigid-grasp task |
 | `commanded_base_twist` | app arbitration | `SwerveDrive.update_twist()`와 status |
-| `q_des_r/l` | WBIK 또는 FK selection | arm torque controllers |
+| `q_des[side]` | WBIK 또는 FK selection | `arm_controllers[side]` |
 | collision diagnostics | WBIK command | status와 render overlay |
 | `data.qpos/qvel` | MuJoCo physics | 모든 feedback 계산 |
 

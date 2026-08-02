@@ -61,10 +61,12 @@ p_{hand} = p_{obj} + R_{obj}\,p_{\text{offset}}, \quad R_{hand} = R_{obj}\,R_{\t
 
 ## 함수
 
+RPY↔quaternion과 quaternion↔회전행렬 변환은
+[`kinematics.rotations`](../api/kinematics.md#rotation-utilities)에
+모아 두었다. 이 모듈은 그 공용 연산을 조합해 target 좌표계만 처리한다.
+
 | 함수 | 역할 |
 |---|---|
-| `rpy_deg_to_quat(rpy_deg)` | RPY degree를 quaternion으로 변환 |
-| `quat_to_rpy_deg(q)` | quaternion을 RPY degree로 변환 |
 | `set_home_references(app)` | 자체 `site_state()` FK로 양손 시작 위치/자세를 계산해 target 기준으로 저장 |
 | `base_pose(app)` | base x/y/yaw, sin/cos, yaw quaternion 반환 |
 | `local_to_world_pos(app, p_local)` | base-local 위치를 world 위치로 변환 |
@@ -72,22 +74,18 @@ p_{hand} = p_{obj} + R_{obj}\,p_{\text{offset}}, \quad R_{hand} = R_{obj}\,R_{\t
 | `anchor_local_to_world_pos(app, p_local)` | startup base anchor 위치를 world로 변환 |
 | `world_to_anchor_local_pos(app, p_world)` | world 위치를 startup anchor로 역변환 |
 | `carry_world_targets_with_base(app, previous, current)` | 수동 주행 SE(2) 변환을 hand/virtual target frame에 적용 |
-| `target_pos_to_base_pos(app, side, pos_target)` | 손별 home-relative offset을 base-local 위치로 변환 |
 | `target_pos_to_world_pos(app, side, pos_target)` | 손별 target 위치를 world 위치로 변환 |
 | `world_to_target_pos(app, side, world_pos)` | world 위치를 손별 target offset으로 변환 |
 | `target_world_quat(app, side)` | 손별 RPY target을 world quaternion으로 변환 |
 | `target_rpy_to_world_quat(app, side, rpy)` | raw/smoothed RPY를 활성 target frame의 world quaternion으로 변환 |
 | `world_quat_to_target_rpy(app, side, world_quat)` | world quaternion을 손별 RPY target으로 변환 |
 | `world_quat_to_virtual_rpy(app, world_quat)` | world quaternion을 virtual object RPY로 변환 |
-| `quat_to_mat(quat)` | quaternion을 3x3 rotation matrix로 변환 |
-| `mat_to_quat(mat)` | 3x3 rotation matrix를 quaternion으로 변환 |
 | `target_world_pose(app, side)` | 손 target의 world position/quaternion 반환 |
 | `virtual_object_world_pose(app)` | virtual object의 world position/quaternion 반환 |
 | `sync_virtual_object_to_hand_targets(app)` | virtual object를 양손 target 중점으로 이동 |
 | `capture_grasp(app)` | 양손 target을 virtual object 기준 상대 transform으로 저장 |
 | `release_grasp(app)` | Bimanual MoveL capture 해제 |
 | `apply_virtual_object_target(app)` | virtual object pose에서 양손 target 재계산 |
-| `bimanual_marker_visible(app)` | virtual marker 표시 여부 반환 |
 | `sync_marker_visibility(app)` | virtual marker alpha 갱신 |
 | `active_gizmo_target(app)` | 현재 gizmo 대상 반환 |
 | `gizmo_target_world_pose(app, target)` | gizmo 대상의 world pose 반환 |
@@ -139,6 +137,6 @@ Release Grasp
 
 ## 사용 위치
 
-- `application/teleop.py`: target wrapper와 물리 step에서 호출
-- `visualization/render.py`: gizmo pose 조회/반영 wrapper를 통해 사용
+- `application/teleop.py`: 물리 step과 의미 있는 capture/release 앱 명령에서 직접 호출
+- `visualization/render.py`: gizmo pose 조회·반영과 marker 동기화에 직접 사용
 - `visualization/ui.py`: capture/release/apply 메서드를 통해 사용

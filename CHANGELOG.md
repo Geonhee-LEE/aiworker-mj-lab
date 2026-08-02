@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.4.0 — 2026-08-03
+
+- 회전·쿼터니언 변환을 `kinematics.rotations`의 단일 구현으로 통합
+- `TeleopApp`의 좌표·렌더 전달용 wrapper와 사용하지 않는 private 호환 별칭 제거
+- 좌우 팔 controller와 목표 관절각을 `side` 기반 딕셔너리로 통합
+- 스워브 피드백, 파지 관절 범위, UI jog와 marker 표시의 중복 분기 정리
+- 단일 팔 DLS 및 Whole-body IK의 gain·속도 기본값을 빠른 목표 추종 기준으로 조정
+- 실제 공개 함수와 호출 구조에 맞춰 API 및 개발 문서 갱신
+- Phase 0–6, YAML 설정, Whole-body 통합 및 엄격 문서 빌드 검증
+
+## 1.3.0 — 2026-08-02
+
+- 런타임을 application/control/kinematics/visualization 계층으로 분리
+- 모든 조절값을 한국어 주석이 포함된 YAML 설정으로 중앙화
+- 함수별 API 지도와 통합 개발자 학습 경로, 모방학습·sim-to-real 가이드 추가
+- Whole-body/Arm-only 데모 링크와 알고리즘 상세 구현 연결 보강
+
 ## 1.2.0 — 2026-07-23
 
 - 컴파일된 MJCF에서 body–joint–site 트리를 만드는 `KinematicTree`와 자체 FK 구현

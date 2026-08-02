@@ -13,7 +13,7 @@ collision avoidance를 하나의 Python 앱에서 실행합니다.
 | [알고리즘 상세 구현: 전신 IK와 충돌 회피](docs/guide/whole_body_ik.md) | [알고리즘 상세 구현: Arm-only hard gate](docs/guide/whole_body_ik.md#whole-body-onoff) |
 
 [문서 사이트](https://ggh-png.github.io/ffw-sh5-grasp/) ·
-[1.3.0 릴리스](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.3.0)
+[1.4.0 릴리스](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.4.0)
 
 ## 먼저 읽을 문서
 

@@ -356,15 +356,17 @@ class SwerveDrive:
         for name in self.wheels:
             self.reversal_phase[name] = ReversalPhase.NORMAL
             self.wheel_speed_scale[name] = 1.0
-            cur = self._current_steering(name, steering_positions)
+            cur = _feedback_value(
+                steering_positions, name, self.previous_commands[name])
             self.steer_angle[name] = cur
             self.previous_commands[name] = cur
         return {name: (self.steer_angle[name], 0.0) for name in self.wheels}
 
     def _control_module(self, name, target_angle, target_wheel_speed, dt,
                         steering_positions, wheel_velocities):
-        current_steering = self._current_steering(name, steering_positions)
-        current_wheel_velocity = self._current_wheel_velocity(name, wheel_velocities)
+        current_steering = _feedback_value(
+            steering_positions, name, self.previous_commands[name])
+        current_wheel_velocity = _feedback_value(wheel_velocities, name, 0.0)
         direction = -1.0 if target_wheel_speed < 0.0 else 1.0
         steering_target = self._update_reversal_phase(
             name, direction, target_angle, current_steering, current_wheel_velocity, dt)
@@ -389,17 +391,6 @@ class SwerveDrive:
         if not aligned:
             wheel_cmd = 0.0
         return steering_cmd, wheel_cmd, aligned
-
-    def _current_steering(self, name, steering_positions):
-        if steering_positions is not None and name in steering_positions:
-            return float(steering_positions[name])
-        return self.previous_commands[name]
-
-    @staticmethod
-    def _current_wheel_velocity(name, wheel_velocities):
-        if wheel_velocities is not None and name in wheel_velocities:
-            return float(wheel_velocities[name])
-        return 0.0
 
     def _update_reversal_phase(self, name, direction, target, current, wheel_velocity, dt):
         previous_direction = self.previous_wheel_rotation_direction[name]
@@ -463,6 +454,13 @@ def _limit_steering_rate(current, target, dt, steer_range=STEER_RANGE):
     if abs(desired) <= max_change:
         return target
     return _clamp(current + math.copysign(max_change, desired), *steer_range)
+
+
+def _feedback_value(feedback, name, fallback):
+    """선택적 바퀴 피드백을 읽고 없으면 명시한 상태값을 사용한다."""
+    if feedback is not None and name in feedback:
+        return float(feedback[name])
+    return fallback
 
 
 def _normalize_angle(angle):

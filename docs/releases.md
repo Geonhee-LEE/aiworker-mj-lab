@@ -1,5 +1,31 @@
 # 릴리스 기록
 
+## 1.4.0 — Lean Runtime & Faster IK Defaults
+
+2026-08-03 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.4.0)
+
+### 코드와 API
+
+- RPY·quaternion·회전행렬 계산을 `kinematics.rotations`에 통합
+- `TeleopApp`의 단순 전달 wrapper 16개와 Whole-body private 호환 별칭 제거
+- 좌우 팔 controller/목표 상태를 `arm_controllers[side]`, `q_des[side]`로 통합
+- 스워브 피드백, 손가락 관절 범위, marker 표시와 UI jog의 중복 분기 정리
+- 소스 코드 순 90줄 이상 축소
+
+### 제어와 설정
+
+- 단일 팔 DLS의 관절 step과 반복 상한을 높여 먼 목표 수렴 여유 확대
+- Whole-body 위치·자세 gain과 말단/base/lift/팔 속도 상한을 높여 목표 추종 가속
+- 모든 기본값과 검증 규칙은 한국어 주석이 포함된 `config/default.yaml`에서 관리
+
+### 문서와 검증
+
+- 제거·이동된 함수와 실제 직접 호출 구조를 API 및 모듈 가이드에 반영
+- Phase 0–6, YAML 설정, Whole-body 통합 테스트 통과
+- Python compile, diff whitespace와 `mkdocs build --strict` 통과
+
+전체 diff: [1.3.0...1.4.0](https://github.com/ggh-png/ffw-sh5-grasp/compare/1.3.0...1.4.0)
+
 ## 1.3.0 — Modular Kinematics & Unified Developer Guide
 
 2026-08-02 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.3.0)

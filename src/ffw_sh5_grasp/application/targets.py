@@ -15,44 +15,9 @@ import math
 import mujoco
 import numpy as np
 
+from ..kinematics import rotations
+
 SIDES = ("r", "l")
-
-
-def _multiply_quaternions(*quaternions):
-    """MuJoCo 형식 쿼터니언을 왼쪽부터 순서대로 곱한다."""
-    result = np.array([1.0, 0.0, 0.0, 0.0])
-    for quaternion in quaternions:
-        product = np.zeros(4)
-        mujoco.mju_mulQuat(product, result, quaternion)
-        result = product
-    return result
-
-
-def _inverse_quaternion(quaternion):
-    result = np.zeros(4)
-    mujoco.mju_negQuat(result, quaternion)
-    return result
-
-
-def rpy_deg_to_quat(rpy_deg):
-    r, p, y = (math.radians(v) for v in rpy_deg)
-    cr, sr = math.cos(r / 2), math.sin(r / 2)
-    cp, sp = math.cos(p / 2), math.sin(p / 2)
-    cy, sy = math.cos(y / 2), math.sin(y / 2)
-    return np.array([
-        cr * cp * cy + sr * sp * sy,
-        sr * cp * cy - cr * sp * sy,
-        cr * sp * cy + sr * cp * sy,
-        cr * cp * sy - sr * sp * cy,
-    ])
-
-
-def quat_to_rpy_deg(q):
-    w, x, y, z = q
-    roll = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
-    pitch = math.asin(max(-1.0, min(1.0, 2 * (w * y - z * x))))
-    yaw = math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
-    return [math.degrees(roll), math.degrees(pitch), math.degrees(yaw)]
 
 
 def set_home_references(app):
@@ -112,7 +77,7 @@ def carry_world_targets_with_base(app, previous_base_pose, current_base_pose):
     app.target_anchor_quat = anchor_quat
     for side in SIDES:
         app.home_pos_world[side] = transform_position(app.home_pos_world[side])
-        app.home_quat_world[side] = _multiply_quaternions(
+        app.home_quat_world[side] = rotations.multiply_quaternions(
             delta_quat, app.home_quat_world[side]
         )
 
@@ -156,10 +121,6 @@ def world_to_anchor_local_pos(app, p_world):
     return np.array([cy * dx + sy * dy, -sy * dx + cy * dy, p_world[2]])
 
 
-def target_pos_to_base_pos(app, side, pos_target):
-    return app.home_pos_local[side] + np.array(pos_target)
-
-
 def target_pos_to_world_pos(app, side, pos_target):
     if getattr(app, "whole_body_enabled", False):
         offset = np.asarray(pos_target, dtype=float)
@@ -170,7 +131,8 @@ def target_pos_to_world_pos(app, side, pos_target):
             offset[2],
         ])
         return app.home_pos_world[side] + rotated
-    return local_to_world_pos(app, target_pos_to_base_pos(app, side, pos_target))
+    return local_to_world_pos(
+        app, app.home_pos_local[side] + np.asarray(pos_target, dtype=float))
 
 
 def world_to_target_pos(app, side, world_pos):
@@ -184,12 +146,12 @@ def world_to_target_pos(app, side, world_pos):
 
 def target_rpy_to_world_quat(app, side, rpy_deg):
     """활성 목표 좌표계를 사용해 손의 홈 기준 RPY 값을 월드 자세로 변환한다."""
-    delta_quat = rpy_deg_to_quat(rpy_deg)
+    delta_quat = rotations.rpy_deg_to_quat(rpy_deg)
     if getattr(app, "whole_body_enabled", False):
-        return _multiply_quaternions(app.home_quat_world[side], delta_quat)
+        return rotations.multiply_quaternions(app.home_quat_world[side], delta_quat)
     *_unused, base_quat = base_pose(app)
     home_quat = getattr(app, f"home_quat_{side}")
-    return _multiply_quaternions(base_quat, home_quat, delta_quat)
+    return rotations.multiply_quaternions(base_quat, home_quat, delta_quat)
 
 
 def target_world_quat(app, side):
@@ -198,18 +160,18 @@ def target_world_quat(app, side):
 
 def world_quat_to_target_rpy(app, side, world_quat):
     if getattr(app, "whole_body_enabled", False):
-        delta = _multiply_quaternions(
-            _inverse_quaternion(app.home_quat_world[side]), world_quat
+        delta = rotations.multiply_quaternions(
+            rotations.inverse_quaternion(app.home_quat_world[side]), world_quat
         )
-        return quat_to_rpy_deg(delta)
+        return rotations.quat_to_rpy_deg(delta)
     home_quat = getattr(app, f"home_quat_{side}")
     *_unused, base_quat = base_pose(app)
-    rpy_delta_quat = _multiply_quaternions(
-        _inverse_quaternion(home_quat),
-        _inverse_quaternion(base_quat),
+    rpy_delta_quat = rotations.multiply_quaternions(
+        rotations.inverse_quaternion(home_quat),
+        rotations.inverse_quaternion(base_quat),
         world_quat,
     )
-    return quat_to_rpy_deg(rpy_delta_quat)
+    return rotations.quat_to_rpy_deg(rpy_delta_quat)
 
 
 def world_quat_to_virtual_rpy(app, world_quat):
@@ -217,26 +179,17 @@ def world_quat_to_virtual_rpy(app, world_quat):
         base_quat = app.target_anchor_quat
     else:
         *_unused, base_quat = base_pose(app)
-    rpy_delta_quat = _multiply_quaternions(
-        _inverse_quaternion(base_quat), world_quat
+    rpy_delta_quat = rotations.multiply_quaternions(
+        rotations.inverse_quaternion(base_quat), world_quat
     )
-    return quat_to_rpy_deg(rpy_delta_quat)
-
-
-def quat_to_mat(quat):
-    mat = np.zeros(9)
-    mujoco.mju_quat2Mat(mat, quat)
-    return mat.reshape(3, 3)
-
-
-def mat_to_quat(mat):
-    quat = np.zeros(4)
-    mujoco.mju_mat2Quat(quat, np.asarray(mat).reshape(9))
-    return quat
+    return rotations.quat_to_rpy_deg(rpy_delta_quat)
 
 
 def target_world_pose(app, side):
-    return target_pos_to_world_pos(app, side, app.targets[f"pos_{side}"]), target_world_quat(app, side)
+    return (
+        target_pos_to_world_pos(app, side, app.targets[f"pos_{side}"]),
+        target_world_quat(app, side),
+    )
 
 
 def virtual_object_world_pose(app):
@@ -246,8 +199,8 @@ def virtual_object_world_pose(app):
     else:
         pos = local_to_world_pos(app, app.targets["virtual_object_pos"])
         *_unused, base_quat = base_pose(app)
-    quat = _multiply_quaternions(
-        base_quat, rpy_deg_to_quat(app.targets["virtual_object_rpy"])
+    quat = rotations.multiply_quaternions(
+        base_quat, rotations.rpy_deg_to_quat(app.targets["virtual_object_rpy"])
     )
     return pos, quat
 
@@ -267,13 +220,13 @@ def capture_grasp(app):
     """가상 물체 마커를 기준으로 양손 목표 자세를 기록한다."""
     sync_virtual_object_to_hand_targets(app)
     obj_pos, obj_quat = virtual_object_world_pose(app)
-    obj_R = quat_to_mat(obj_quat)
+    obj_R = rotations.rotation_from_quaternion(obj_quat)
     offsets = {}
     for side in SIDES:
         hand_pos, hand_quat = target_world_pose(app, side)
         offsets[side] = {
             "pos": obj_R.T @ (hand_pos - obj_pos),
-            "mat": obj_R.T @ quat_to_mat(hand_quat),
+            "mat": obj_R.T @ rotations.rotation_from_quaternion(hand_quat),
         }
     app.cyclo_capture_offsets = offsets
     app.cyclo_grasp_captured = True
@@ -291,23 +244,20 @@ def apply_virtual_object_target(app):
     if not app.cyclo_grasp_captured or app.cyclo_capture_offsets is None:
         return
     obj_pos, obj_quat = virtual_object_world_pose(app)
-    obj_R = quat_to_mat(obj_quat)
+    obj_R = rotations.rotation_from_quaternion(obj_quat)
     for side, offset in app.cyclo_capture_offsets.items():
         hand_pos = obj_pos + obj_R @ offset["pos"]
-        hand_quat = mat_to_quat(obj_R @ offset["mat"])
+        hand_quat = rotations.quaternion_from_rotation(obj_R @ offset["mat"])
         app.targets[f"pos_{side}"] = world_to_target_pos(app, side, hand_pos)
         app.targets[f"rpy_{side}"] = world_quat_to_target_rpy(app, side, hand_quat)
-
-
-def bimanual_marker_visible(app):
-    return (getattr(app, "cyclo_controller", "movel") == "bimanual_movel"
-            and bool(getattr(app, "cyclo_grasp_captured", False)))
 
 
 def sync_marker_visibility(app):
     if not hasattr(app, "virtual_object_marker_geom_id"):
         return
-    alpha_scale = 1.0 if bimanual_marker_visible(app) else 0.0
+    visible = (getattr(app, "cyclo_controller", "movel") == "bimanual_movel"
+               and bool(getattr(app, "cyclo_grasp_captured", False)))
+    alpha_scale = float(visible)
     geom_rgba = app.virtual_object_marker_rgba["geom"].copy()
     site_rgba = app.virtual_object_marker_rgba["site"].copy()
     geom_rgba[3] *= alpha_scale

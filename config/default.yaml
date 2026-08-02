@@ -39,8 +39,8 @@ arm_control:
 kinematics:
   # 단일 사이트 위치 우선 DLS IK의 감쇠와 반복 설정이다.
   damping: 0.05
-  max_joint_delta_rad: 0.05
-  max_iterations: 50
+  max_joint_delta_rad: 0.07
+  max_iterations: 70
   position_tolerance_m: 0.0001
   orientation_tolerance_rad: 0.001
   orientation_cost_weight: 0.3
@@ -56,8 +56,8 @@ whole_body_ik:
   # 말단 위치·방향 작업의 가중치와 오차 피드백 이득이다.
   position_weight: 10.0
   orientation_weight: 5.0
-  position_gain: 8.0
-  orientation_gain: 7.0
+  position_gain: 10.0
+  orientation_gain: 9.0
   linear_velocity_damping: 0.0
   angular_velocity_damping: 0.0
   posture_gain: 1.0
@@ -73,8 +73,8 @@ whole_body_ik:
   collision_barrier_gain: 50.0
   collision_slack_weight: 1000.0
   # 말단과 베이스 명령의 속도·가속도 상한이다.
-  max_task_linear_speed_m_s: 1.0
-  max_task_angular_speed_rad_s: 2.5
+  max_task_linear_speed_m_s: 1.2
+  max_task_angular_speed_rad_s: 3.0
   base_linear_acceleration_limit_m_s2: 8.0
   base_angular_acceleration_limit_rad_s2: 4.0
   base_position_fade_distance_m: 0.08
@@ -83,9 +83,9 @@ whole_body_ik:
   velocity_limits:
     base_x: 0.55
     base_y: 0.55
-    base_yaw: 1.2
-    lift_joint: 0.25
-    arm_default: 2.0
+    base_yaw: 1.4
+    lift_joint: 0.35
+    arm_default: 4.5
   # [base_x, base_y, base_yaw, lift]와 14개 팔 관절의 정규화 비용이다.
   damping_weights:
     base_lift: [0.25, 0.25, 0.20, 0.12]
@@ -96,9 +96,9 @@ whole_body_ik:
   # 양손 공통 이동을 베이스 명령으로 바꾸는 서보 설정이다.
   common_base:
     position_gain: 5.0
-    yaw_gain: 3.0
+    yaw_gain: 3.5
     yaw_deadband_rad: 0.05
-    yaw_speed_limit_rad_s: 0.8
+    yaw_speed_limit_rad_s: 1.0
     task_weights: [30.0, 30.0, 100.0]
 
 optimization:

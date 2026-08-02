@@ -167,6 +167,11 @@ def _command_coefficients(model, side):
         grasp_slopes.append(grasp_slope)
         thumb_slopes.append(thumb_slope)
 
+    def joint_range(joint_name):
+        joint_id, _actuator_id = _resolve_joint_actuator(model, joint_name)
+        lo, hi = model.jnt_range[joint_id]
+        return lo, hi, hi - lo
+
     for joint_name, value in THUMB_PRESHAPE[side].items():
         add(joint_name, value)
     add(
@@ -176,22 +181,16 @@ def _command_coefficients(model, side):
     )
 
     for joint_name in THUMB_CURL_JOINTS[side]:
-        joint_id, _actuator_id = _resolve_joint_actuator(model, joint_name)
-        lo, hi = model.jnt_range[joint_id]
-        span = hi - lo
-        if THUMB_CURL_OPEN_AT_HI[side]:
-            offset = hi - THUMB_OPEN_FRAC * span
-            slope = -(1.0 - THUMB_OPEN_FRAC) * span
-        else:
-            offset = lo + THUMB_OPEN_FRAC * span
-            slope = (1.0 - THUMB_OPEN_FRAC) * span
+        lo, hi, span = joint_range(joint_name)
+        direction = -1.0 if THUMB_CURL_OPEN_AT_HI[side] else 1.0
+        open_edge = hi if direction < 0.0 else lo
+        offset = open_edge + direction * THUMB_OPEN_FRAC * span
+        slope = direction * (1.0 - THUMB_OPEN_FRAC) * span
         add(joint_name, offset, thumb_slope=slope)
 
     for finger_joints in FINGER_CURL_JOINTS[side].values():
         for joint_name in finger_joints:
-            joint_id, _actuator_id = _resolve_joint_actuator(model, joint_name)
-            lo, hi = model.jnt_range[joint_id]
-            span = hi - lo
+            lo, _hi, span = joint_range(joint_name)
             add(
                 joint_name,
                 lo + FINGER_OPEN_FRAC * span,
@@ -278,8 +277,8 @@ def is_grasped(model, data, min_fingers=DEFAULT_MIN_FINGERS,
     # 엄지가 반드시 포함되고(기본값), 서로 다른 손가락 그룹 2개 이상이 닿아 있으며,
     # 합산 법선력이 임계값을 넘어야 "쥐었다"고 판정한다 -- 셋 다 접촉력 기반이라
     # 위치/부착 치팅이 끼어들 여지가 없다.
-    if require_thumb and "thumb" not in forces:
-        return False
-    if len(forces) < min_fingers:
-        return False
-    return sum(forces.values()) >= min_total_force
+    return (
+        (not require_thumb or "thumb" in forces)
+        and len(forces) >= min_fingers
+        and sum(forces.values()) >= min_total_force
+    )

@@ -19,7 +19,7 @@
 | 입력 | 키보드 edge 입력, 주행/리프트 continuous 입력 |
 | 상태 | `app.targets`, arm mode, grab state, Cyclo state |
 | 물리 step | target smoothing, IK solve, actuator command, `mj_step` |
-| 연결 | `ui`, `render`, `targets` wrapper 제공 |
+| 연결 | `ui`, `render`, `targets` 모듈의 공개 함수를 호출 |
 
 ## 메인 루프
 
@@ -29,7 +29,7 @@ while not glfw.window_should_close(self.window):
     render.handle_camera_mouse(self, io)
     self._handle_edge_keys(io)
     drive_keys = self._read_drive_and_lift_keys(io)
-    self._draw_ui_panel()
+    ui.draw_panel(self)
     self._step_physics(drive_keys)
     render.render_scene(self)
     render.end_frame(self, t0)
@@ -43,8 +43,6 @@ while not glfw.window_should_close(self.window):
 |---|---|
 | `_named_id(model, object_type, name)` | 필수 MuJoCo object id 조회, 누락 시 명확한 오류 반환 |
 | `_joint_address(model, name, addresses)` | joint의 qpos 또는 DOF 주소 조회 |
-| `rpy_deg_to_quat(rpy_deg)` | `targets.rpy_deg_to_quat()` wrapper |
-| `quat_to_rpy_deg(q)` | `targets.quat_to_rpy_deg()` wrapper |
 | `_reset_can_random(model, data, rng)` | 캔 free joint를 home 근처에 랜덤 리셋 |
 | `_parse_args(argv)` | CLI 인자 파싱 |
 | `main(argv=None)` | `TeleopApp().run()` 실행 |
@@ -61,7 +59,6 @@ while not glfw.window_should_close(self.window):
 |---|---|
 | `__init__()` | sim, render, loop state 초기화 |
 | `_setup_sim()` | model/data 로드, solver/controller/id/target 상태 생성 |
-| `_setup_render()` | `render.setup_render()` 호출 |
 | `_setup_loop_state()` | q_des, FK slider, timing, input 상태 생성 |
 | `reset_can()` | 캔 free-joint qpos/qvel만 리셋; 파생 물리 상태는 다음 `mj_step()`에서 갱신 |
 | `reset_active_object()` | 캔/grab/Cyclo 상태 리셋 |
@@ -70,7 +67,6 @@ while not glfw.window_should_close(self.window):
 | `set_arm_mode(side, mode)` | 손별 IK/FK 전환; FK→IK는 자체 `site_state()` pose로 target 동기화 |
 | `set_whole_body_enabled(enabled)` | world target을 보존하며 whole-body/arm-only 전환 |
 | `toggle_whole_body_control()` | UI 버튼용 전신 제어 토글 |
-| `_draw_ui_panel()` | `ui.draw_panel(self)`로 탭형 Control/Diagnostics 렌더링 |
 | `_handle_edge_keys(io)` | `R/G/V/C` edge key 처리 |
 | `_read_drive_and_lift_keys(io)` | 주행/리프트 continuous key 처리 |
 | `_read_base_feedback()` | wheel 상태, body twist, base pose를 한 번에 읽기 |
@@ -87,15 +83,14 @@ while not glfw.window_should_close(self.window):
 flowchart TD
     A["main()<br>CLI entry point"] --> B["TeleopApp()<br>시뮬레이터와 UI 앱 객체 생성"]
     B --> C["_setup_sim()<br>MuJoCo model/data와 controller 초기화"]
-    B --> D["_setup_render()<br>GLFW, MuJoCo renderer, ImGui 초기화"]
+    B --> D["render.setup_render()<br>GLFW, MuJoCo renderer, ImGui 초기화"]
     B --> E["_setup_loop_state()<br>target, mode, smoothing 상태 초기화"]
     B --> F["run()<br>종료 전까지 frame loop 실행"]
     F --> G["render.begin_frame()<br>입력 이벤트와 ImGui frame 시작"]
     G --> H["render.handle_camera_mouse()<br>카메라 마우스 조작 처리"]
     H --> I["_handle_edge_keys()<br>R/G/V/C 같은 edge key 처리"]
     I --> J["_read_drive_and_lift_keys()<br>주행/리프트 continuous key 읽기"]
-    J --> K["_draw_ui_panel()<br>UI 모듈 호출 wrapper"]
-    K --> L["ui.draw_panel()<br>상태·제어·트리 창을 그리고 target 갱신"]
+    J --> L["ui.draw_panel()<br>상태·제어·트리 창을 그리고 target 갱신"]
     L --> M["_step_physics()<br>frame 제어 순서 조율"]
     M --> N["_read_base_feedback()<br>wheel · body · base 상태"]
     N --> O["target carry · grasp ramp · smoothing"]
@@ -109,29 +104,22 @@ flowchart TD
     U --> F
 ```
 
-### `application/targets.py` 연결 메서드
+### `application.targets`와의 연결
 
-`TeleopApp`에는 렌더링과 테스트가 직접 호출하는 연결 메서드만 남긴다. 실제 좌표
-계산과 Cyclo 상태 변경은 같은 이름의 `application/targets.py` 함수가 수행한다. 단순 전달만
-하고 호출되지 않던 wrapper는 삭제했다.
+좌표 변환과 marker 동기화는 `targets.target_world_pose(app, side)`처럼 전용 모듈의
+공개 함수를 직접 호출한다. `TeleopApp`에 같은 인자의 전달용 메서드를 반복하지 않으므로
+구현 위치와 호출 위치가 한 번에 드러난다. 앱에는 UI 명령의 의미가 있는 아래 세
+메서드만 남는다.
 
-| wrapper | 실제 역할 |
+| 앱 메서드 | 실제 역할 |
 |---|---|
-| `_local_to_world_pos()` / `_world_to_base_pos()` | base/world 위치 변환 |
-| `_world_to_target_pos()` | world 위치를 손별 home-relative target으로 변환 |
-| `_target_world_quat()` / `_world_quat_to_target_rpy()` | 손별 RPY/world quaternion 변환 |
-| `_world_quat_to_virtual_rpy()` | virtual object RPY 변환 |
-| `_quat_to_mat()` / `_mat_to_quat()` | quaternion/matrix 변환 |
-| `_target_world_pose()` | 손 target world pose |
-| `_virtual_object_world_pose()` | virtual object world pose |
-| `sync_virtual_object_to_hand_targets()` | virtual object를 양손 중점에 배치 |
-| `capture_grasp()` | Bimanual MoveL capture |
-| `release_grasp()` | Bimanual MoveL release |
+| `capture_grasp()` | Bimanual MoveL 캡처 후 solver의 rigid-grasp 기준도 갱신 |
+| `release_grasp()` | Bimanual MoveL 캡처와 solver 기준 해제 |
 | `apply_virtual_object_target()` | virtual object pose로 양손 target 갱신 |
-| `_active_gizmo_target()` | gizmo 대상 선택 |
-| `_gizmo_target_world_pose()` | gizmo 대상 world pose |
-| `_set_gizmo_target_world_pose()` | gizmo 결과를 target에 반영 |
-| `_sync_ik_mocaps_from_targets()` | mocap marker와 target 동기화 |
+
+순수 회전 계산은 `kinematics.rotations`, target 좌표 변환은
+`application.targets`, Gizmo 행렬 변환은 `visualization.render`가 각각 한 번만
+구현한다.
 
 ## `_step_physics()` 내부 순서
 

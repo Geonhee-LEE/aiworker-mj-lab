@@ -27,8 +27,8 @@ UI·목표 상태와 gizmo가 연결되는 전체 흐름은
 | `begin_frame(app)` | event poll, ImGui input 처리, 새 frame 시작 |
 | `shutdown(app)` | 모든 플랫폼 창, ImGui backend와 GLFW 종료 |
 | `handle_camera_mouse(app, io)` | 마우스 입력을 MuJoCo camera move로 변환 |
-| `pose_to_imguizmo_matrix(app, world_pos, world_quat)` | world pose를 ImGuizmo matrix로 변환 |
-| `imguizmo_matrix_to_pose(app, matrix)` | ImGuizmo matrix를 world pose로 변환 |
+| `pose_to_imguizmo_matrix(world_pos, world_quat)` | world pose를 ImGuizmo matrix로 변환 |
+| `imguizmo_matrix_to_pose(matrix)` | ImGuizmo matrix를 world pose로 변환 |
 | `_imguizmo_camera_matrices(app, viewport)` | ImGuizmo용 view/projection matrix 생성 |
 | `draw_transform_gizmo(app, viewport)` | 주 viewport의 desktop 좌표에서 target 위에 gizmo를 렌더링하고 결과 반영 |
 | `render_scene(app)` | MuJoCo와 주 ImGui draw 뒤 각 플랫폼 창을 별도 context로 렌더링 |
@@ -44,14 +44,14 @@ flowchart TD
     A --> E["handle_camera_mouse()<br>마우스 입력으로 카메라 조작"]
     E --> F["mjv_moveCamera()<br>MuJoCo 카메라 pose 갱신"]
     A --> G["render_scene()<br>3D scene, gizmo, UI를 그리는 메인 함수"]
-    G --> H["app._sync_ik_mocaps_from_targets()<br>target에 맞춰 marker mocap 동기화"]
+    G --> H["targets.sync_ik_mocaps_from_targets()<br>target에 맞춰 marker mocap 동기화"]
     H --> I["mjv_updateScene()<br>MuJoCo scene geometry 갱신"]
     I --> J["mjr_render()<br>MuJoCo 3D 화면 렌더링"]
     J --> K["draw_transform_gizmo()<br>현재 target의 이동/회전 gizmo 표시"]
     K --> L["pose_to_imguizmo_matrix()<br>world pose를 gizmo matrix로 변환"]
     K --> M["imguizmo.manipulate()<br>사용자 drag 결과 matrix 계산"]
     M --> N["imguizmo_matrix_to_pose()<br>gizmo matrix를 world pose로 복원"]
-    N --> O["app._set_gizmo_target_world_pose()<br>world pose를 target 상태에 반영"]
+    N --> O["targets.set_gizmo_target_world_pose()<br>world pose를 target 상태에 반영"]
     K --> P["imgui.render()<br>주 ImGui draw command 생성"]
     P --> Q["update_platform_windows()<br>외부 OS 창 생성·갱신"]
     Q --> S["render_platform_windows_default()<br>각 창의 OpenGL context 렌더"]
@@ -74,7 +74,7 @@ end_frame()
 
 | 읽기 | 쓰기 |
 |---|---|
-| `app.model`, `app.data`, `app.targets`, camera state | `app.cam`, `app.gizmo_mouse_active`, target wrapper 호출 |
+| `app.model`, `app.data`, `app.targets`, camera state | `app.cam`, `app.gizmo_mouse_active`, `targets` 함수로 target 변경 |
 
 렌더 모듈은 직접 IK나 physics step을 수행하지 않는다.
 

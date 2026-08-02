@@ -51,6 +51,7 @@ DEFAULT_COLLISION_BARRIER_GAIN = SETTINGS.number(
     "whole_body_ik.collision_barrier_gain", positive=True)
 DEFAULT_COLLISION_SLACK_WEIGHT = SETTINGS.number(
     "whole_body_ik.collision_slack_weight", positive=True)
+SIDES = ("r", "l")
 
 
 @dataclass
@@ -236,7 +237,7 @@ class WholeBodyIK:
         self._rigid_grasp_reference = bimanual.capture_reference(
             right, left)
 
-    def solve(self, data, target_poses, dt, *, active_sides=("r", "l"),
+    def solve(self, data, target_poses, dt, *, active_sides=SIDES,
               arm_nominal=None, lift_nominal=None, rigid_grasp=False,
               whole_body_enabled=True):
         """한 control frame에 적용할 actuator-level 목표를 반환한다.
@@ -285,10 +286,16 @@ class WholeBodyIK:
             position_errors[side] = float(np.linalg.norm(pos_error))
             orientation_errors[side] = float(np.linalg.norm(ori_error_world))
 
-        if rigid_grasp and all(side in site_states for side in ("r", "l")):
+        if rigid_grasp and all(side in site_states for side in SIDES):
             if self._rigid_grasp_reference is None:
                 self.set_rigid_grasp(data, True)
-            grasp_jacobian, grasp_velocity = self._rigid_grasp_task(site_states, dt)
+            grasp_jacobian, grasp_velocity = bimanual.rigid_grasp_task(
+                self._rigid_grasp_reference,
+                site_states,
+                dt,
+                self.max_task_linear_speed,
+                self.max_task_angular_speed,
+            )
             weight = math.sqrt(self.rigid_grasp_weight)
             rows.append(weight * grasp_jacobian)
             rhs.append(weight * grasp_velocity)
@@ -296,7 +303,7 @@ class WholeBodyIK:
         # 양손 평균 오차로 base를 먼저 servo하고 나머지 개별 오차는 lift/팔이 푼다.
         # minimum norm에만 맡기면 swerve가 조향 중일 때 14개 팔 열이 공통 오차의
         # 부호를 바꾸어 chassis 방향이 반복 반전될 수 있다.
-        if whole_body_enabled and all(side in position_errors for side in ("r", "l")):
+        if whole_body_enabled and all(side in position_errors for side in SIDES):
             reference_centroid = 0.5 * (
                 self._reference_hand_positions["r"] + self._reference_hand_positions["l"])
             target_centroid = 0.5 * (
@@ -304,7 +311,7 @@ class WholeBodyIK:
             desired_base_xy = self._reference_base_xy + (target_centroid - reference_centroid)[:2]
             base_position_error = desired_base_xy - current_q[:2]
             target_yaw_deltas = []
-            for side in ("r", "l"):
+            for side in SIDES:
                 target_quaternion = np.asarray(target_poses[side][1], dtype=float)
                 delta_world = rotations.shortest_orientation_error(
                     target_quaternion, self._reference_hand_quaternions[side])
@@ -341,7 +348,7 @@ class WholeBodyIK:
         if lift_nominal is not None:
             nominal[self.index["lift_joint"]] = float(lift_nominal)
         if arm_nominal is not None:
-            for side in ("r", "l"):
+            for side in SIDES:
                 if side in arm_nominal:
                     nominal[self.side_indices[side]] = np.asarray(arm_nominal[side], dtype=float)
         posture_velocity = self.posture_gain * (nominal - current_q)
@@ -360,7 +367,7 @@ class WholeBodyIK:
 
         # FK mode 팔은 기존 FK controller가 소유하므로 differential velocity를 0으로
         # 고정하고, 반대쪽 팔과 lift/base만 계속 협력하게 한다.
-        for side in ("r", "l"):
+        for side in SIDES:
             if side not in active_sides:
                 lower[self.side_indices[side]] = 0.0
                 upper[self.side_indices[side]] = 0.0
@@ -375,7 +382,6 @@ class WholeBodyIK:
             qdot = self._shape_base_velocity(
                 qdot, position_errors, orientation_errors, dt, float(data.time))
         else:
-            qdot[:3] = 0.0
             self._previous_base_velocity_world[:] = 0.0
             self._last_solve_time = None
         collision_constraints = self._collision_constraints(data, dt)
@@ -467,16 +473,6 @@ class WholeBodyIK:
                 results.append(result)
         return tuple(results)
 
-    def _rigid_grasp_task(self, site_states, dt):
-        """기존 호출 경로를 유지하면서 양손 기구학 모듈에 계산을 위임한다."""
-        return bimanual.rigid_grasp_task(
-            self._rigid_grasp_reference,
-            site_states,
-            dt,
-            self.max_task_linear_speed,
-            self.max_task_angular_speed,
-        )
-
     def _shape_base_velocity(self, qdot, position_errors, orientation_errors, dt, data_time):
         """differential 해의 물리 base 성분에 fade와 가속도 제한을 적용한다.
 
@@ -531,16 +527,10 @@ class WholeBodyIK:
 
     def _clip_positions(self, q):
         result = q.copy()
-        for i, limited in enumerate(self.position_limited):
-            if limited:
-                result[i] = np.clip(result[i], *self.position_ranges[i])
+        limited = self.position_limited
+        result[limited] = np.clip(
+            result[limited],
+            self.position_ranges[limited, 0],
+            self.position_ranges[limited, 1],
+        )
         return result
-
-
-# 과거 회귀 테스트와 외부 디버그 스크립트의 private import 경로를 보존한다.
-# 실제 구현은 아래 전용 모듈에 하나만 존재한다.
-_bounded_least_squares = optimization.bounded_least_squares
-_bounded_least_squares_with_barriers = (
-    optimization.bounded_least_squares_with_barriers)
-_quaternion_matrix = rotations.rotation_from_quaternion
-_matrix_quaternion = rotations.quaternion_from_rotation

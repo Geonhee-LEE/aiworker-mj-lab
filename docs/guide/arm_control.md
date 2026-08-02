@@ -99,8 +99,8 @@ flowchart TD
 매 물리 substep 적용한다.
 
 ```python
-self.ctrl_r.apply(data, self.q_des_r)
-self.ctrl_l.apply(data, self.q_des_l)
+for side in SIDES:
+    self.arm_controllers[side].apply(data, self.q_des[side])
 ```
 
 ## 데이터 접근

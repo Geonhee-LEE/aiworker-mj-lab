@@ -25,9 +25,9 @@
 | `kinematics/rotations.py` | 회전 행렬·쿼터니언·각도·벡터 공용 함수 |
 | `kinematics/collision.py` | geometry signed distance와 gradient 계산 |
 
-기존 디버그 코드에서 사용하던 `_bounded_least_squares()`, `_quaternion_matrix()` 등의
-이름은 `control/whole_body.py`에 호환 별칭으로 남지만 실제 구현은 각 전용 모듈에 하나만
-존재한다.
+중복된 private 호환 별칭은 두지 않는다. 수치 최적화는 `control.optimization`, 강체
+양손 task는 `control.bimanual`, 회전 계산은 `kinematics.rotations`의 공개 함수를
+직접 호출한다.
 
 ROS2/MoveIt 관점의 개념 비교와 legacy DLS 식의 역할은
 [DLS와 위치 우선 IK 수학](ik-math.md)과 [단일 팔 IK](ik.md)를 먼저 보면,
@@ -220,9 +220,9 @@ geometry(group 3)가 반투명 청색으로 표시된다. 동시에 controller�
 사용한다. `G`의 물리 contact point/force 표시는 별도 토글이므로 두 시각화를 동시에
 비교할 수도 있다.
 
-position/orientation task weight는 각각 10/5, error gain은 8/7이다. task 속도는
-linear 1.0 m/s, angular 2.5 rad/s로 제한하고, base/lift/arm 속도 상한은 각각
-0.55 m/s·1.2 rad/s, 0.25 m/s, 2.0 rad/s다. 각 DOF의 damping/posture weight도
+position/orientation task weight는 각각 10/5, error gain은 10/9다. task 속도는
+linear 1.2 m/s, angular 3.0 rad/s로 제한하고, base x/y·yaw, lift, arm 속도 상한은
+각각 0.55 m/s·1.4 rad/s, 0.35 m/s, 4.5 rad/s다. 각 DOF의 damping/posture weight도
 서로 다르다.
 
 양손이 함께 움직일 때 14개 팔 자유도만으로 공통 오차를 흡수하면 물리 베이스가

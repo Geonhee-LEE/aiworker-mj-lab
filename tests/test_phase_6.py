@@ -19,8 +19,9 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
 import teleop_app  # noqa: E402
+from ffw_sh5_grasp.application import targets as teleop_targets  # noqa: E402
 from ffw_sh5_grasp.control import base  # noqa: E402
-from ffw_sh5_grasp.kinematics import legacy  # noqa: E402
+from ffw_sh5_grasp.kinematics import legacy, rotations  # noqa: E402
 from ffw_sh5_grasp.visualization import render as teleop_render  # noqa: E402
 from ffw_sh5_grasp.visualization import ui as teleop_ui  # noqa: E402
 
@@ -28,19 +29,6 @@ ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
 ARM_L = [f"arm_l_joint{i}" for i in range(1, 8)]
 HOME_Q_R = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
 HOME_Q_L = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
-
-
-def _rpy_deg_to_quat(rpy_deg):
-    r, p, y = np.radians(rpy_deg)
-    cr, sr = np.cos(r / 2), np.sin(r / 2)
-    cp, sp = np.cos(p / 2), np.sin(p / 2)
-    cy, sy = np.cos(y / 2), np.sin(y / 2)
-    return np.array([
-        cr * cp * cy + sr * sp * sy,
-        sr * cp * cy - cr * sp * sy,
-        cr * sp * cy + sr * cp * sy,
-        cr * cp * sy - sr * sp * cy,
-    ])
 
 
 def _make_sim_only_app():
@@ -125,7 +113,7 @@ def run_initial_ik_target_origin_gate():
     pose_matches = True
     reports = []
     for side in ("r", "l"):
-        pos, quat = app._target_world_pose(side)
+        pos, quat = teleop_targets.target_world_pose(app, side)
         state = app.whole_body_solver.site_state(app.data, side)
         pos_err = float(np.linalg.norm(pos - state.position))
         quat_dot = abs(float(np.dot(quat, state.quaternion)))
@@ -144,8 +132,8 @@ def run_cyclo_bimanual_virtual_object_gate():
     _set_hand_base_target(app, "l", [0.34, 0.08, 0.88])
     app.targets["rpy_r"] = [0.0, 0.0, 0.0]
     app.targets["rpy_l"] = [0.0, 0.0, 0.0]
-    r0 = app._target_world_pose("r")[0]
-    l0 = app._target_world_pose("l")[0]
+    r0 = teleop_targets.target_world_pose(app, "r")[0]
+    l0 = teleop_targets.target_world_pose(app, "l")[0]
 
     app.capture_grasp()
     capture_ok = app.cyclo_grasp_captured and app.cyclo_controller == "bimanual_movel"
@@ -154,14 +142,15 @@ def run_cyclo_bimanual_virtual_object_gate():
     app.targets["virtual_object_pos"][2] += 0.060
     app.targets["virtual_object_rpy"][2] += 12.0
     app.apply_virtual_object_target()
-    r1 = app._target_world_pose("r")[0]
-    l1 = app._target_world_pose("l")[0]
+    r1 = teleop_targets.target_world_pose(app, "r")[0]
+    l1 = teleop_targets.target_world_pose(app, "l")[0]
     rel1 = l1 - r1
     rel_len_ok = abs(np.linalg.norm(rel1) - np.linalg.norm(rel0)) < 1e-9
     moved_ok = np.linalg.norm(0.5 * (r1 + l1) - 0.5 * (r0 + l0)) > 0.05
 
-    app._sync_ik_mocaps_from_targets()
-    vo_pos = app._local_to_world_pos(app.targets["virtual_object_pos"])
+    teleop_targets.sync_ik_mocaps_from_targets(app)
+    vo_pos = teleop_targets.local_to_world_pos(
+        app, app.targets["virtual_object_pos"])
     marker_err = float(np.linalg.norm(app.data.mocap_pos[app.virtual_object_mocap_id] - vo_pos))
 
     app.release_grasp()
@@ -176,17 +165,18 @@ def run_cyclo_bimanual_virtual_object_gate():
 def run_cyclo_3d_gizmo_pose_gate():
     app = _make_sim_only_app()
     world_pos = np.array([0.42, -0.11, 0.94])
-    world_quat = _rpy_deg_to_quat([13.0, -8.0, 21.0])
-    matrix = app._pose_to_imguizmo_matrix(world_pos, world_quat)
-    round_pos, round_quat = app._imguizmo_matrix_to_pose(matrix)
+    world_quat = rotations.rpy_deg_to_quat([13.0, -8.0, 21.0])
+    matrix = teleop_render.pose_to_imguizmo_matrix(world_pos, world_quat)
+    round_pos, round_quat = teleop_render.imguizmo_matrix_to_pose(matrix)
     roundtrip_ok = (
         np.linalg.norm(round_pos - world_pos) < 1e-7
         and abs(abs(float(np.dot(round_quat, world_quat))) - 1.0) < 1e-7
     )
 
-    app._set_gizmo_target_world_pose("r", world_pos, world_quat)
-    hand_pos = app._target_world_pose("r")[0]
-    hand_quat = app._target_world_quat("r")
+    teleop_targets.set_gizmo_target_world_pose(
+        app, "r", world_pos, world_quat)
+    hand_pos = teleop_targets.target_world_pose(app, "r")[0]
+    hand_quat = teleop_targets.target_world_quat(app, "r")
     hand_ok = (
         np.linalg.norm(hand_pos - world_pos) < 1e-9
         and abs(abs(float(np.dot(hand_quat, world_quat))) - 1.0) < 1e-9
@@ -194,9 +184,10 @@ def run_cyclo_3d_gizmo_pose_gate():
 
     app.capture_grasp()
     vo_pos = np.array([0.43, 0.02, 0.98])
-    vo_quat = _rpy_deg_to_quat([0.0, 0.0, 16.0])
-    app._set_gizmo_target_world_pose("virtual", vo_pos, vo_quat)
-    new_vo_pos, new_vo_quat = app._virtual_object_world_pose()
+    vo_quat = rotations.rpy_deg_to_quat([0.0, 0.0, 16.0])
+    teleop_targets.set_gizmo_target_world_pose(
+        app, "virtual", vo_pos, vo_quat)
+    new_vo_pos, new_vo_quat = teleop_targets.virtual_object_world_pose(app)
     virtual_ok = (
         np.linalg.norm(new_vo_pos - vo_pos) < 1e-9
         and abs(abs(float(np.dot(new_vo_quat, vo_quat))) - 1.0) < 1e-9
@@ -218,12 +209,12 @@ def run_bimanual_marker_visibility_gate():
     _set_hand_base_target(app, "r", [0.34, -0.08, 0.88])
     _set_hand_base_target(app, "l", [0.34, 0.08, 0.88])
     app.capture_grasp()
-    app._sync_ik_mocaps_from_targets()
+    teleop_targets.sync_ik_mocaps_from_targets(app)
     geom_alpha_capture = float(app.model.geom_rgba[geom_id][3])
     site_alpha_capture = float(app.model.site_rgba[site_id][3])
 
     app.release_grasp()
-    app._sync_ik_mocaps_from_targets()
+    teleop_targets.sync_ik_mocaps_from_targets(app)
     geom_alpha_release = float(app.model.geom_rgba[geom_id][3])
     site_alpha_release = float(app.model.site_rgba[site_id][3])
 
@@ -256,13 +247,13 @@ def run_numeric_target_marker_sync_gate():
         app.data.mocap_pos[mocap_id] = [9.0, 9.0, 9.0]
         app.data.mocap_quat[mocap_id] = [0.0, 1.0, 0.0, 0.0]
 
-    app._sync_ik_mocaps_from_targets()
+    teleop_targets.sync_ik_mocaps_from_targets(app)
 
     ok = True
     reports = []
     for side, mocap_id in app.ik_target_mocap_ids.items():
-        expected_pos = app._target_world_pose(side)[0]
-        expected_quat = app._target_world_quat(side)
+        expected_pos = teleop_targets.target_world_pose(app, side)[0]
+        expected_quat = teleop_targets.target_world_quat(app, side)
         pos_err = float(np.linalg.norm(app.data.mocap_pos[mocap_id] - expected_pos))
         quat_dot = abs(float(np.dot(app.data.mocap_quat[mocap_id], expected_quat)))
         case_ok = pos_err < 1e-9 and (1.0 - quat_dot) < 1e-9
@@ -283,15 +274,17 @@ def run_whole_body_toggle_gate():
     app.targets["rpy_l"] = [-6.0, 3.0, -4.0]
     app.targets["virtual_object_pos"] = [0.31, -0.02, 0.87]
     app.targets["virtual_object_rpy"] = [2.0, -3.0, 8.0]
-    hand_before = {side: app._target_world_pose(side) for side in ("r", "l")}
-    virtual_before = app._virtual_object_world_pose()
+    hand_before = {
+        side: teleop_targets.target_world_pose(app, side) for side in ("r", "l")}
+    virtual_before = teleop_targets.virtual_object_world_pose(app)
     app.whole_body_base_twist = base.BodyTwist(0.2, -0.1, 0.3)
     app.commanded_base_twist = base.BodyTwist(0.2, -0.1, 0.3)
 
     app.toggle_whole_body_control()
     off_mode = not app.whole_body_enabled
-    hand_off = {side: app._target_world_pose(side) for side in ("r", "l")}
-    virtual_off = app._virtual_object_world_pose()
+    hand_off = {
+        side: teleop_targets.target_world_pose(app, side) for side in ("r", "l")}
+    virtual_off = teleop_targets.virtual_object_world_pose(app)
     off_pose_preserved = all(
         np.allclose(hand_before[side][0], hand_off[side][0], atol=1e-10)
         and abs(np.dot(hand_before[side][1], hand_off[side][1])) > 1.0 - 1e-10
@@ -308,8 +301,9 @@ def run_whole_body_toggle_gate():
         for side in ("r", "l"))
 
     app.toggle_whole_body_control()
-    hand_on = {side: app._target_world_pose(side) for side in ("r", "l")}
-    virtual_on = app._virtual_object_world_pose()
+    hand_on = {
+        side: teleop_targets.target_world_pose(app, side) for side in ("r", "l")}
+    virtual_on = teleop_targets.virtual_object_world_pose(app)
     round_trip = app.whole_body_enabled and all(
         np.allclose(hand_before[side][0], hand_on[side][0], atol=1e-10)
         and abs(np.dot(hand_before[side][1], hand_on[side][1])) > 1.0 - 1e-10
@@ -324,28 +318,34 @@ def run_whole_body_toggle_gate():
     captured_app.targets["virtual_object_rpy"][2] = 6.0
     captured_app.apply_virtual_object_target()
     captured_before = {
-        side: captured_app._target_world_pose(side) for side in ("r", "l")}
-    captured_virtual_before = captured_app._virtual_object_world_pose()
+        side: teleop_targets.target_world_pose(captured_app, side)
+        for side in ("r", "l")}
+    captured_virtual_before = teleop_targets.virtual_object_world_pose(captured_app)
     captured_app.toggle_whole_body_control()
     captured_app.toggle_whole_body_control()
     captured_round_trip = all(
-        np.allclose(captured_before[side][0], captured_app._target_world_pose(side)[0],
+        np.allclose(
+            captured_before[side][0],
+            teleop_targets.target_world_pose(captured_app, side)[0],
                     atol=1e-10)
         and abs(np.dot(captured_before[side][1],
-                       captured_app._target_world_pose(side)[1])) > 1.0 - 1e-10
+                       teleop_targets.target_world_pose(
+                           captured_app, side)[1])) > 1.0 - 1e-10
         for side in ("r", "l"))
-    captured_virtual_after = captured_app._virtual_object_world_pose()
+    captured_virtual_after = teleop_targets.virtual_object_world_pose(captured_app)
     captured_round_trip &= (
         np.allclose(captured_virtual_before[0], captured_virtual_after[0], atol=1e-10)
         and abs(np.dot(captured_virtual_before[1], captured_virtual_after[1])) > 1.0 - 1e-10)
 
     integration_app = _make_sim_only_app()
-    integration_app.q_des_r = teleop_app.HOME_Q_R.copy()
-    integration_app.q_des_l = teleop_app.HOME_Q_L.copy()
+    integration_app.q_des = {
+        "r": teleop_app.HOME_Q_R.copy(),
+        "l": teleop_app.HOME_Q_L.copy(),
+    }
     integration_app.arm_mode = {"r": "ik", "l": "ik"}
     integration_app.fk_q_deg = {
-        "r": np.degrees(integration_app.q_des_r).tolist(),
-        "l": np.degrees(integration_app.q_des_l).tolist(),
+        side: np.degrees(q_des).tolist()
+        for side, q_des in integration_app.q_des.items()
     }
     integration_app.frame_dt = 1.0 / teleop_app.LOOP_HZ
     integration_app.steps_per_frame = max(
@@ -439,7 +439,9 @@ def run_manual_xyz_rpy_ik_gate(model):
         home_quat = np.zeros(4)
         target_quat = np.zeros(4)
         mujoco.mju_mat2Quat(home_quat, data.site_xmat[site_id])
-        mujoco.mju_mulQuat(target_quat, home_quat, _rpy_deg_to_quat(rpy_delta))
+        mujoco.mju_mulQuat(
+            target_quat, home_quat, rotations.rpy_deg_to_quat(rpy_delta)
+        )
         q_sol, pos_err, ori_err, converged = solver.solve_pose_multistart(
             q_seed, target_pos, target_quat, np.random.default_rng(100 + (side == "l")),
             context_qpos=data.qpos, success_pos_tol=0.005, success_ori_tol=np.radians(5.0))

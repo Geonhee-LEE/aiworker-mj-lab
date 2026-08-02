@@ -44,8 +44,7 @@ from ffw_sh5_grasp.control import arm, base  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
 from ffw_sh5_grasp.control import whole_body  # noqa: E402
 from ffw_sh5_grasp.config import CONFIG_ENV_VAR, SETTINGS  # noqa: E402
-from ffw_sh5_grasp.kinematics import legacy as ik  # noqa: E402
-from ffw_sh5_grasp.paths import MODEL_PATH, REPO_ROOT  # noqa: E402
+from ffw_sh5_grasp.paths import MODEL_PATH  # noqa: E402
 from ffw_sh5_grasp.visualization import render, ui  # noqa: E402
 from . import targets  # noqa: E402
 
@@ -107,16 +106,6 @@ def _joint_address(model, name, addresses):
     return int(addresses[joint_id])
 
 
-def rpy_deg_to_quat(rpy_deg):
-    return targets.rpy_deg_to_quat(rpy_deg)
-
-
-def quat_to_rpy_deg(q):
-    """rpy_deg_to_quat의 역변환 -- FK 모드에서 IK 모드로 되돌아갈 때, 현재 실제
-    방향(쿼터니언)을 RPY 슬라이더 값(도)으로 되짚어 오기 위해 필요하다."""
-    return targets.quat_to_rpy_deg(q)
-
-
 def _reset_can_random(model, data, rng):
     """초기 키프레임 리셋 외에 이 파일에서 허용하는 유일한 qpos 쓰기다.
 
@@ -173,8 +162,10 @@ class TeleopApp:
         self.data = data
 
         # 전신 IK solver와 팔 토크 제어기를 만든다. 기존 ik.py는 Phase 3/4 독립 회귀용이다.
-        self.ctrl_r = arm.ArmTorqueController(model, ARM_R)
-        self.ctrl_l = arm.ArmTorqueController(model, ARM_L)
+        self.arm_controllers = {
+            side: arm.ArmTorqueController(model, joint_names)
+            for side, joint_names in ARM_JOINTS.items()
+        }
         self.whole_body_enabled = True
         self.whole_body_solver = whole_body.WholeBodyIK(
             model,
@@ -313,7 +304,7 @@ class TeleopApp:
             data.qpos[self.base_x_qadr], data.qpos[self.base_y_qadr],
             data.qpos[self.base_yaw_qadr],
         ], dtype=float)
-        self._sync_ik_mocaps_from_targets()
+        targets.sync_ik_mocaps_from_targets(self)
         self.contact_viz = False
         self.collision_viz = False
         self.collision_active_pairs = ()
@@ -334,8 +325,7 @@ class TeleopApp:
 
     def _setup_loop_state(self):
         """메인 루프에서만 쓰는 상태(IK 웜스타트 값, 타이밍, 입력 헬퍼)."""
-        self.q_des_r = HOME_Q_R.copy()
-        self.q_des_l = HOME_Q_L.copy()
+        self.q_des = {"r": HOME_Q_R.copy(), "l": HOME_Q_L.copy()}
         # 손별 제어 모드: "ik"(EE 포즈 슬라이더 -> whole-body solver) 또는
         # "fk"(관절각 슬라이더를 그대로 토크 제어기 목표로 사용, IK 자체를 건너뜀).
         # 리프트를 움직이는 동안 IK가 매 프레임에서만 어깨 높이를 다시 읽어들여서
@@ -343,8 +333,10 @@ class TeleopApp:
         # 한 번만 풀림)을 피하고 싶을 때 FK로 전환해 관절각을 고정해두면, 팔 전체가
         # 리프트에 강체로 붙어 그대로 오르내리기만 해서 흔들림이 아예 없다.
         self.arm_mode = {"r": "ik", "l": "ik"}
-        self.fk_q_deg = {"r": [math.degrees(v) for v in self.q_des_r],
-                          "l": [math.degrees(v) for v in self.q_des_l]}
+        self.fk_q_deg = {
+            side: np.degrees(q_des).tolist()
+            for side, q_des in self.q_des.items()
+        }
         self.frame_dt = 1.0 / LOOP_HZ
         self.steps_per_frame = max(1, round(self.frame_dt / self.model.opt.timestep))
         self.freq_ema = LOOP_HZ
@@ -406,14 +398,15 @@ class TeleopApp:
         """
         if mode == self.arm_mode[side]:
             return
-        q_des = self.q_des_r if side == "r" else self.q_des_l
+        q_des = self.q_des[side]
 
         if mode == "fk":
             self.fk_q_deg[side] = [math.degrees(v) for v in q_des]
         else:
             state = self.whole_body_solver.site_state(self.data, side)
-            target_pos = self._world_to_target_pos(side, state.position)
-            rpy_deg = self._world_quat_to_target_rpy(side, state.quaternion)
+            target_pos = targets.world_to_target_pos(self, side, state.position)
+            rpy_deg = targets.world_quat_to_target_rpy(
+                self, side, state.quaternion)
 
             self.targets[f"pos_{side}"] = target_pos
             self.targets[f"rpy_{side}"] = rpy_deg
@@ -421,36 +414,6 @@ class TeleopApp:
             self.smoothed_rpy[side] = np.array(rpy_deg)
 
         self.arm_mode[side] = mode
-
-    def _local_to_world_pos(self, p_local):
-        return targets.local_to_world_pos(self, p_local)
-
-    def _world_to_base_pos(self, p_world):
-        return targets.world_to_base_pos(self, p_world)
-
-    def _world_to_target_pos(self, side, world_pos):
-        return targets.world_to_target_pos(self, side, world_pos)
-
-    def _target_world_quat(self, side):
-        return targets.target_world_quat(self, side)
-
-    def _world_quat_to_target_rpy(self, side, world_quat):
-        return targets.world_quat_to_target_rpy(self, side, world_quat)
-
-    def _world_quat_to_virtual_rpy(self, world_quat):
-        return targets.world_quat_to_virtual_rpy(self, world_quat)
-
-    def _quat_to_mat(self, quat):
-        return targets.quat_to_mat(quat)
-
-    def _mat_to_quat(self, mat):
-        return targets.mat_to_quat(mat)
-
-    def _target_world_pose(self, side):
-        return targets.target_world_pose(self, side)
-
-    def _virtual_object_world_pose(self):
-        return targets.virtual_object_world_pose(self)
 
     def set_whole_body_enabled(self, enabled):
         """월드 목표를 움직이지 않고 전신 IK와 팔 전용 IK를 전환한다.
@@ -465,10 +428,12 @@ class TeleopApp:
             return
 
         hand_world_poses = {
-            side: tuple(value.copy() for value in self._target_world_pose(side))
-            for side in ("r", "l")
+            side: tuple(
+                value.copy() for value in targets.target_world_pose(self, side))
+            for side in SIDES
         }
-        virtual_world_pose = tuple(value.copy() for value in self._virtual_object_world_pose())
+        virtual_world_pose = tuple(
+            value.copy() for value in targets.virtual_object_world_pose(self))
         self.whole_body_enabled = enabled
 
         virtual_pos, virtual_quat = virtual_world_pose
@@ -476,37 +441,37 @@ class TeleopApp:
             self.targets["virtual_object_pos"] = targets.world_to_anchor_local_pos(
                 self, virtual_pos).tolist()
         else:
-            self.targets["virtual_object_pos"] = self._world_to_base_pos(virtual_pos).tolist()
+            self.targets["virtual_object_pos"] = targets.world_to_base_pos(
+                self, virtual_pos).tolist()
         self.targets["virtual_object_rpy"] = list(
-            self._world_quat_to_virtual_rpy(virtual_quat))
+            targets.world_quat_to_virtual_rpy(self, virtual_quat))
 
         if self.cyclo_grasp_captured:
             # 양손 MoveL 모드에서는 캡처된 가상 물체가 최종 목표의 기준이다.
             self.apply_virtual_object_target()
         else:
             for side, (world_pos, world_quat) in hand_world_poses.items():
-                self.targets[f"pos_{side}"] = self._world_to_target_pos(
-                    side, world_pos)
+                self.targets[f"pos_{side}"] = targets.world_to_target_pos(
+                    self, side, world_pos)
                 self.targets[f"rpy_{side}"] = list(
-                    self._world_quat_to_target_rpy(side, world_quat))
+                    targets.world_quat_to_target_rpy(
+                        self, side, world_quat))
 
-        for side in ("r", "l"):
+        for side in SIDES:
             self.smoothed_pos[side] = np.asarray(
                 self.targets[f"pos_{side}"], dtype=float).copy()
             self.smoothed_rpy[side] = np.asarray(
                 self.targets[f"rpy_{side}"], dtype=float).copy()
 
-        rebased_targets = {side: self._target_world_pose(side) for side in ("r", "l")}
+        rebased_targets = {
+            side: targets.target_world_pose(self, side) for side in SIDES}
         self.whole_body_solver.rebase(self.data, rebased_targets)
         self.whole_body_base_twist = base.BodyTwist()
         self.commanded_base_twist = base.BodyTwist()
-        self._sync_ik_mocaps_from_targets()
+        targets.sync_ik_mocaps_from_targets(self)
 
     def toggle_whole_body_control(self):
         self.set_whole_body_enabled(not self.whole_body_enabled)
-
-    def sync_virtual_object_to_hand_targets(self):
-        targets.sync_virtual_object_to_hand_targets(self)
 
     def capture_grasp(self):
         """Cyclo 방식의 ``/capture_grasp true`` 동작을 수행한다.
@@ -525,24 +490,6 @@ class TeleopApp:
 
     def apply_virtual_object_target(self):
         targets.apply_virtual_object_target(self)
-
-    def _active_gizmo_target(self):
-        return targets.active_gizmo_target(self)
-
-    def _gizmo_target_world_pose(self, target):
-        return targets.gizmo_target_world_pose(self, target)
-
-    def _set_gizmo_target_world_pose(self, target, world_pos, world_quat):
-        targets.set_gizmo_target_world_pose(self, target, world_pos, world_quat)
-
-    def _pose_to_imguizmo_matrix(self, world_pos, world_quat):
-        return render.pose_to_imguizmo_matrix(self, world_pos, world_quat)
-
-    def _imguizmo_matrix_to_pose(self, matrix):
-        return render.imguizmo_matrix_to_pose(self, matrix)
-
-    def _sync_ik_mocaps_from_targets(self):
-        targets.sync_ik_mocaps_from_targets(self)
 
     # 메인 루프
 
@@ -686,8 +633,8 @@ class TeleopApp:
         """렌더링 한 프레임 동안 현재 명령 묶음을 모든 물리 서브스텝에 적용한다."""
         data = self.data
         for _ in range(self.steps_per_frame):
-            self.ctrl_r.apply(data, self.q_des_r)
-            self.ctrl_l.apply(data, self.q_des_l)
+            for side in SIDES:
+                self.arm_controllers[side].apply(data, self.q_des[side])
             data.ctrl[self.lift_aid] = self.lift_cmd
             for wheel, (steer_angle, drive_speed) in wheel_commands.items():
                 data.ctrl[self.wheel_steer_aids[wheel]] = steer_angle
@@ -765,16 +712,10 @@ class TeleopApp:
                          else self.targets["lift"])
         for side in SIDES:
             if side in whole_body_cmd.arm_positions:
-                if side == "r":
-                    self.q_des_r = whole_body_cmd.arm_positions[side]
-                else:
-                    self.q_des_l = whole_body_cmd.arm_positions[side]
+                self.q_des[side] = whole_body_cmd.arm_positions[side]
                 self.ik_err_mm[side] = whole_body_cmd.position_errors[side] * 1000.0
             else:
-                if side == "r":
-                    self.q_des_r = np.radians(self.fk_q_deg[side])
-                else:
-                    self.q_des_l = np.radians(self.fk_q_deg[side])
+                self.q_des[side] = np.radians(self.fk_q_deg[side])
 
         # 명시적인 키보드 이동이 우선한다. 키를 놓으면 차체 피드백이 정지를 확인할 때까지
         # 영 속도를 명령하고, 그 뒤에만 같은 스워브 경로로 전신 IK를 재개한다.

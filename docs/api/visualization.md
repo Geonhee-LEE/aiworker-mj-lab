@@ -53,13 +53,13 @@ mode 상태를 바꾸고, renderer는 그 상태와 MuJoCo 물리 결과를 화�
 - **입력:** 앱과 현재 ImGui IO.
 - **변경:** `app.cam`과 마지막 mouse 위치.
 
-### `pose_to_imguizmo_matrix(app, world_pos, world_quat)`
+### `pose_to_imguizmo_matrix(world_pos, world_quat)`
 
 - **직관:** 로봇의 world pose를 ImGuizmo가 조작할 수 있는 column-major 4×4 행렬로
   포장한다.
 - **반환:** `imguizmo.Matrix16`.
 
-### `imguizmo_matrix_to_pose(app, matrix)`
+### `imguizmo_matrix_to_pose(matrix)`
 
 - **직관:** 사용자가 끌어 바꾼 Gizmo 행렬을 다시 IK target 위치·quaternion으로 푼다.
 - **반환:** `(world_position, world_quaternion)`.

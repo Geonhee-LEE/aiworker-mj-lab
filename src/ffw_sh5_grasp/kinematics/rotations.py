@@ -22,6 +22,46 @@ def normalize_quaternion(quaternion):
     return result
 
 
+def multiply_quaternions(*quaternions):
+    """MuJoCo 형식 쿼터니언을 왼쪽부터 순서대로 곱한다."""
+    result = np.array([1.0, 0.0, 0.0, 0.0])
+    for quaternion in quaternions:
+        product = np.zeros(4)
+        mujoco.mju_mulQuat(product, result, quaternion)
+        result = product
+    return result
+
+
+def inverse_quaternion(quaternion):
+    """단위 쿼터니언의 역회전인 켤레를 반환한다."""
+    result = np.zeros(4)
+    mujoco.mju_negQuat(result, quaternion)
+    return result
+
+
+def rpy_deg_to_quat(rpy_deg):
+    """도 단위 roll, pitch, yaw를 MuJoCo 형식 쿼터니언으로 바꾼다."""
+    roll, pitch, yaw = (math.radians(value) for value in rpy_deg)
+    cr, sr = math.cos(roll / 2.0), math.sin(roll / 2.0)
+    cp, sp = math.cos(pitch / 2.0), math.sin(pitch / 2.0)
+    cy, sy = math.cos(yaw / 2.0), math.sin(yaw / 2.0)
+    return np.array([
+        cr * cp * cy + sr * sp * sy,
+        sr * cp * cy - cr * sp * sy,
+        cr * sp * cy + sr * cp * sy,
+        cr * cp * sy - sr * sp * cy,
+    ])
+
+
+def quat_to_rpy_deg(quaternion):
+    """MuJoCo 형식 쿼터니언을 도 단위 roll, pitch, yaw로 바꾼다."""
+    w, x, y, z = normalize_quaternion(quaternion)
+    roll = math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
+    pitch = math.asin(np.clip(2.0 * (w * y - z * x), -1.0, 1.0))
+    yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+    return [math.degrees(value) for value in (roll, pitch, yaw)]
+
+
 def shortest_orientation_error(target_quaternion, current_quaternion):
     """현재 자세에서 목표 자세로 가는 최단 world-frame 회전 벡터를 반환한다.
 
@@ -32,10 +72,7 @@ def shortest_orientation_error(target_quaternion, current_quaternion):
     current = normalize_quaternion(current_quaternion)
     if float(np.dot(target, current)) < 0.0:
         target *= -1.0
-    current_inverse = current.copy()
-    current_inverse[1:] *= -1.0
-    error = np.zeros(4)
-    mujoco.mju_mulQuat(error, target, current_inverse)
+    error = multiply_quaternions(target, inverse_quaternion(current))
     error = normalize_quaternion(error)
     vector_norm = float(np.linalg.norm(error[1:]))
     if vector_norm < 1e-12:

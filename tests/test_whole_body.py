@@ -19,6 +19,7 @@ MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 from ffw_sh5_grasp.application import targets as teleop_targets  # noqa: E402
 from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
 from ffw_sh5_grasp.control import base as base_teleop  # noqa: E402
+from ffw_sh5_grasp.control import bimanual  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
 from ffw_sh5_grasp.control import optimization as bounded_optimization  # noqa: E402
 from ffw_sh5_grasp.control import whole_body as whole_body_ik  # noqa: E402
@@ -495,7 +496,13 @@ def run_rigid_grasp_gate(model):
     states = {
         side: rigid_solver.site_state(data, side) for side in ("r", "l")
     }
-    grasp_jacobian, desired_velocity = rigid_solver._rigid_grasp_task(states, 0.04)
+    grasp_jacobian, desired_velocity = bimanual.rigid_grasp_task(
+        rigid_solver._rigid_grasp_reference,
+        states,
+        0.04,
+        rigid_solver.max_task_linear_speed,
+        rigid_solver.max_task_angular_speed,
+    )
     free_residual = float(np.linalg.norm(
         grasp_jacobian @ free.generalized_velocity - desired_velocity))
     rigid_residual = float(np.linalg.norm(
@@ -510,12 +517,14 @@ def run_rigid_grasp_physical_gate():
     """가상 물체 MoveL이 실제 동역학에서도 캡처한 관계를 보존하는지 검사한다."""
     app = teleop_app.TeleopApp.__new__(teleop_app.TeleopApp)
     app._setup_sim()
-    app.q_des_r = teleop_app.HOME_Q_R.copy()
-    app.q_des_l = teleop_app.HOME_Q_L.copy()
+    app.q_des = {
+        "r": teleop_app.HOME_Q_R.copy(),
+        "l": teleop_app.HOME_Q_L.copy(),
+    }
     app.arm_mode = {"r": "ik", "l": "ik"}
     app.fk_q_deg = {
-        "r": list(np.degrees(app.q_des_r)),
-        "l": list(np.degrees(app.q_des_l)),
+        side: np.degrees(q_des).tolist()
+        for side, q_des in app.q_des.items()
     }
     app.frame_dt = 0.04
     app.steps_per_frame = round(app.frame_dt / app.model.opt.timestep)
@@ -564,15 +573,15 @@ def run_world_anchor_gate():
     app._setup_sim()
     app.targets["pos_r"] = [0.08, -0.03, 0.04]
     app.targets["rpy_r"] = [5.0, -7.0, 11.0]
-    hand_before = app._target_world_pose("r")
-    virtual_before = app._virtual_object_world_pose()
+    hand_before = teleop_targets.target_world_pose(app, "r")
+    virtual_before = teleop_targets.virtual_object_world_pose(app)
 
     app.data.qpos[app.base_x_qadr] += 0.25
     app.data.qpos[app.base_y_qadr] -= 0.12
     app.data.qpos[app.base_yaw_qadr] += np.radians(35.0)
     mujoco.mj_forward(app.model, app.data)
-    hand_after = app._target_world_pose("r")
-    virtual_after = app._virtual_object_world_pose()
+    hand_after = teleop_targets.target_world_pose(app, "r")
+    virtual_after = teleop_targets.virtual_object_world_pose(app)
 
     hand_fixed = (np.linalg.norm(hand_after[0] - hand_before[0]) < 1e-12
                   and abs(abs(np.dot(hand_after[1], hand_before[1])) - 1.0) < 1e-12)
@@ -590,8 +599,9 @@ def run_manual_handover_gate():
     """수동 베이스 이동이 목표를 운반하고 복귀 명령 없이 제어권을 넘기는지 검사한다."""
     app = teleop_app.TeleopApp.__new__(teleop_app.TeleopApp)
     app._setup_sim()
-    targets_before = {side: app._target_world_pose(side) for side in ("r", "l")}
-    virtual_before = app._virtual_object_world_pose()
+    targets_before = {
+        side: teleop_targets.target_world_pose(app, side) for side in ("r", "l")}
+    virtual_before = teleop_targets.virtual_object_world_pose(app)
     app.whole_body_solver.solve(app.data, targets_before, 0.04)
 
     previous_base = np.array([
@@ -607,8 +617,9 @@ def run_manual_handover_gate():
         app.data.qpos[app.base_yaw_qadr],
     ])
     teleop_targets.carry_world_targets_with_base(app, previous_base, current_base)
-    targets_after = {side: app._target_world_pose(side) for side in ("r", "l")}
-    virtual_after = app._virtual_object_world_pose()
+    targets_after = {
+        side: teleop_targets.target_world_pose(app, side) for side in ("r", "l")}
+    virtual_after = teleop_targets.virtual_object_world_pose(app)
 
     delta_yaw = current_base[2] - previous_base[2]
     c, s = np.cos(delta_yaw), np.sin(delta_yaw)
@@ -657,12 +668,14 @@ def run_manual_release_physical_gate():
     """전체 경로의 입력 해제가 반동 없이 차체와 바퀴 회전을 멈추는지 검사한다."""
     app = teleop_app.TeleopApp.__new__(teleop_app.TeleopApp)
     app._setup_sim()
-    app.q_des_r = teleop_app.HOME_Q_R.copy()
-    app.q_des_l = teleop_app.HOME_Q_L.copy()
+    app.q_des = {
+        "r": teleop_app.HOME_Q_R.copy(),
+        "l": teleop_app.HOME_Q_L.copy(),
+    }
     app.arm_mode = {"r": "ik", "l": "ik"}
     app.fk_q_deg = {
-        "r": list(np.degrees(app.q_des_r)),
-        "l": list(np.degrees(app.q_des_l)),
+        side: np.degrees(q_des).tolist()
+        for side, q_des in app.q_des.items()
     }
     app.frame_dt = 0.04
     app.steps_per_frame = round(app.frame_dt / app.model.opt.timestep)

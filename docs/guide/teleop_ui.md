@@ -28,7 +28,6 @@ MoveL/Bimanual MoveL 상태 전이 안에서 이 패널이 맡는 위치는
 | `_ensure_window_state(app)` | 창 표시 상태·트리 filter와 최초 외부 분리 요청 준비 |
 | `_begin_tool_window(app, key)` | 외부/메인 배치 요청을 적용하고 독립 도구 창 시작 |
 | `_ik_err_text(app, side)` | IK/FK 모드에 맞는 오차 표시 문자열 생성 |
-| `_note_manual_pose_edit(app)` | 수동 target 편집 hook |
 | `_clamp(value, lo, hi)` | 값 clamp |
 | `_slider_float_clamped(label, value, lo, hi, fmt)` | slider 값 clamp 처리 |
 | `_draw_vector_sliders(prefix, values, axes, lo, hi, fmt, on_change)` | XYZ/RPY 반복 slider 렌더링 |
@@ -59,7 +58,7 @@ MoveL/Bimanual MoveL 상태 전이 안에서 이 패널이 맡는 위치는
 
 ```mermaid
 flowchart TD
-    A["teleop_app._draw_ui_panel<br>앱에서 UI 렌더링 진입"] --> B["draw_panel(app)<br>두 workspace 구성"]
+    A["teleop_app.run<br>프레임에서 UI 렌더링 진입"] --> B["draw_panel(app)<br>두 workspace 구성"]
     B --> C["Status & Windows<br>FPS/solver 상태 + 창 표시 관리"]
     B --> W["Control Center<br>운영자가 자주 쓰는 조작"]
     W --> D["Target tab<br>MoveL/Bimanual marker 제어"]

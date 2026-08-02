@@ -55,7 +55,7 @@ mkdocs build --strict
 | Phase 6 | marker, gizmo, Bimanual, mode toggle | pose round-trip과 ON/OFF 불변성 |
 | Whole-body | BVLS, joint/collision CBF, rigid grasp, mobile WBIK | 수치/물리/latency 통합 gate |
 
-## 1.3.0 핵심 회귀가 증명하는 것
+## 1.4.0 핵심 회귀가 증명하는 것
 
 ### Custom kinematics hard gate
 
