@@ -10,6 +10,7 @@ collision avoidance를 하나의 Python 앱에서 실행합니다.
 |---|---|
 | [![Whole-body Control 데모](https://img.youtube.com/vi/MzO1GpUfCd8/hqdefault.jpg)](https://www.youtube.com/watch?v=MzO1GpUfCd8&list=PLWyQPsEn5Atg) | [![Whole-body 미사용 데모](https://img.youtube.com/vi/2LV_RsAGdz8/hqdefault.jpg)](https://www.youtube.com/watch?v=2LV_RsAGdz8&list=PLWyQPsEn5Atg&index=2) |
 | base·lift·양팔이 함께 목표를 추종하는 버전 | base·lift 자동 참여를 끈 버전 |
+| [알고리즘 상세 구현: 전신 IK와 충돌 회피](docs/guide/whole_body_ik.md) | [알고리즘 상세 구현: Arm-only hard gate](docs/guide/whole_body_ik.md#whole-body-onoff) |
 
 [문서 사이트](https://ggh-png.github.io/ffw-sh5-grasp/) ·
 [1.3.0 릴리스](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.3.0)

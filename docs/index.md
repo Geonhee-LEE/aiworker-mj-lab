@@ -101,6 +101,8 @@ command를 계산하고, MuJoCo physics가 다음 state를 만든다.
 
 [YouTube에서 Whole-body Control 데모 보기](https://www.youtube.com/watch?v=MzO1GpUfCd8&list=PLWyQPsEn5Atg)
 
+[알고리즘 상세 구현: 전신 IK와 충돌 회피](guide/whole_body_ik.md)
+
 ### Whole-body 미사용 (Arm-only)
 
 <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
@@ -114,3 +116,5 @@ command를 계산하고, MuJoCo physics가 다음 state를 만든다.
 </div>
 
 [YouTube에서 Whole-body 미사용 데모 보기](https://www.youtube.com/watch?v=2LV_RsAGdz8&list=PLWyQPsEn5Atg&index=2)
+
+[알고리즘 상세 구현: Whole-body OFF의 Arm-only hard gate](guide/whole_body_ik.md#whole-body-onoff)
