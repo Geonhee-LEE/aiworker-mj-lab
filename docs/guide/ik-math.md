@@ -343,16 +343,25 @@ W_h\dot q_{posture}^*
 목적함수만 보면 $H=2A^TA$, $f=-2A^Tb$인 같은 QP 구조다. 차이는 속도·관절 한계가
 box constraint로 들어가므로 DLS 역행렬 한 번으로 끝낼 수 없다는 점이다. 현재
 `control.optimization.least_squares_to_qp()`가 이 식을 명시적인 Hessian과 선형항으로
-바꾸고 `bounded_quadratic_program()`이 box active-set으로 푼다. 충돌 단계는 다음
-soft CBF 부등식을 추가한다.
+바꾸고 `bounded_quadratic_program()`이 box active-set으로 푼다. 그 명목 해에 base
+shaping을 적용한 뒤, 충돌 safety projection QP가 다음 soft CBF 부등식을 처리한다.
 
 \[
 G\dot q+s\ge h,\qquad s\ge0,
 \qquad \rho\lVert s\rVert^2
 \]
 
-따라서 전신 IK는 **DLS와 별개의 원리**가 아니라, weighted DLS 목적함수를 속도·관절·
-충돌 제약까지 확장한 constrained least-squares/QP라고 이해하는 것이 정확하다.
+따라서 전신 IK pipeline은 **DLS와 별개의 원리**가 아니라, weighted DLS 목적함수를
+속도·관절 제약이 있는 명목 QP로 확장하고 충돌 제약은 두 번째 QP로 투영한 것이라고
+이해하는 것이 정확하다.
+
+!!! tip "전신 IK의 생략 없는 증명"
+    이 절은 단일 팔 DLS에서 전신 QP로 넘어가는 연결만 보여준다. FK의 한 주기
+    선형화, residual 적층, Hessian의 convexity, joint-limit CBF, box-QP KKT 조건과
+    collision slack 제거까지의 전체 유도는
+    [전신 IK 수식 증명: pose 선형화에서 QP까지](whole_body_ik.md#whole-body-proof)를
+    이어서 본다. 실제 구현이 `명목 QP → base shaping → 충돌 safety projection QP`인
+    이유와 각 식의 담당 함수도 그 절에 대응시켰다.
 
 ## 3. 수식과 코드의 대응
 

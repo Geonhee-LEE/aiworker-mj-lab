@@ -9,7 +9,7 @@
 문제에서 푸는 ROS 비의존 differential whole-body IK다.
 
 작업 가중치, 속도 한계와 관절·충돌 CBF 값은 `config/default.yaml`의
-`whole_body_ik`, `optimization` 구역에서 조절한다. 적용·검증 규칙은
+`whole_body_ik` 구역에서 조절한다. 적용·검증 규칙은
 [YAML 파라미터 설정](../configuration.md)을 참고한다.
 
 ## 모듈 구성
@@ -99,9 +99,10 @@ CBF가 실제 최종 명령에 모두 반영된다.
 조절한다.
 
 QP 표현을 사용하면 이 자유도별 비용 외에도 위치/자세/양손 task weight, 속도 상한,
-joint-limit bound, Whole-body OFF hard pin과 collision CBF를 같은 변수 $\dot q$에
-일관되게 적용할 수 있다. 이것이 전신 경로를 단일 팔의 닫힌형 DLS 식 그대로 두지
-않고 constrained QP 기반 DLS로 구성한 핵심 이유다.
+joint-limit bound와 Whole-body OFF hard pin을 같은 변수 $\dot q$에 일관되게 적용할 수
+있다. 충돌 CBF도 같은 $\dot q$를 쓰지만, base 가속 shaping 뒤의 명령을 안전하게
+보정해야 하므로 두 번째 safety projection QP에서 처리한다. 이것이 전신 경로를 단일
+팔의 닫힌형 DLS 식 그대로 두지 않고 constrained QP 기반 DLS로 구성한 핵심 이유다.
 
 ## 제어 변수와 출력
 
@@ -168,34 +169,242 @@ distance gradient와
 [`vr_controller.cpp`](https://github.com/ROBOTIS-GIT/cyclo_control/blob/ceffbd7562028f6b317e462911e2a0991b9ba735/cyclo_motion_controller_core/src/controllers/ai_worker/vr_controller.cpp)의
 collision CBF/slack 구성을 기준으로 삼았다.
 
-## Weighted differential IK
+## 전신 IK 수식 증명: pose 선형화에서 QP까지 { #whole-body-proof }
 
-각 손의 world pose 오차에서 원하는 task velocity를 만든다.
+이 절은 구현이 푸는 문제를 pose 오차에서 시작해 QP, KKT 조건, 충돌 안전 투영까지
+순서대로 유도한다. 결론부터 말하면 이 구현은 **현재 자세 주변에서 선형화한 weighted
+DLS를 box-constrained convex QP로 푼 뒤, 충돌이 가까울 때 별도의 convex safety
+projection QP를 한 번 더 푸는 구조**다.
+
+### 1. FK를 한 제어 주기 동안 선형화한다
+
+$i$번째 손의 FK를 $x_i=f_i(q)$라고 하자. 현재 자세 $q$에서 Taylor 전개하면
 
 \[
-\dot x_i^* =
+f_i(q+\Delta q)
+=f_i(q)+J_i(q)\Delta q+O(\lVert\Delta q\rVert^2)
+\]
+
+이고, 한 제어 주기 $\Delta t$에서 $\Delta q=\dot q\Delta t$이므로 $\Delta t$로
+나누고 2차 이상 항을 버리면 다음 velocity-level 관계를 얻는다.
+
+\[
+\boxed{\dot x_i\simeq J_i(q)\dot q}
+\]
+
+위치와 회전 모두 world frame으로 계산한다. 회전 오차는 quaternion 부호가 바뀌어도
+같은 회전을 뜻하도록 최단 회전을 선택한 $\operatorname{Log}(R_i^*R_i^T)$다. 현재
+손 twist의 damping까지 포함한 목표 task 속도는
+
+\[
+\dot x_i^*=
 \begin{bmatrix}
-K_p(p_i^*-p_i) \\
-K_R e_{R,i}
+\operatorname{clip}(K_p(p_i^*-p_i)-D_pv_i)\\
+\operatorname{clip}(K_R\operatorname{Log}(R_i^*R_i^T)-D_R\omega_i)
+\end{bmatrix}
+\]
+
+이다. `kinematics.tasks.pose_error()`가 두 오차를, `pose_velocity_command()`가 gain,
+damping과 선형·각속도 제한을 적용한다. `WholeBodyIK.site_state()`의 geometric
+Jacobian도 같은 world frame이므로 $J_i\dot q$와 $\dot x_i^*$를 직접 비교할 수 있다.
+
+### 2. 모든 요구를 weighted residual로 쓴다
+
+손 하나의 residual을
+
+\[
+r_i(\dot q)=W_i(J_i\dot q-\dot x_i^*)
+\]
+
+로 둔다. $W_i$의 대각 원소는 YAML task weight의 제곱근이므로
+$\lVert r_i\rVert^2$을 전개하면 설정한 위치·자세 weight가 정확히 한 번 곱해진다.
+그 밖의 항도 같은 형태로 표현할 수 있다.
+
+| 요구 | residual | 의미 |
+|---|---|---|
+| 오른손·왼손 pose | $W_i(J_i\dot q-\dot x_i^*)$ | 손의 world twist 오차 |
+| rigid grasp | $\sqrt{w_g}(J_g\dot q-\dot x_g^*)$ | 캡처한 양손 상대 pose 복원 |
+| 공통 base 이동 | $W_b(S_b\dot q-v_b^*)$ | $S_b=[I_3\;0]$로 base 3축 선택 |
+| 자유도별 damping | $R^{1/2}\dot q$ | base·lift·팔 사용 비용 |
+| nominal posture | $P^{1/2}(\dot q-\dot q_{post}^*)$ | $\dot q_{post}^*=K_h(q_{nom}-q)$ |
+
+여기서 $R=\operatorname{diag}(r_j)$와 $P=\operatorname{diag}(p_j)$다. 실제 코드는
+`WholeBodyIK.solve()`의 `rows`, `rhs`에 위 행들을 차례로 추가한다.
+
+### 3. residual 합을 하나의 least-squares로 적층한다
+
+활성화된 항을 세로로 쌓아 다음 $A,b$를 정의한다.
+
+\[
+A=
+\begin{bmatrix}
+W_RJ_R\\ W_LJ_L\\ \sqrt{w_g}J_g\\ W_bS_b\\ R^{1/2}\\ P^{1/2}
 \end{bmatrix},\qquad
-\dot x_i = J_i(q)\dot q
+b=
+\begin{bmatrix}
+W_R\dot x_R^*\\ W_L\dot x_L^*\\ \sqrt{w_g}\dot x_g^*\\
+W_bv_b^*\\ 0\\ P^{1/2}\dot q_{post}^*
+\end{bmatrix}.
 \]
 
-양손 task, 자유도별 damping 비용과 home posture task를 한 weighted DLS 목적함수에
-쌓은 뒤 표준 QP의 Hessian과 선형항으로 변환한다.
+rigid-grasp 또는 common-base task가 꺼져 있으면 해당 block만 빠진다. 행렬곱의 block
+정의에 따라
 
 \[
-\min_{\dot q}
-\sum_{i\in\{L,R\}}\|W_i(J_i\dot q-\dot x_i^*)\|^2
-+\|W_d\dot q\|^2
-+\|W_h(\dot q-K_h(q_{home}-q))\|^2
+\lVert A\dot q-b\rVert^2
+=\sum_k\lVert r_k(\dot q)\rVert^2
 \]
 
-subject to:
+이므로 여러 residual의 제곱합과 적층 least-squares는 완전히 같은 목적함수다.
+
+### 4. weighted DLS와 QP가 동치임을 보인다
+
+$z=\dot q$로 놓고 적층 비용을 전개하면
 
 \[
-\dot q_{min}\le\dot q\le\dot q_{max}
+\begin{aligned}
+\lVert Az-b\rVert^2
+&=(Az-b)^T(Az-b)\\
+&=z^TA^TAz-2b^TAz+b^Tb.
+\end{aligned}
 \]
+
+$b^Tb$는 $z$와 무관하므로 표준 QP
+
+\[
+\min_z\;\frac12z^THz+g^Tz
+\]
+
+와 비교하면
+
+\[
+\boxed{H=2A^TA,\qquad g=-2A^Tb}
+\]
+
+를 얻는다. 이것이 `control.optimization.least_squares_to_qp()`의 두 반환식이다.
+또한 임의의 벡터 $y$에 대해
+
+\[
+y^THy=2y^TA^TAy=2\lVert Ay\rVert^2\ge0
+\]
+
+이므로 $H$는 positive semidefinite이고 목적함수는 convex다. 현재 설정처럼 모든
+자유도의 damping weight가 양수이면 $A$가 $R^{1/2}$ block을 포함하므로 $y\ne0$에서
+$\lVert Ay\rVert^2\ge r_{min}\lVert y\rVert^2>0$이다. 따라서 $H$는 positive
+definite이고 명목 QP 해는 유일하다.
+
+### 5. 속도·관절 한계를 hard box로 만든다
+
+명목 문제는 다음 box constraint를 함께 만족해야 한다.
+
+\[
+\boxed{\dot q_{min}\le\dot q\le\dot q_{max}}
+\]
+
+기본 속도 상한과 더불어 관절 위치 한계는 control barrier function(CBF)으로 box에
+교차한다. lower margin의 안전함수 $h_l=q-q_{min}-m$, upper margin의 안전함수
+$h_u=q_{max}-m-q$를 두면 $h_l,h_u\ge0$이 안전영역이다. 조건
+$\dot h\ge-\alpha h$를 각각 적용하면
+
+\[
+\dot q\ge-\alpha(q-q_{min}-m),\qquad
+\dot q\le\alpha(q_{max}-m-q)
+\]
+
+를 얻는다. 이것이 `_velocity_bounds()`가 만드는 lower/upper다. 실효 gain을
+$\alpha_{eff}=\min(\alpha,1/\Delta t)$로 제한하면 lower 쪽 Euler step은
+
+\[
+h_{l,k+1}=h_{l,k}+\Delta t\dot q
+\ge(1-\Delta t\alpha_{eff})h_{l,k}\ge0
+\]
+
+이고 upper 쪽도 같은 방식이므로 안전영역 안에서 한 step에 margin을 건너지 않는다.
+Whole-body OFF와 FK mode 팔은 soft 비용을 키우는 대신 해당 축에 lower=upper=0을 넣어
+정확히 고정한다.
+
+### 6. active-set 종료 조건이 전역 최적 조건이다
+
+box QP의 lower/upper multiplier를 각각 $\mu^-,\mu^+\ge0$라 하면 KKT 조건은
+
+\[
+Hz+g-\mu^-+\mu^+=0,
+\]
+
+\[
+l\le z\le u,\qquad
+\mu_j^-(z_j-l_j)=0,\qquad
+\mu_j^+(u_j-z_j)=0
+\]
+
+이다. 따라서 free 변수에서는 gradient $(Hz+g)_j=0$, lower bound에서는
+$(Hz+g)_j\ge0$, upper bound에서는 $(Hz+g)_j\le0$이어야 한다. 이 부호를 위반한
+변수를 free set으로 되돌리고 reduced QP를 다시 푸는 과정이
+`bounded_quadratic_program()`의 active-set loop다. 4절에서 목적함수가 convex임을
+보였으므로 feasible 해가 이 KKT 조건을 만족하면 국소해가 아니라 **전역 최적해**다.
+
+### 7. 충돌은 두 번째 safety projection QP로 푼다
+
+명목 QP의 해를 base 가속·근접 fade로 shaping한 명령을 $\bar z$라고 하자. 충돌 pair
+$j$의 signed distance CBF는
+
+\[
+G_jz\ge h_j,\qquad
+G_j=\nabla d_j,\quad h_j=-\alpha(d_j-d_{safe})
+\]
+
+다. task가 물리적으로 불가능해도 유한한 명령을 반환하도록 $s\ge0$인 soft slack을
+두면 두 번째 문제는
+
+\[
+\boxed{
+\min_{l\le z\le u,\;s\ge0}
+\lVert z-\bar z\rVert^2+\rho\lVert s\rVert^2
+\quad\text{s.t.}\quad Gz+s\ge h
+}
+\]
+
+가 된다. $z$를 고정하면 비용을 최소화하는 slack은 각 행마다
+
+\[
+s_j^*(z)=\max(0,h_j-G_jz)
+\]
+
+다. 이를 대입하면 slack 변수를 없앤 동치 문제를 얻는다.
+
+\[
+\min_{l\le z\le u}
+\lVert z-\bar z\rVert^2
++\rho\sum_j\max(0,h_j-G_jz)^2
+\]
+
+현재 위반 중인 행 집합을 $\mathcal C$로 고정하면 해당 구간의 Hessian과 선형항은
+
+\[
+H_{\mathcal C}=2I+2\rho G_{\mathcal C}^TG_{\mathcal C},\qquad
+g_{\mathcal C}=-2\bar z-2\rho G_{\mathcal C}^Th_{\mathcal C}
+\]
+
+다. $H_{\mathcal C}$는 $2I$ 때문에 positive definite이므로 각 active-set subproblem도
+유일한 convex QP 해를 갖는다. `bounded_quadratic_program_with_barriers()`는 위반
+집합이 바뀌지 않을 때까지 이 식을 반복한다.
+
+중요한 구분은 충돌 항이 최초 task Hessian에 동시에 들어가는 것이 아니라는 점이다.
+실제 순서는 `명목 WBIK box-QP → base shaping → 명목 명령에 가장 가까운 collision
+safety projection QP`다. 이 덕분에 shaping이 CBF를 나중에 다시 깨지 않지만, slack을
+허용하므로 충돌 CBF는 hard guarantee가 아니다. 반환되는 `collision_violation`으로
+남은 위반량을 확인해야 한다.
+
+### 8. 이 증명이 보장하는 범위
+
+- 명목 해는 **현재 자세에서 선형화한 한 제어 주기**의 box QP 전역 최적해다.
+- 충돌 보정은 활성 집합이 안정된 piecewise-convex soft-barrier 문제의 최적해다.
+- base shaping은 두 QP 사이의 명시적 heuristic이므로 전체 pipeline을 하나의 목적함수로
+  합친 전역 최적해라고 주장하지 않는다.
+- Taylor 전개의 2차항을 버렸으므로 임의로 먼 목표에 대한 global pose IK 증명은 아니다.
+- 충돌 slack, 모델 오차와 이산 시간 때문에 미래 trajectory 전체의 무충돌 증명도 아니다.
+
+따라서 매 frame FK/Jacobian과 CBF를 다시 계산하는 closed-loop 반복이 필요하다.
 
 ```mermaid
 flowchart TD
@@ -210,7 +419,8 @@ flowchart TD
 아래쪽 bound는 절충 대상이 아니라 해가 반드시 머물러야 하는 범위다. 그래서
 Whole-body OFF와 FK 팔은 작은 weight가 아니라 lower=upper=0으로 고정한다.
 
-관절 위치 한계는 Cyclo와 같은 control-barrier velocity bound를 box에 교차한다.
+관절 위치 한계는 Cyclo와 같은 control-barrier velocity bound를 box에 교차한다. 위
+5절의 유도식을 그림으로 나타내면 다음과 같다.
 
 \[
 -\alpha(q-q_{min}-m)\le\dot q\le
@@ -315,8 +525,9 @@ linear 1.2 m/s, angular 3.0 rad/s로 제한하고, base x/y·yaw, lift, arm 속�
 늦게 따라오고 해의 작은 부호 변화가 스워브 반전을 반복시킬 수 있다. 그래서 첫
 solve에서 base pose와 양손 pose를 기준으로 저장하고, 이후 두 target의 평균 이동과
 평균 yaw 변화를 명시적인 base x/y/yaw 목표로 만든다. selector row에 높은 가중치를
-주되 이 목표도 QP 내부에서 손 task, 자유도 비용, 속도·충돌 제약과 함께 푼다. 과거처럼
-QP 계산 뒤 base 3축을 별도 값으로 덮어쓰지 않는다. 따라서 `damping_weights`와
+주되 이 목표도 명목 QP 내부에서 손 task, 자유도 비용, 속도·관절 제약과 함께 푼다.
+충돌 제약은 그 결과와 base shaping 뒤의 두 번째 safety projection QP가 처리한다.
+과거처럼 QP 계산 뒤 base 3축을 별도 목표값으로 덮어쓰지 않는다. 따라서 `damping_weights`와
 `base.participation_scale`을 바꾸면 최종 base 명령이 실제로 달라지며, lift와 팔은 같은
 문제 안에서 각 손의 나머지 residual을 푼다.
 
