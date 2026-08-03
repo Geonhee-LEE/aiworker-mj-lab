@@ -4,9 +4,13 @@ Base x/y/yaw, lift와 양팔 14축을 하나의 bounded differential IK로 조�
 
 ## `WholeBodyIK(model, site_names, arm_joint_names, **weights)`
 
-- **입력:** `MjModel`, 손별 site·관절 이름, 선택적 task/CBF 가중치와 gain.
+- **입력:** `MjModel`, 손별 site·관절 이름, 선택적 task/CBF 가중치와 gain,
+  `base_participation_scale`.
 - **상태:** 공유 `KinematicTree`, 속도 제한, base·손 reference, rigid-grasp reference.
 - **설정:** `config/default.yaml`의 `whole_body_ik`.
+- **베이스 참여:** `base_participation_scale=0.05`는 base 목표와 속도 상한을 기본값의
+  5%로 낮추고, `0.0`은 base 3축만 hard pin하면서 lift·팔은 유지한다.
+- **유효 범위:** `base_participation_scale`은 `0.0` 이상 `1.0` 이하다.
 
 ## `WholeBodyIK.solve(...)`
 
@@ -25,6 +29,13 @@ solve(
 - **부작용:** actuator와 live `data.qpos`를 쓰지 않는다.
 - **공통 규칙:** 손 pose 오차와 목표 twist는
   [`kinematics.tasks`](kinematics-tasks.md)의 공통 함수로 만든다.
+- **QP 비용:** `damping_weights`가 base·lift·팔 속도의 상대 비용을 정하며 큰 값일수록
+  해당 자유도의 불필요한 참여를 더 강하게 억제한다.
+- **QP 베이스 bound:** 생성자/YAML의 베이스 참여 설정은 ON 상태의 base 3축 속도
+  bound에 적용된다. `whole_body_enabled=False`는 이 설정과 무관하게 base와 lift를
+  모두 고정한다.
+- **수치 경로:** weighted DLS의 `A, b`를 `least_squares_to_qp()`로 변환한 뒤
+  `bounded_quadratic_program()`과 soft-CBF QP로 푼다.
 
 ## `WholeBodyCommand`
 

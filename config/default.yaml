@@ -1,6 +1,6 @@
 # FFW-SH5 실행 및 알고리즘 조절값의 기본 설정이다.
 # 단위는 키 이름 또는 각 항목의 주석에 표시한다.
-schema_version: 1
+schema_version: 2
 
 application:
   # 실행할 MJCF 모델과 초기 키프레임이다. 상대 경로는 저장소 루트를 기준으로 한다.
@@ -44,8 +44,6 @@ kinematics:
   position_tolerance_m: 0.0001
   orientation_tolerance_rad: 0.001
   orientation_cost_weight: 0.3
-  backtracking_steps: 6
-  backtracking_ratio: 0.5
   multistart:
     restarts: 8
     max_iterations: 250
@@ -58,8 +56,6 @@ whole_body_ik:
   orientation_weight: 5.0
   position_gain: 10.0
   orientation_gain: 9.0
-  linear_velocity_damping: 0.0
-  angular_velocity_damping: 0.0
   posture_gain: 1.0
   # 관절 한계 CBF 설정이다.
   joint_limit_margin_rad: 0.02
@@ -79,35 +75,35 @@ whole_body_ik:
   base_angular_acceleration_limit_rad_s2: 4.0
   base_position_fade_distance_m: 0.08
   base_orientation_fade_angle_rad: 0.25
-  # 제어 자유도별 속도 상한이다. arm_default는 각 팔 관절에 공통 적용한다.
+  # 모바일 베이스의 전신 QP 참여율이다. 1은 전부 참여, 0.05는 거의 고정,
+  # 0은 베이스 3축만 정확히 고정하며 lift와 양팔은 계속 푼다.
+  base:
+    participation_scale: 1.0
+  # 좌우 평면 이동과 각 팔 관절은 각각 하나의 공통 속도 상한을 사용한다.
   velocity_limits:
-    base_x: 0.55
-    base_y: 0.55
+    base_linear: 0.55
     base_yaw: 1.4
-    lift_joint: 0.35
-    arm_default: 4.5
-  # [base_x, base_y, base_yaw, lift]와 14개 팔 관절의 정규화 비용이다.
+    lift: 0.35
+    arm: 4.5
+  # 같은 종류의 자유도끼리 공유하는 QP 정규화 비용이다.
+  # 값이 클수록 같은 task 오차를 줄일 때 해당 자유도의 움직임을 더 비싸게 취급한다.
   damping_weights:
-    base_lift: [0.25, 0.25, 0.20, 0.12]
+    base_linear: 0.25
+    base_yaw: 0.20
+    lift: 0.12
     arm: 0.045
+  # base에는 기준 자세가 없으므로 lift와 팔의 자세 유지 비용만 설정한다.
   posture_weights:
-    base_lift: [0.0, 0.0, 0.0, 0.10]
+    lift: 0.10
     arm: 0.025
   # 양손 공통 이동을 베이스 명령으로 바꾸는 서보 설정이다.
   common_base:
     position_gain: 5.0
     yaw_gain: 3.5
     yaw_deadband_rad: 0.05
-    yaw_speed_limit_rad_s: 1.0
-    task_weights: [30.0, 30.0, 100.0]
-
-optimization:
-  # BVLS 활성 집합 판정과 반복 상한을 조절하는 수치 설정이다.
-  tolerance: 0.0000000001
-  iteration_multiplier: 4
-  extra_iterations: 4
-  barrier_iteration_multiplier: 2
-  barrier_extra_iterations: 4
+    task_weights:
+      translation: 30.0
+      yaw: 100.0
 
 base:
   teleop:
@@ -119,7 +115,6 @@ base:
     yaw_speed_rad_s: 1.6
     yaw_follow_gain: 5.0
     yaw_decay_gain: 8.0
-    zero_epsilon: 0.001
   geometry:
     # 각 스워브 모듈의 차체 기준 (x, y) 위치다.
     wheel_positions_m:
@@ -136,10 +131,8 @@ base:
   control:
     linear_velocity_deadband_m_s: 0.001
     angular_velocity_deadband_rad_s: 0.001
-    module_speed_epsilon_m_s: 0.00001
     steering_velocity_limit_rad_s: 8.0
     alignment_angle_threshold_rad: 0.10
-    alignment_start_angle_threshold_rad: 0.10
     alignment_start_speed_threshold_rad_s: 0.10
     steering_tolerance_rad: 0.03
     direction_switch_hysteresis_rad: 0.08
@@ -175,12 +168,6 @@ grasp:
 ui:
   jog_position_step_m: 0.005
   jog_rotation_step_deg: 2.0
-  hand_position_offset_range_m: [-0.35, 0.35]
-  hand_rotation_range_deg: [-90.0, 90.0]
-  virtual_position_range_m: [-0.2, 1.2]
-  move_time_range_s: [0.2, 8.0]
-  jog_position_step_range_m: [0.001, 0.050]
-  jog_rotation_step_range_deg: [0.5, 15.0]
   windows:
     control:
       title: FFW-SH5 Control Center
@@ -206,15 +193,3 @@ render:
       distance: 0.5
       azimuth_deg: 90.0
       elevation_deg: -15.0
-  mouse_zoom_scale: 0.05
-  gizmo_size: 0.18
-  max_scene_geometries: 10000
-  collision_overlay:
-    collision_geometry_rgba: [0.05, 0.75, 1.0, 0.28]
-    penetration_rgba: [1.0, 0.02, 0.02, 1.0]
-    unsafe_rgba: [1.0, 0.18, 0.02, 1.0]
-    buffer_rgba: [1.0, 0.78, 0.05, 1.0]
-    point_radius_m: 0.007
-    line_width: 4.0
-  # 표시 주파수의 지수 이동 평균에서 이전 값과 새 값의 비율이다.
-  frequency_ema_previous_weight: 0.9

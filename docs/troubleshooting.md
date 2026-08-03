@@ -71,6 +71,8 @@ marker는 target이고 손은 실제 물리 state다. 큰 target은 rate limit�
 
 ## Whole-body ON인데 base가 움직이지 않는다
 
+- `base.participation_scale`이 0 또는 매우 작은 값이면 base 목표와 속도 상한도 같은
+  비율로 줄어든다. 기본 동작을 확인할 때는 `1.0`으로 되돌린다.
 - 한 손만 작게 움직였거나 오차가 작은 경우 팔이 대부분 흡수할 수 있다.
 - base command는 손 위치 오차 8 cm, 자세 오차 0.25 rad 안에서 점차 fade한다.
 - 수동 키를 막 놓았다면 차체 feedback이 정지를 확인할 때까지 WBIK가 대기한다.
@@ -85,6 +87,20 @@ python3 tests/test_whole_body.py
 ```
 
 출력의 `Whole-body solver gate`와 `Physical WBIK longitudinal/lateral/yaw`를 본다.
+
+## 모바일 베이스를 거의 움직이지 않고 싶다
+
+lift와 양팔의 전신 IK 참여는 유지하면서 base만 억제하려면 다음을 사용자 YAML에 넣는다.
+
+```yaml
+whole_body_ik:
+  base:
+    participation_scale: 0.05
+```
+
+이 값은 단순 비용이 아니라 base 목표와 속도 bound를 함께 5%로 줄인다. base 자동
+명령을 정확히 0으로 만들려면 `participation_scale: 0.0`을 사용한다. UI에서 Whole-body를 끄면
+base와 lift가 모두 고정되므로 목적이 다르다.
 
 ## Whole-body OFF인데 base 또는 lift가 움직인다
 

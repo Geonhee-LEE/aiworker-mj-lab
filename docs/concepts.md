@@ -74,6 +74,11 @@ arm-only에서는 base를 수동으로 재배치할 때 손 target도 로봇과 
 ON/OFF 전환 시 앱은 world pose를 먼저 저장하고 새 좌표계 값으로 역변환한다. 따라서
 표현은 달라도 화면의 목표는 같은 곳에 남는다.
 
+Whole-body ON의 world-fixed target 표현은 유지하면서 모바일 베이스만 줄이고 싶다면
+`whole_body_ik.base.participation_scale`을 낮춘다. base만 완전히 막고 lift·팔을 유지할
+때는 참여율 `0.0`, base와 lift를 모두 막는 arm-only가 필요할 때는 UI의
+Whole-body OFF를 사용한다.
+
 ## 4. FK, 단일 팔 IK, Whole-body IK
 
 | 이름 | 입력 | 출력/변수 | 런타임 역할 |
@@ -82,7 +87,7 @@ ON/OFF 전환 시 앱은 world pose를 먼저 저장하고 새 좌표계 값으�
 | `kinematics/legacy.py` | 한 손 world pose | 한 팔 7개 관절 위치 | Phase 3/4 독립 회귀와 단일 팔 solver |
 | `control/whole_body.py` | 양손 world pose | base/lift/양팔 differential command | 현재 teleop IK 경로 |
 | `control/bimanual.py` | 양손 pose/Jacobian | rigid-grasp 상대 task | WBIK 순수 계산 보조 |
-| `control/optimization.py` | task 행렬과 box/barrier | bounded 최소제곱 해 | WBIK 순수 수치 solver |
+| `control/optimization.py` | QP Hessian/선형항과 box/barrier | constrained DLS/QP 해 | WBIK 순수 수치 solver |
 
 여기서 FK는 forward kinematics 계산 자체와 UI의 `FK mode`라는 표현이 겹친다. UI의
 FK mode는 “관절 slider를 직접 목표로 사용한다”는 뜻이고, 수학적 FK 계산은
@@ -97,7 +102,8 @@ FK mode는 “관절 slider를 직접 목표로 사용한다”는 뜻이고, �
 \dot q_{r,1:7},\dot q_{l,1:7}]^T
 \]
 
-solver는 다음 요구를 한 bounded least-squares 문제에서 절충한다.
+solver는 weighted DLS를 변환한 한 convex box-QP에서 다음 요구를 절충한다. 특히
+base·lift·팔별 정규화 비용으로 모바일 자유도의 참여 정도를 조절한다.
 
 1. 손 위치/자세 오차 감소
 2. 관절 속도와 한 step 위치 한계 준수

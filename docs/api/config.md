@@ -17,7 +17,7 @@
 
 ```python
 settings = load_settings("config/local.yaml")
-damping = settings.number("whole_body_ik.damping", positive=True)
+damping = settings.number("kinematics.damping", positive=True)
 ```
 
 ## `Settings`
@@ -27,7 +27,7 @@ damping = settings.number("whole_body_ik.damping", positive=True)
 
 ### `Settings.get(dotted_path)`
 
-- **직관:** 중첩된 YAML을 `"whole_body_ik.velocity_limits.arm_default"` 같은 한 줄
+- **직관:** 중첩된 YAML을 `"whole_body_ik.velocity_limits.arm"` 같은 한 줄
   경로로 읽는다.
 - **입력:** 점으로 구분한 키 경로.
 - **반환:** 값의 복사본. 목록·매핑을 수정해도 원본 설정에는 영향이 없다.

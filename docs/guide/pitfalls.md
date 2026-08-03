@@ -18,6 +18,8 @@ MuJoCo 코드 수정 전후에 확인할 항목과 이 프로젝트에서 실제
 | marker state | UI target, mocap marker, IK world target 동기화 확인 |
 | whole-body toggle | ON/OFF 전후 hand/virtual world pose와 cached base command 확인 |
 | arm-only gate | base/lift weight가 아니라 lower/upper velocity bound를 0으로 고정 |
+| base-only gate | `participation_scale: 0.0`은 base 3축 bound만 0, lift·팔 참여는 유지 |
+| base 참여율 | 목표와 속도 상한을 같은 `participation_scale`로 축소하는지 확인 |
 | manual handover | key release 동안 zero 유지, 정지 뒤 target/reference rebase 확인 |
 | collision 범위 | finger-object와 wheel-floor 의도 접촉을 CBF pair에서 제외 |
 | 문서 | 함수 역할이나 target 의미가 바뀌면 `docs/guide/` 업데이트 |

@@ -33,7 +33,8 @@ K_BRAKE = SETTINGS.number("base.teleop.brake_gain", positive=True)
 K_YAW = SETTINGS.number("base.teleop.yaw_speed_rad_s", minimum=0.0)
 YAW_FOLLOW = SETTINGS.number("base.teleop.yaw_follow_gain", positive=True)
 YAW_DECAY = SETTINGS.number("base.teleop.yaw_decay_gain", positive=True)
-VEL_ZERO_EPS = SETTINGS.number("base.teleop.zero_epsilon", minimum=0.0)
+# 수치적인 0 판정값은 사용자 조절 대상이 아닌 구현 상수다.
+VEL_ZERO_EPS = 1e-3
 if K_SPEED > K_MAX:
     raise ValueError("base.teleop.cruise_speed_m_s는 max_speed_m_s 이하여야 합니다.")
 
@@ -67,14 +68,11 @@ LINEAR_VEL_DEADBAND = SETTINGS.number(
     "base.control.linear_velocity_deadband_m_s", minimum=0.0)
 ANGULAR_VEL_DEADBAND = SETTINGS.number(
     "base.control.angular_velocity_deadband_rad_s", minimum=0.0)
-MODULE_SPEED_EPS = SETTINGS.number(
-    "base.control.module_speed_epsilon_m_s", minimum=0.0)
+MODULE_SPEED_EPS = 1e-5
 STEERING_ANGULAR_VELOCITY_LIMIT = SETTINGS.number(
     "base.control.steering_velocity_limit_rad_s", positive=True)
 STEERING_ALIGNMENT_ANGLE_ERROR_THRESHOLD = SETTINGS.number(
     "base.control.alignment_angle_threshold_rad", minimum=0.0)
-STEERING_ALIGNMENT_START_ANGLE_ERROR_THRESHOLD = SETTINGS.number(
-    "base.control.alignment_start_angle_threshold_rad", minimum=0.0)
 STEERING_ALIGNMENT_START_SPEED_ERROR_THRESHOLD = SETTINGS.number(
     "base.control.alignment_start_speed_threshold_rad_s", minimum=0.0)
 STEERING_TOLERANCE = SETTINGS.number(
@@ -405,10 +403,7 @@ class SwerveDrive:
         )
         wheel_cmd = effective_direction * abs(target_wheel_speed) * self.wheel_speed_scale[name]
         align_err = abs(target_angle - current_steering)
-        threshold = (STEERING_ALIGNMENT_ANGLE_ERROR_THRESHOLD
-                     if abs(current_wheel_velocity) >= STEERING_ALIGNMENT_START_SPEED_ERROR_THRESHOLD
-                     else STEERING_ALIGNMENT_START_ANGLE_ERROR_THRESHOLD)
-        aligned = align_err < threshold
+        aligned = align_err < STEERING_ALIGNMENT_ANGLE_ERROR_THRESHOLD
         if not aligned:
             wheel_cmd = 0.0
         return steering_cmd, wheel_cmd, aligned

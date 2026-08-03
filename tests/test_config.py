@@ -1,5 +1,6 @@
 """YAML 설정의 기본값, 부분 덮어쓰기와 오탈자 검증을 확인한다."""
 
+import ast
 import json
 import os
 from pathlib import Path
@@ -7,6 +8,8 @@ import re
 import subprocess
 import sys
 import tempfile
+
+import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -20,6 +23,35 @@ from ffw_sh5_grasp.config import load_settings  # noqa: E402
 def _write(path, content):
     """설정 회귀에서 사용할 임시 YAML 문자열을 UTF-8 파일로 기록한다."""
     path.write_text(content, encoding="utf-8")
+
+
+def _leaf_paths(value, prefix=""):
+    """중첩 YAML에서 실제 설정값이 놓인 점 구분 경로를 모두 반환한다."""
+    if isinstance(value, dict):
+        paths = []
+        for key, child in value.items():
+            child_prefix = f"{prefix}.{key}" if prefix else str(key)
+            paths.extend(_leaf_paths(child, child_prefix))
+        return paths
+    return [prefix]
+
+
+def _settings_access_paths():
+    """소스의 ``SETTINGS`` 접근에서 리터럴 경로와 하위 매핑 사용을 수집한다."""
+    paths = {"schema_version"}
+    for source_path in SRC_DIR.rglob("*.py"):
+        tree = ast.parse(
+            source_path.read_text(encoding="utf-8"), filename=str(source_path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            owner = node.func.value
+            if not (isinstance(owner, ast.Name) and owner.id == "SETTINGS" and node.args):
+                continue
+            path_node = node.args[0]
+            if isinstance(path_node, ast.Constant) and isinstance(path_node.value, str):
+                paths.add(path_node.value)
+    return paths
 
 
 def main():
@@ -81,7 +113,17 @@ def main():
     ]
     assert comment_lines
     assert all(re.search(r"[가-힣]", comment) for comment in comment_lines)
-    print("YAML 설정 기본값/덮어쓰기/검증/한국어 주석: OK")
+    # 설정값을 추가하고 읽지 않는 실수를 막는다. 매핑 전체를 get한 경우 하위 leaf도
+    # 소비된 것으로 보며 schema_version은 설정 로더가 직접 사용한다.
+    default_data = yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    access_paths = _settings_access_paths()
+    unused_paths = [
+        path for path in _leaf_paths(default_data)
+        if not any(path == used or path.startswith(f"{used}.") for used in access_paths)
+    ]
+    assert not unused_paths, f"코드에서 사용하지 않는 YAML 설정: {unused_paths}"
+    print(f"YAML 설정 기본값/덮어쓰기/검증/한국어 주석/사용 여부: "
+          f"{len(_leaf_paths(default_data))}개 OK")
     print("PASS")
 
 

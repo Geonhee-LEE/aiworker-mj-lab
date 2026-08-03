@@ -118,6 +118,8 @@ def run_tree_kinematics_dependency_gate():
         for filename, class_name in expected_classes.items())
     expected_functions = {
         "ffw_sh5_grasp/control/optimization.py": {
+            "least_squares_to_qp", "bounded_quadratic_program",
+            "bounded_quadratic_program_with_barriers",
             "bounded_least_squares", "bounded_least_squares_with_barriers"},
         "ffw_sh5_grasp/control/bimanual.py": {
             "capture_reference", "rigid_grasp_task"},
@@ -273,21 +275,73 @@ def _brute_box_least_squares(matrix, vector, lower, upper):
 
 
 def run_box_qp_gate():
-    """외부 의존성 없는 bounded solver가 실제 convex box 최적해에 도달하는지 검사한다."""
+    """명시적 QP 변환과 active-set 해를 완전탐색 최적해와 비교한다."""
     rng = np.random.default_rng(20260719)
     worst_gap = 0.0
+    worst_conversion_error = 0.0
+    worst_wrapper_delta = 0.0
     for _ in range(25):
         matrix = rng.normal(size=(8, 3))
         vector = rng.normal(size=8)
         lower = rng.uniform(-1.2, -0.1, size=3)
         upper = rng.uniform(0.1, 1.2, size=3)
-        solution = bounded_optimization.bounded_least_squares(
+        hessian, linear = bounded_optimization.least_squares_to_qp(
+            matrix, vector)
+        solution = bounded_optimization.bounded_quadratic_program(
+            hessian, linear, lower, upper)
+        wrapper_solution = bounded_optimization.bounded_least_squares(
             matrix, vector, lower, upper)
-        objective = float(np.linalg.norm(matrix @ solution - vector) ** 2)
+        qp_objective = float(
+            0.5 * solution @ hessian @ solution + linear @ solution)
+        objective = qp_objective + float(vector @ vector)
         optimum = _brute_box_least_squares(matrix, vector, lower, upper)
         worst_gap = max(worst_gap, objective - optimum)
-    ok = worst_gap < 1e-9
-    print(f"Box-QP gate: worst_objective_gap={worst_gap:.2e}: "
+        least_squares_objective = float(
+            np.linalg.norm(matrix @ solution - vector) ** 2)
+        worst_conversion_error = max(
+            worst_conversion_error,
+            abs(objective - least_squares_objective))
+        worst_wrapper_delta = max(
+            worst_wrapper_delta,
+            float(np.max(np.abs(solution - wrapper_solution))))
+    ok = (worst_gap < 1e-9
+          and worst_conversion_error < 1e-10
+          and worst_wrapper_delta < 1e-10)
+    print(f"Box-QP gate: objective_gap={worst_gap:.2e} "
+          f"conversion={worst_conversion_error:.2e} "
+          f"wrapper_delta={worst_wrapper_delta:.2e}: "
+          f"{'OK' if ok else 'FAIL'}")
+    return ok
+
+
+def run_explicit_qp_path_gate():
+    """전신 런타임이 호환 wrapper가 아니라 명시적 QP API를 호출하는지 검사한다."""
+    filename = REPO_ROOT / "src" / "ffw_sh5_grasp" / "control" / "whole_body.py"
+    source = filename.read_text(encoding="utf-8")
+    parsed = ast.parse(source, filename=str(filename))
+    optimization_calls = {
+        node.func.attr
+        for node in ast.walk(parsed)
+        if (isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "optimization")
+    }
+    required = {
+        "least_squares_to_qp",
+        "bounded_quadratic_program",
+        "bounded_quadratic_program_with_barriers",
+    }
+    legacy = {
+        "bounded_least_squares",
+        "bounded_least_squares_with_barriers",
+    }
+    missing = sorted(required - optimization_calls)
+    legacy_calls = sorted(legacy & optimization_calls)
+    forced_base_override = "qdot[:3] =" in source
+    ok = not missing and not legacy_calls and not forced_base_override
+    print(f"Explicit QP path gate: missing={missing} legacy_calls={legacy_calls} "
+          f"forced_base_override={forced_base_override}: "
           f"{'OK' if ok else 'FAIL'}")
     return ok
 
@@ -800,6 +854,46 @@ def run_whole_body_solver_gate(model):
     return ok
 
 
+def run_base_participation_gate(model):
+    """베이스 참여율과 base-only OFF가 QP bound와 나머지 자유도를 보존하는지 검사한다."""
+    data = mujoco.MjData(model)
+    _reset(model, data)
+    sites = _sites(model)
+    targets = _target_poses(data, sites, [0.12, 0.0, 0.08])
+    solver_kwargs = {
+        "model": model,
+        "site_names": {side: f"grasp_target_{side}" for side in ("r", "l")},
+        "arm_joint_names": ARMS,
+        "collision_avoidance": False,
+    }
+    full_solver = whole_body_ik.WholeBodyIK(**solver_kwargs)
+    limited_solver = whole_body_ik.WholeBodyIK(
+        **solver_kwargs, base_participation_scale=0.05)
+    disabled_solver = whole_body_ik.WholeBodyIK(
+        **solver_kwargs, base_participation_scale=0.0)
+
+    full = full_solver.solve(data, targets, 0.04)
+    limited = limited_solver.solve(data, targets, 0.04)
+    disabled = disabled_solver.solve(data, targets, 0.04)
+    limited_bound = 0.05 * limited_solver.velocity_limits[:3]
+    limited_respects_bound = np.all(
+        np.abs(limited.generalized_velocity[:3]) <= limited_bound + 1e-12)
+    reduced = (
+        np.linalg.norm(limited.generalized_velocity[:3])
+        < np.linalg.norm(full.generalized_velocity[:3]))
+    base_exactly_off = np.array_equal(
+        disabled.generalized_velocity[:3], np.zeros(3))
+    lift_and_arms_remain = np.linalg.norm(
+        disabled.generalized_velocity[3:]) > 1e-3
+    ok = (limited_respects_bound and reduced
+          and base_exactly_off and lift_and_arms_remain)
+    print(f"Base participation gate: limited_bound={limited_respects_bound} "
+          f"reduced={reduced} base_off={base_exactly_off} "
+          f"lift_arms_active={lift_and_arms_remain}: "
+          f"{'OK' if ok else 'FAIL'}")
+    return ok
+
+
 def run_arm_only_solver_gate(model):
     """OFF가 유효한 팔 IK는 유지하면서 베이스와 리프트를 완전히 막는지 검사한다."""
     data = mujoco.MjData(model)
@@ -1059,13 +1153,14 @@ def run_physical_whole_body_gate(model):
 
 
 def main():
-    """스워브·BVLS·CBF·양손·WBIK 수치 및 물리 통합 회귀를 순서대로 실행한다."""
+    """스워브·box-QP·CBF·양손·WBIK 수치 및 물리 통합 회귀를 실행한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     ok = (run_ros_free_dependency_gate()
           and run_tree_kinematics_dependency_gate()
           and run_shared_pose_task_gate()
           and run_swerve_kinematics_gate()
           and run_box_qp_gate()
+          and run_explicit_qp_path_gate()
           and run_joint_limit_cbf_gate(model)
           and run_collision_gradient_gate(model)
           and run_self_collision_cbf_gate(model)
@@ -1077,6 +1172,7 @@ def main():
           and run_manual_handover_gate()
           and run_manual_release_physical_gate()
           and run_whole_body_solver_gate(model)
+          and run_base_participation_gate(model)
           and run_arm_only_solver_gate(model)
           and run_solver_latency_gate(model)
           and run_randomized_whole_body_gate(model)

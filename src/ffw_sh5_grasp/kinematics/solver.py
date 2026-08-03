@@ -48,10 +48,9 @@ ORIENTATION_TOLERANCE = SETTINGS.number(
     "kinematics.orientation_tolerance_rad", positive=True)
 ORIENTATION_COST_WEIGHT = SETTINGS.number(
     "kinematics.orientation_cost_weight", minimum=0.0)
-BACKTRACKING_STEPS = SETTINGS.integer(
-    "kinematics.backtracking_steps", minimum=1)
-BACKTRACKING_RATIO = SETTINGS.number(
-    "kinematics.backtracking_ratio", positive=True)
+# Backtracking 규칙은 사용자 목표가 아니라 solver 수렴 구현의 일부다.
+BACKTRACKING_STEPS = 6
+BACKTRACKING_RATIO = 0.5
 MULTISTART_RESTARTS = SETTINGS.integer(
     "kinematics.multistart.restarts", minimum=0)
 MULTISTART_MAX_ITER = SETTINGS.integer(
@@ -60,10 +59,6 @@ MULTISTART_POSITION_TOLERANCE = SETTINGS.number(
     "kinematics.multistart.success_position_tolerance_m", positive=True)
 MULTISTART_ORIENTATION_TOLERANCE = np.radians(SETTINGS.number(
     "kinematics.multistart.success_orientation_tolerance_deg", positive=True))
-if BACKTRACKING_RATIO >= 1.0:
-    raise ValueError("kinematics.backtracking_ratio는 1보다 작아야 합니다.")
-
-
 class KinematicsSolver:
     """트리 FK를 사용하는 position-priority damped least-squares IK solver."""
 

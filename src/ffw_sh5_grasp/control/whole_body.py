@@ -4,7 +4,7 @@
 
     [base_x, base_y, base_yaw, lift, right_arm(7), left_arm(7)]
 
-이 파일은 task 조립과 로봇 상태 관리만 담당한다. 순수 bounded least-squares 계산은
+이 파일은 task 조립과 로봇 상태 관리만 담당한다. 순수 convex QP 계산은
 ``control.optimization``, 양손 상대 pose 계산은 ``control.bimanual``, 충돌 거리
 계산은 ``kinematics.collision``, 공통 pose 오차·속도 명령은 ``kinematics.tasks``에
 분리되어 있다.
@@ -25,25 +25,30 @@ from ..kinematics.tree import KinematicTree
 
 
 BASE_JOINTS = ("base_x", "base_y", "base_yaw")
+DEFAULT_BASE_LINEAR_VELOCITY_LIMIT = SETTINGS.number(
+    "whole_body_ik.velocity_limits.base_linear", positive=True)
 DEFAULT_VELOCITY_LIMITS = {
-    name: SETTINGS.number(f"whole_body_ik.velocity_limits.{name}", positive=True)
-    for name in ("base_x", "base_y", "base_yaw", "lift_joint")
+    "base_x": DEFAULT_BASE_LINEAR_VELOCITY_LIMIT,
+    "base_y": DEFAULT_BASE_LINEAR_VELOCITY_LIMIT,
+    "base_yaw": SETTINGS.number("whole_body_ik.velocity_limits.base_yaw", positive=True),
+    "lift_joint": SETTINGS.number("whole_body_ik.velocity_limits.lift", positive=True),
 }
 DEFAULT_ARM_VELOCITY_LIMIT = SETTINGS.number(
-    "whole_body_ik.velocity_limits.arm_default", positive=True)
+    "whole_body_ik.velocity_limits.arm", positive=True)
 DEFAULT_POSITION_WEIGHT = SETTINGS.number("whole_body_ik.position_weight", positive=True)
 DEFAULT_ORIENTATION_WEIGHT = SETTINGS.number("whole_body_ik.orientation_weight", positive=True)
 DEFAULT_POSITION_GAIN = SETTINGS.number("whole_body_ik.position_gain", positive=True)
 DEFAULT_ORIENTATION_GAIN = SETTINGS.number("whole_body_ik.orientation_gain", positive=True)
-DEFAULT_LINEAR_VELOCITY_DAMPING = SETTINGS.number(
-    "whole_body_ik.linear_velocity_damping", minimum=0.0)
-DEFAULT_ANGULAR_VELOCITY_DAMPING = SETTINGS.number(
-    "whole_body_ik.angular_velocity_damping", minimum=0.0)
+# 속도 감쇠는 기본 동작에서 사용하지 않는다. 고급 API 호출에서만 명시적으로 주입한다.
+DEFAULT_LINEAR_VELOCITY_DAMPING = 0.0
+DEFAULT_ANGULAR_VELOCITY_DAMPING = 0.0
 DEFAULT_POSTURE_GAIN = SETTINGS.number("whole_body_ik.posture_gain", minimum=0.0)
 DEFAULT_JOINT_LIMIT_MARGIN = SETTINGS.number(
     "whole_body_ik.joint_limit_margin_rad", minimum=0.0)
 DEFAULT_JOINT_LIMIT_GAIN = SETTINGS.number("whole_body_ik.joint_limit_gain", positive=True)
 DEFAULT_RIGID_GRASP_WEIGHT = SETTINGS.number("whole_body_ik.rigid_grasp_weight", positive=True)
+DEFAULT_BASE_PARTICIPATION_SCALE = SETTINGS.number(
+    "whole_body_ik.base.participation_scale", minimum=0.0)
 DEFAULT_COLLISION_AVOIDANCE = SETTINGS.get("whole_body_ik.collision_avoidance")
 DEFAULT_COLLISION_BUFFER = SETTINGS.number("whole_body_ik.collision_buffer_m", positive=True)
 DEFAULT_COLLISION_SAFE_DISTANCE = SETTINGS.number(
@@ -89,6 +94,7 @@ class WholeBodyIK:
                  joint_limit_margin=DEFAULT_JOINT_LIMIT_MARGIN,
                  joint_limit_gain=DEFAULT_JOINT_LIMIT_GAIN,
                  rigid_grasp_weight=DEFAULT_RIGID_GRASP_WEIGHT,
+                 base_participation_scale=DEFAULT_BASE_PARTICIPATION_SCALE,
                  collision_avoidance=DEFAULT_COLLISION_AVOIDANCE,
                  collision_pairs=None,
                  collision_buffer=DEFAULT_COLLISION_BUFFER,
@@ -140,6 +146,9 @@ class WholeBodyIK:
         self.joint_limit_margin = float(joint_limit_margin)
         self.joint_limit_gain = float(joint_limit_gain)
         self.rigid_grasp_weight = float(rigid_grasp_weight)
+        self.base_participation_scale = float(base_participation_scale)
+        if not 0.0 <= self.base_participation_scale <= 1.0:
+            raise ValueError("base_participation_scale must be between 0 and 1")
         self.collision_buffer = float(collision_buffer)
         self.collision_safe_distance = float(collision_safe_distance)
         self.collision_barrier_gain = float(collision_barrier_gain)
@@ -174,10 +183,12 @@ class WholeBodyIK:
             "whole_body_ik.common_base.yaw_gain", positive=True)
         self.common_base_yaw_deadband = SETTINGS.number(
             "whole_body_ik.common_base.yaw_deadband_rad", minimum=0.0)
-        self.common_base_yaw_speed_limit = SETTINGS.number(
-            "whole_body_ik.common_base.yaw_speed_limit_rad_s", positive=True)
-        self.common_base_weights = np.asarray(
-            SETTINGS.get("whole_body_ik.common_base.task_weights"), dtype=float)
+        common_base_weights = SETTINGS.get("whole_body_ik.common_base.task_weights")
+        self.common_base_weights = np.array([
+            common_base_weights["translation"],
+            common_base_weights["translation"],
+            common_base_weights["yaw"],
+        ], dtype=float)
         if np.any(self.common_base_weights <= 0.0):
             raise ValueError("whole_body_ik.common_base.task_weights는 모두 양수여야 합니다.")
         self._previous_base_velocity_world = np.zeros(3)
@@ -189,14 +200,17 @@ class WholeBodyIK:
         self._rigid_grasp_reference = None
 
         # 양손의 공통 이동에 base/lift가 참여하도록 해당 DOF의 정규화 비용을 낮춘다.
-        damping_base_lift = SETTINGS.get("whole_body_ik.damping_weights.base_lift")
-        posture_base_lift = SETTINGS.get("whole_body_ik.posture_weights.base_lift")
+        base_linear_damping = SETTINGS.number(
+            "whole_body_ik.damping_weights.base_linear", minimum=0.0)
         self.damping_weights = np.array(
-            damping_base_lift
+            [base_linear_damping, base_linear_damping,
+             SETTINGS.number("whole_body_ik.damping_weights.base_yaw", minimum=0.0),
+             SETTINGS.number("whole_body_ik.damping_weights.lift", minimum=0.0)]
             + [SETTINGS.number("whole_body_ik.damping_weights.arm", minimum=0.0)] * 14,
             dtype=float)
         self.posture_weights = np.array(
-            posture_base_lift
+            [0.0, 0.0, 0.0,
+             SETTINGS.number("whole_body_ik.posture_weights.lift", minimum=0.0)]
             + [SETTINGS.number("whole_body_ik.posture_weights.arm", minimum=0.0)] * 14,
             dtype=float)
         if np.any(self.damping_weights < 0.0) or np.any(self.posture_weights < 0.0):
@@ -267,7 +281,6 @@ class WholeBodyIK:
         if self._reference_base_yaw is None:
             self.rebase(data)
         rows, rhs = [], []
-        dual_base_request = None
         position_errors, orientation_errors = {}, {}
 
         site_states = {}
@@ -338,13 +351,15 @@ class WholeBodyIK:
             desired_base = np.array([
                 self.common_base_position_gain * base_position_error[0],
                 self.common_base_position_gain * base_position_error[1],
-                np.clip(self.common_base_yaw_gain * yaw_control_error,
-                        -self.common_base_yaw_speed_limit,
-                        self.common_base_yaw_speed_limit),
+                self.common_base_yaw_gain * yaw_control_error,
             ])
+            # 참여율은 명시적 base task와 물리 속도 상한 양쪽에 적용한다. 목표만
+            # 줄이면 다른 hand task가 base 열을 다시 크게 사용할 수 있고, bound만
+            # 줄이면 작은 참여율에서도 계속 포화되므로 두 곳을 같은 비율로 낮춘다.
+            desired_base *= self.base_participation_scale
+            base_velocity_limits = self._base_velocity_limits()
             desired_base = np.clip(
-                desired_base, -self.velocity_limits[:3], self.velocity_limits[:3])
-            dual_base_request = desired_base.copy()
+                desired_base, -base_velocity_limits, base_velocity_limits)
             base_selector = np.zeros((3, len(self.joint_names)))
             base_selector[:, :3] = np.eye(3)
             common_base_weights = np.sqrt(self.common_base_weights)
@@ -375,6 +390,11 @@ class WholeBodyIK:
         if not whole_body_enabled:
             lower[:4] = 0.0
             upper[:4] = 0.0
+        else:
+            # 베이스만 끄거나 참여율을 낮춰도 lift와 양팔 bound는 그대로 유지한다.
+            base_limits = self._base_velocity_limits()
+            lower[:3] = np.maximum(lower[:3], -base_limits)
+            upper[:3] = np.minimum(upper[:3], base_limits)
 
         # FK mode 팔은 기존 FK controller가 소유하므로 differential velocity를 0으로
         # 고정하고, 반대쪽 팔과 lift/base만 계속 협력하게 한다.
@@ -383,12 +403,13 @@ class WholeBodyIK:
                 lower[self.side_indices[side]] = 0.0
                 upper[self.side_indices[side]] = 0.0
 
-        qdot = optimization.bounded_least_squares(
-            matrix, vector, lower, upper)
-        if dual_base_request is not None:
-            # hierarchy를 정확히 적용한다. lift/팔은 위 weighted row로 잔차를 풀고,
-            # base 3축을 복사해 작은 수치 절충이 큰 swerve heading 변화로 번지지 않게 한다.
-            qdot[:3] = dual_base_request
+        # Weighted DLS 행을 표준 convex QP의 Hessian/선형항으로 명시적으로 변환한다.
+        # 자유도별 damping weight는 Hessian 대각 비용이 되므로 base·lift·팔의 참여
+        # 정도를 독립적으로 조절할 수 있고, 아래 box/CBF 제약도 같은 QP 변수에 건다.
+        hessian, linear = optimization.least_squares_to_qp(
+            matrix, vector)
+        qdot = optimization.bounded_quadratic_program(
+            hessian, linear, lower, upper)
         if whole_body_enabled:
             qdot = self._shape_base_velocity(
                 qdot, position_errors, orientation_errors, dt, float(data.time))
@@ -404,8 +425,10 @@ class WholeBodyIK:
             # Cyclo collision CBF의 quadratic slack을 squared hinge loss로 줄여 작은
             # active set으로 푼다. base shaping 뒤에 적용해야 가속도 제한이 위험한
             # 접근 속도를 다시 만들지 않는다.
-            qdot = optimization.bounded_least_squares_with_barriers(
-                np.eye(len(qdot)), qdot, lower, upper,
+            proximity_hessian, proximity_linear = optimization.least_squares_to_qp(
+                np.eye(len(qdot)), qdot)
+            qdot = optimization.bounded_quadratic_program_with_barriers(
+                proximity_hessian, proximity_linear, lower, upper,
                 barrier_matrix, barrier_lower, self.collision_slack_weight)
             # 다음 가속 ramp는 collision safety override까지 반영된 실제 명령에서 시작한다.
             self._previous_base_velocity_world = qdot[:3].copy()
@@ -493,6 +516,12 @@ class WholeBodyIK:
         짧은 가속 ramp는 한 frame짜리 chassis 반전을 억제한다.
         """
         result = qdot.copy()
+        base_limits = self._base_velocity_limits()
+        if not np.any(base_limits):
+            result[:3] = 0.0
+            self._previous_base_velocity_world[:] = 0.0
+            self._last_solve_time = data_time
+            return result
         if self._last_solve_time is None or data_time < self._last_solve_time:
             self._previous_base_velocity_world[:] = 0.0
         self._last_solve_time = data_time
@@ -509,10 +538,14 @@ class WholeBodyIK:
         ])
         shaped = self._previous_base_velocity_world + np.clip(
             requested - self._previous_base_velocity_world, -max_delta, max_delta)
-        shaped = np.clip(shaped, -self.velocity_limits[:3], self.velocity_limits[:3])
+        shaped = np.clip(shaped, -base_limits, base_limits)
         result[:3] = shaped
         self._previous_base_velocity_world = shaped.copy()
         return result
+
+    def _base_velocity_limits(self):
+        """현재 참여율이 반영된 base 3축 속도 상한을 반환한다."""
+        return self.base_participation_scale * self.velocity_limits[:3]
 
     def _velocity_bounds(self, current_q, dt):
         """속도 한계와 joint-limit barrier를 결합한 관절별 하한·상한을 반환한다."""

@@ -28,27 +28,17 @@ CAMERA_PRESETS = (
     SETTINGS.get("render.camera_presets.overview"),
     SETTINGS.get("render.camera_presets.hand_closeup"),
 )
-MOUSE_ZOOM_SCALE = SETTINGS.number("render.mouse_zoom_scale", positive=True)
-GIZMO_SIZE = SETTINGS.number("render.gizmo_size", positive=True)
-MAX_SCENE_GEOMETRIES = SETTINGS.integer(
-    "render.max_scene_geometries", minimum=1)
-COLLISION_GEOMETRY_RGBA = np.asarray(
-    SETTINGS.get("render.collision_overlay.collision_geometry_rgba"),
-    dtype=np.float32)
-PENETRATION_RGBA = np.asarray(
-    SETTINGS.get("render.collision_overlay.penetration_rgba"), dtype=np.float32)
-UNSAFE_RGBA = np.asarray(
-    SETTINGS.get("render.collision_overlay.unsafe_rgba"), dtype=np.float32)
-BUFFER_RGBA = np.asarray(
-    SETTINGS.get("render.collision_overlay.buffer_rgba"), dtype=np.float32)
-COLLISION_POINT_RADIUS = SETTINGS.number(
-    "render.collision_overlay.point_radius_m", positive=True)
-COLLISION_LINE_WIDTH = SETTINGS.number(
-    "render.collision_overlay.line_width", positive=True)
-FREQUENCY_EMA_PREVIOUS_WEIGHT = SETTINGS.number(
-    "render.frequency_ema_previous_weight", minimum=0.0)
-if FREQUENCY_EMA_PREVIOUS_WEIGHT >= 1.0:
-    raise ValueError("render.frequency_ema_previous_weight는 1보다 작아야 합니다.")
+# 렌더링 스타일과 내부 버퍼 크기는 로봇 제어 튜닝값이 아니므로 구현과 함께 고정한다.
+MOUSE_ZOOM_SCALE = 0.05
+GIZMO_SIZE = 0.18
+MAX_SCENE_GEOMETRIES = 10_000
+COLLISION_GEOMETRY_RGBA = np.array([0.05, 0.75, 1.0, 0.28], dtype=np.float32)
+PENETRATION_RGBA = np.array([1.0, 0.02, 0.02, 1.0], dtype=np.float32)
+UNSAFE_RGBA = np.array([1.0, 0.18, 0.02, 1.0], dtype=np.float32)
+BUFFER_RGBA = np.array([1.0, 0.78, 0.05, 1.0], dtype=np.float32)
+COLLISION_POINT_RADIUS = 0.007
+COLLISION_LINE_WIDTH = 4.0
+FREQUENCY_EMA_PREVIOUS_WEIGHT = 0.9
 
 
 def set_camera_preset(cam, preset):

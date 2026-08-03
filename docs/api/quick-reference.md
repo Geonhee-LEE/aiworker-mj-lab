@@ -73,7 +73,8 @@ from ffw_sh5_grasp.control.whole_body import WholeBodyIK
 |---|---|---|
 | `WholeBodyIK.solve(...)` | base·lift·양팔 bounded differential IK | `WholeBodyCommand` |
 | `WholeBodyIK.set_rigid_grasp(data, active)` | 양손 상대 pose 기준 설정·해제 | solver 상태 |
-| `bounded_least_squares(A, b, lower, upper)` | Box-constrained least squares | 제한된 해 벡터 |
+| `least_squares_to_qp(A, b)` | Weighted DLS 비용을 명시적 QP로 변환 | `(H, g)` |
+| `bounded_quadratic_program(H, g, lower, upper)` | Box-constrained convex QP | 제한된 해 벡터 |
 | `ArmTorqueController.apply(data, q_desired)` | Bias 보상 PD 팔 토크 기록 | `data.ctrl` |
 | `BodyTwist(vx, vy, wz)` | 차체 좌표 속도 명령 표현 | 불변 명령 객체 |
 | `SwerveDrive.update_twist(twist, dt, ...)` | 차체 속도를 모듈 명령으로 변환 | `{wheel: (steer, speed)}` |

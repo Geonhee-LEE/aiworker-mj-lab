@@ -5,11 +5,13 @@
     이 문서에서 \(J\)의 역문제를 목적함수부터 관절 변화량까지 유도한다. 다음은
     [단일 팔 IK 구현](ik.md)이다.
 
-이 페이지는 `src/ffw_sh5_grasp/kinematics/solver.py`의 `KinematicsSolver.solve_pose()`를 읽을 때 가장
-헷갈리기 쉬운 두 질문에 답한다.
+이 페이지는 `src/ffw_sh5_grasp/kinematics/solver.py`의 `KinematicsSolver.solve_pose()`와
+`control/whole_body.py`의 constrained differential IK를 읽을 때 가장 헷갈리기 쉬운
+세 질문에 답한다.
 
 1. DLS는 왜 특이점 근처에서 관절 움직임이 폭발하지 않게 하는가?
 2. 자세 보정은 어떻게 이미 맞춘 손 위치를 거의 망치지 않고 더할 수 있는가?
+3. 단일 팔 DLS 목적함수는 어떻게 전신 IK의 명시적 box-QP로 확장되는가?
 
 설명은 7자유도 팔의 **한 solver iteration**을 기준으로 한다. 실제 클래스와 호출
 흐름은 [단일 팔 IK](ik.md), Jacobian 정의는 [FK와 Jacobian](forward-kinematics.md),
@@ -18,8 +20,9 @@
 !!! note "현재 텔레옵과 이 페이지의 관계"
     현재 텔레옵은 [`src/ffw_sh5_grasp/control/whole_body.py`](whole_body_ik.md)의 bounded solver를
     사용한다. 여기서 설명하는 반복 DLS는 단일 팔 회귀·오프라인 경로지만, FK와
-    Jacobian은 실시간 경로와 같은 `KinematicTree` 구현을 공유한다. `src/ik.py`는
-    기존 `InverseKinematics` 이름만 제공한다.
+    Jacobian뿐 아니라 pose 오차도 실시간·양손 경로와 같은 `KinematicTree`와
+    `kinematics.tasks.pose_error()`를 공유한다. `src/ik.py`는 기존
+    `InverseKinematics` 이름만 제공한다.
 
 ## 먼저 보는 전체 흐름
 
@@ -276,6 +279,81 @@ J^T(JJ^T+\lambda^2I_m)^{-1}
 
 이다. 여기까지가 목적함수에서 코드의 DLS 식까지 생략 없는 전개다.
 
+### 2.4 DLS는 이미 무제약 convex QP다
+
+2.1절에서 전개한 DLS 비용에서 $\Delta q$와 무관한 상수 $e^Te$를 빼고,
+행렬 항을 하나로 묶으면
+
+\[
+L(\Delta q)
+=\Delta q^T(J^TJ+\lambda^2I)\Delta q
+-2(J^Te)^T\Delta q+\text{constant}
+\]
+
+이다. 표준 QP 형식
+
+\[
+\min_x\;\frac12x^THx+f^Tx
+\]
+
+과 비교하면 다음 대응을 얻는다.
+
+\[
+\boxed{
+H=2(J^TJ+\lambda^2I),
+\qquad
+f=-2J^Te
+}
+\]
+
+$\lambda>0$이면 $H$가 positive definite이므로 이 문제는 유일한 최솟값을 갖는
+convex QP다. 단일 팔 구현은 bound나 부등식 제약이 없기 때문에 범용 QP solver를
+호출하지 않고 normal equation을 직접 풀어 닫힌 형태의 DLS step을 얻는다.
+
+전신 IK에서는 여러 task와 정규화 항을 세로로 쌓아
+
+\[
+A=
+\begin{bmatrix}
+W_RJ_R\\
+W_LJ_L\\
+W_d\\
+W_h
+\end{bmatrix},
+\qquad
+b=
+\begin{bmatrix}
+W_R\dot x_R^*\\
+W_L\dot x_L^*\\
+0\\
+W_h\dot q_{posture}^*
+\end{bmatrix}
+\]
+
+를 만들고 다음 문제를 푼다.
+
+\[
+\boxed{
+\min_{\dot q}\lVert A\dot q-b\rVert^2
+\quad\text{subject to}\quad
+\dot q_{min}\le\dot q\le\dot q_{max}
+}
+\]
+
+목적함수만 보면 $H=2A^TA$, $f=-2A^Tb$인 같은 QP 구조다. 차이는 속도·관절 한계가
+box constraint로 들어가므로 DLS 역행렬 한 번으로 끝낼 수 없다는 점이다. 현재
+`control.optimization.least_squares_to_qp()`가 이 식을 명시적인 Hessian과 선형항으로
+바꾸고 `bounded_quadratic_program()`이 box active-set으로 푼다. 충돌 단계는 다음
+soft CBF 부등식을 추가한다.
+
+\[
+G\dot q+s\ge h,\qquad s\ge0,
+\qquad \rho\lVert s\rVert^2
+\]
+
+따라서 전신 IK는 **DLS와 별개의 원리**가 아니라, weighted DLS 목적함수를 속도·관절·
+충돌 제약까지 확장한 constrained least-squares/QP라고 이해하는 것이 정확하다.
+
 ## 3. 수식과 코드의 대응
 
 `KinematicsSolver.solve_pose()`는 위 식을 다음 코드로 직접 구현한다. 별도 helper로
@@ -300,7 +378,7 @@ position_delta = position_jacobian.T @ np.linalg.solve(
 | `position_jacobian.T @ ...` | \(J_p^T(\cdots)\) | 결과를 관절 공간으로 돌려보낸다. |
 
 기본 감쇠는 `DEFAULT_DAMPING = 0.05`, iteration당 관절 변화 제한은
-`DEFAULT_MAX_JOINT_DELTA = 0.05 rad`다. 두 값은 역할이 다르다. damping은 해를
+`DEFAULT_MAX_JOINT_DELTA = 0.07 rad`다. 두 값은 역할이 다르다. damping은 해를
 계산하는 과정의 정규화이고, clamp는 계산된 해에 마지막으로 적용하는 상한이다.
 
 ## 4. DLS가 특이점에서 폭발을 막는 이유
@@ -521,6 +599,36 @@ J=
 J_p\Delta q_{ori}=0
 \]
 
+### 5.1 그런데 전신 IK는 왜 위치와 자세를 함께 쌓는가
+
+이 절의 위치 우선 구조와 전신 IK의 weighted stacking은 서로 모순되지 않는다. 두
+solver는 같은 pose 오차를 받지만 목적과 출력이 다르다.
+
+| 구분 | 단일 팔 `solve_pose()` | 전신 `WholeBodyIK.solve()` |
+|---|---|---|
+| 실행 방식 | 한 목표에 여러 번 반복해 최종 관절각 탐색 | 매 제어 주기 한 번 풀어 관절속도 생성 |
+| 변수 | 팔 관절 변화 $\Delta q$ | base·lift·양팔 속도 $\dot q$ |
+| 가장 중요한 요구 | 손 위치 우선 보존 | 양손 추종과 물리적 실행 가능성의 동시 절충 |
+| 제한 처리 | 관절각 clamp와 backtracking | 속도 box, joint-limit CBF, collision CBF |
+| 자세 처리 | 위치 null space로 투영 | 위치·자세 task에 명시적 weight 적용 |
+
+단일 팔 오프라인 IK는 목표 위치가 자세보다 중요하므로 null-space 계층을 사용한다.
+반면 전신 제어에서 위치를 절대 우선으로 고정하면 양손 목표, 베이스·리프트 범위,
+충돌 회피가 동시에 활성화됐을 때 실행 가능한 속도가 없어질 수 있다. 그래서 전신
+경로는 각 요구를 weighted task로 만들고 box/CBF 제약 안에서 가장 작은 잔차를 선택한다.
+
+`bimanual.rigid_grasp_task()`도 별도 IK solver가 아니다. 캡처한 양손 상대 pose에서
+상대 Jacobian $J_g$와 보정 twist $\dot x_g^*$를 만들어 전신 문제에 다음 행 하나를
+추가한다.
+
+\[
+\lVert W_g(J_g\dot q-\dot x_g^*)\rVert^2
+\]
+
+세 경로에서 같아야 하는 $e_p$, $e_R$의 부호·frame과 bounded Cartesian 속도 계산은
+`kinematics/tasks.py`로 통일하고, 위치 우선 또는 constrained QP라는 정책 차이만 각
+solver에 남겨 둔 이유가 여기에 있다.
+
 ## 6. Null-space projector
 
 Moore–Penrose pseudoinverse \(J_p^+\)를 사용한 정확한 projector는 다음과 같다.
@@ -605,7 +713,7 @@ F_R(\delta q)
 \Delta q_{ori}=\alpha N_pJ_R^Te_R
 \]
 
-일반식의 \(\alpha\)는 자세 보정 gain이다. 현재 `src/ik.py`는 별도 gain을 곱하지 않아
+일반식의 \(\alpha\)는 자세 보정 gain이다. 현재 `kinematics/solver.py`는 별도 gain을 곱하지 않아
 사실상 \(\alpha=1\)이다. `ori_weight=0.3`은 line search의 후보 비용을 비교할 때만
 사용하며 orientation gradient gain이 아니다.
 
@@ -921,6 +1029,8 @@ projector와 두 번째 pseudoinverse의 damping, rank 변화, joint limit를 �
 \]
 
 - DLS는 오차와 관절 변화량을 함께 최소화한다.
+- DLS 목적함수 자체가 무제약 convex QP이며, 전신 IK는 여기에 weighted task와
+  box/CBF 제약을 추가한 확장이다.
 - 특이값이 0에 가까운 방향의 gain을 유한하게 만들어 관절 폭주를 억제한다.
 - 위치를 먼저 풀고 자세 방향을 위치 null space에 투영한다.
 - damped projector의 위치 보존은 정확한 등식이 아니라 근사다.
@@ -930,7 +1040,9 @@ projector와 두 번째 pseudoinverse의 damping, rank 변화, joint limit를 �
 
 | 수학적 주장 | 코드 표현 | 검증 |
 |---|---|---|
+| 모든 IK의 위치·자세 오차는 같은 world frame이다 | `kinematics.tasks.pose_error()` | shared pose-task gate |
 | \(J_pJ_p^T+\lambda^2I\)는 task-space DLS system이다 | `position_system` | Phase 3/4 무작위 IK 수렴률 |
+| weighted constrained DLS는 box-QP로 풀 수 있다 | `least_squares_to_qp()` → `bounded_quadratic_program()` | QP 비용 동등성 + exhaustive active-set 비교 |
 | 역행렬을 직접 만들 필요가 없다 | `np.linalg.solve(position_system, position_error)` | 동일 target의 잔여 위치 오차 |
 | \(N_{p,\lambda}J_R^Te_R\)는 위치 영향을 억제한 자세 방향이다 | `orientation_gradient - position_jacobian.T @ projected_gradient` | 위치·자세 동시 tolerance |
 | 한 iteration 관절 변화는 제한된다 | `np.clip(..., -max_joint_delta, max_joint_delta)` | 무작위 seed에서도 유한한 해 |

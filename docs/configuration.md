@@ -12,16 +12,40 @@
 | `arm_control` | `control/arm.py` | 팔 PD 이득 |
 | `kinematics` | `kinematics/solver.py` | DLS, 반복 횟수, 허용 오차, 다중 시작 |
 | `whole_body_ik` | `control/whole_body.py` | 작업 가중치, 속도 한계, 관절·충돌 CBF |
-| `optimization` | `control/optimization.py` | BVLS 수치 허용 오차와 반복 상한 |
 | `base` | `control/base.py` | 키보드 속도, 스워브 형상, 조향·반전 제어 |
 | `grasp` | `control/grasp.py` | 손 시너지 각도·비율과 파지 판정 임계값 |
-| `ui` | `visualization/ui.py` | 조그 간격, 슬라이더 범위, 창 배치 |
-| `render` | `visualization/render.py` | 카메라, 기즈모, 충돌 표시 |
+| `ui` | `visualization/ui.py` | 조그 기본값과 창 배치 |
+| `render` | `visualization/render.py` | 카메라 프리셋 |
 
 관절·몸체·사이트 이름과 행렬 차원은 모델 인터페이스이므로 튜닝값이 아니다. MuJoCo의
 질량, 관성, 접촉 형상과 액추에이터 정의는 MJCF 모델 자체가 원본이므로
 `models/*.xml`에서 관리한다. YAML은 그 모델을 사용하는 런타임과 알고리즘의 조절값을
 담는다.
+
+QP 반복 상한, DLS backtracking 규칙, UI slider 안전 범위와 렌더링 색상처럼 구현과
+함께 검증되어야 하는 값은 YAML 파라미터로 취급하지 않는다. 자주 조절하는 로봇 동작,
+물리 기하, 목표와 화면 배치만 YAML에 남겨 설정 파일이 알고리즘 내부 상수 목록으로
+변하지 않도록 한다.
+
+## 스키마 2 마이그레이션
+
+중복 파라미터를 합치면서 기본 설정의 leaf 필드는 152개에서 124개로 줄었다. 기존
+사용자 YAML에서 다음 키를 사용했다면 새 형식으로 바꾼다.
+
+| 이전 키 | 현재 키 또는 처리 |
+|---|---|
+| `whole_body_ik.base.enabled: false` | `base.participation_scale: 0.0` |
+| `velocity_limits.base_x`, `base_y` | 공통 `velocity_limits.base_linear` |
+| `velocity_limits.lift_joint`, `arm_default` | `velocity_limits.lift`, `arm` |
+| `damping_weights.base_lift: [x, y, yaw, lift]` | `base_linear`, `base_yaw`, `lift`로 분리 |
+| `posture_weights.base_lift` | 0이 아닌 lift 값만 `posture_weights.lift`에 지정 |
+| `common_base.task_weights: [x, y, yaw]` | `translation`, `yaw` 매핑 |
+| `optimization.*` | 검증된 QP 구현 상수로 이동 |
+| UI range·렌더링 스타일 키 | 고정된 시각화 구현 상수로 이동 |
+
+x/y에 서로 다른 값을 사용하던 사용자 설정은 더 보수적인 큰 비용 또는 작은 속도
+상한을 `base_linear`에 선택한다. 현재 로봇의 평면 이동은 등방성으로 운용하므로 기본
+설정에서는 x/y를 별도로 조절하지 않는다.
 
 테스트의 성공률·오차 허용치도 YAML로 옮기지 않는다. 실행 설정과 합격 기준을 함께
 바꾸면 실패를 숨길 수 있으므로, `tests/`의 회귀 기준은 독립된 검증 계약으로 유지한다.
@@ -58,6 +82,9 @@ base:
 
 whole_body_ik:
   collision_safe_distance_m: 0.015
+  # 베이스를 거의 고정하되 lift와 양팔은 계속 전신 QP에 참여시킨다.
+  base:
+    participation_scale: 0.05
 ```
 
 앱 실행 시 `--config`로 선택한다.
@@ -65,6 +92,21 @@ whole_body_ik:
 ```bash
 python3 src/teleop_app.py --config config/local.yaml
 ```
+
+베이스의 자동 IK 명령을 정확히 0으로 고정하려면 다음처럼 설정한다. 이 옵션은 lift를
+막지 않는다는 점에서 UI의 Whole-body OFF와 다르다.
+
+```yaml
+whole_body_ik:
+  base:
+    participation_scale: 0.0
+```
+
+`participation_scale`은 `0.0`~`1.0` 범위이며 명시적 공통 base 목표와 x/y/yaw 속도
+상한에 함께 곱해진다. `0.05`이면 기본 상한 0.55 m/s, 0.55 m/s, 1.4 rad/s가 각각
+0.0275 m/s, 0.0275 m/s, 0.07 rad/s가 된다. base를 더 비싼 QP 선택지로만 만들고
+속도 상한은 유지하려면 이 값 대신 `damping_weights.base_linear`와
+`damping_weights.base_yaw`를 높인다.
 
 테스트나 별도 Python 프로그램에서는 설정 의존 모듈을 import하기 전에 환경 변수를
 지정한다.

@@ -53,7 +53,7 @@ mkdocs build --strict
 | Phase 4 | 전신 hold/양팔 IK/pick | hold drift 제한, IK/pick 회귀 |
 | Phase 5 | keyboard, swerve FSM, 실제 물리 주행 | idle/전후/strafe/yaw/반전/충돌 통과 |
 | Phase 6 | marker, gizmo, Bimanual, mode toggle | pose round-trip과 ON/OFF 불변성 |
-| Whole-body | BVLS, joint/collision CBF, rigid grasp, mobile WBIK | 수치/물리/latency 통합 gate |
+| Whole-body | 명시적 box-QP, DLS 비용 변환, joint/collision CBF, rigid grasp, mobile WBIK | 수치/물리/latency 통합 gate |
 
 ## 1.4.0 핵심 회귀가 증명하는 것
 
@@ -85,6 +85,16 @@ MuJoCo 주 viewport 하나와 외부 플랫폼 viewport 두 개가 생성되고,
 - 한 step 뒤 손 pose error가 감소
 
 최근 검증에서는 combined error가 `89.4 mm → 63.0 mm`로 감소했다.
+
+### Base participation gate
+
+`test_whole_body.py`는 Whole-body ON 상태의 모바일 베이스 설정도 별도로 검사한다.
+
+- `base_participation_scale=0.05`에서 base x/y/yaw가 축소된 속도 bound를 넘지 않음
+- 기본 참여율보다 실제 base 속도 norm이 감소함
+- `base_participation_scale=0.0`에서 base 3축 `qdot`이 정확히 0
+- base를 꺼도 lift와 양팔 자유도는 계속 사용됨
+- QP 해를 구한 뒤 `qdot[:3]`을 강제로 덮어쓰는 런타임 경로가 없음
 
 ### ON/OFF target 보존
 

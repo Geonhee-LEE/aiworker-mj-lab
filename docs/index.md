@@ -123,4 +123,4 @@ command를 계산하고, MuJoCo physics가 다음 state를 만든다.
 
 [YouTube에서 Whole-body 미사용 데모 보기](https://www.youtube.com/watch?v=2LV_RsAGdz8&list=PLWyQPsEn5Atg&index=2)
 
-[알고리즘 상세 구현: Whole-body OFF의 Arm-only hard gate](guide/whole_body_ik.md#whole-body-onoff)
+[알고리즘 상세 구현: Whole-body OFF의 Arm-only hard gate](guide/whole_body_ik.md#whole-body-modes)

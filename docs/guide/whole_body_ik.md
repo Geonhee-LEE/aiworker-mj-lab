@@ -20,7 +20,7 @@
 | 파일 | 책임 |
 |---|---|
 | `control/whole_body.py` | robot state, task row, 속도/관절 bound와 최종 command 조립 |
-| `control/optimization.py` | 모델을 모르는 BVLS와 collision soft-barrier 수치 해법 |
+| `control/optimization.py` | 모델을 모르는 box-QP와 collision soft-barrier active-set 해법 |
 | `control/bimanual.py` | rigid-grasp reference와 상대 pose/Jacobian 계산 |
 | `kinematics/tasks.py` | 모든 IK가 공유하는 pose 오차와 bounded Cartesian 속도 명령 |
 | `kinematics/rotations.py` | 회전 행렬·쿼터니언·각도·벡터 공용 함수 |
@@ -46,7 +46,7 @@ ROS2/MoveIt 관점의 개념 비교와 legacy DLS 식의 역할은
 | `bimanual.rigid_grasp_task()` | 전신 문제에 넣는 상대 pose task 생성기 | 상대 Jacobian과 목표 twist | 캡처한 두 손 관계와 spatial transform |
 
 즉 `bimanual.py`는 세 번째 IK solver가 아니다. 만든 행이 `WholeBodyIK`의 동일한
-bounded least-squares 문제에 추가된다. 세 경로에서 실제로 같아야 하는 계산만
+constrained DLS/QP 문제에 추가된다. 세 경로에서 실제로 같아야 하는 계산만
 `kinematics.tasks.pose_error()`와 `pose_velocity_command()`로 통일했다.
 
 전신 목적함수는 수학적으로 **제약 DLS를 QP 형태로 확장한 것**으로 볼 수 있다.
@@ -57,9 +57,51 @@ bounded least-squares 문제에 추가된다. 세 경로에서 실제로 같아�
 \]
 
 제약과 task weight를 제거하고 정규화 행을 $\lambda I$로 두면 일반적인 DLS 해로
-돌아간다. 구현은 범용 QP 패키지가 아니라 box 구조에 특화된 BVLS active-set과
-collision soft-barrier active-set을 사용한다. 따라서 “모든 IK가 하나의 QP solver”는
-아니지만, 전신 IK는 “QP로 표현 가능한 constrained DLS”라고 부를 수 있다.
+돌아간다. 실제 코드는 `least_squares_to_qp()`로 $H=2A^TA$, $g=-2A^Tb$를 만든 뒤
+`bounded_quadratic_program()`을 호출한다. 범용 QP 패키지 대신 작은 18변수 문제에
+맞춘 NumPy active-set과 collision soft-barrier active-set을 사용한다.
+
+### 모바일 자유도 비용을 조절하기 위해 QP를 선택한 이유
+
+팔만 있는 IK와 달리 전신 제어에서는 같은 손 이동을 base, lift, 팔의 여러 조합으로
+만들 수 있다. 단순 최소노름 해에 맡기면 양손에 동시에 영향을 주는 base Jacobian 열을
+과도하게 사용할 수 있지만, 실제 모바일 베이스는 조향 정렬과 차체 관성 때문에 팔보다
+응답이 늦다. 반대로 base 비용을 무조건 크게만 두면 팔 workspace 끝에서도 차체가
+참여하지 않아 목표에 도달하지 못한다.
+
+이를 세밀하게 조절하려고 QP 목적함수에 자유도별 비용을 둔다.
+
+\[
+\dot q^TR\dot q,
+\qquad
+R=\operatorname{diag}(r_{base_x},r_{base_y},r_{base_yaw},r_{lift},r_{arm,1:14})
+\]
+
+`config/default.yaml`의 현재 `damping_weights`는 다음과 같다.
+
+| 자유도 | 비용 weight | 의미 |
+|---|---:|---|
+| base x/y | 0.25 / 0.25 | 작은 공통 오차에 차체가 불필요하게 움직이는 것을 억제 |
+| base yaw | 0.20 | 작은 자세 오차로 스워브 방향이 반복 반전되는 것을 억제 |
+| lift | 0.12 | 수직 이동에 쓰되 팔보다 완만하게 참여 |
+| 각 팔 관절 | 0.045 | 빠른 국소 오차 보정을 우선 담당 |
+
+weight가 클수록 해당 속도는 QP에서 더 비싼 선택이 된다. 다만 양손 target이 공통으로
+크게 이동하면 `common_base` task가 명시적으로 base 목표를 만들어 필요한 차체 이동을
+요청한다. 이 selector task도 다른 task·비용·제약과 함께 **같은 QP 안에서** 절충한다.
+QP를 푼 뒤 base 3축만 강제로 덮어쓰지 않으므로 damping 비용, 속도 bound와 collision
+CBF가 실제 최종 명령에 모두 반영된다.
+
+`whole_body_ik.base.participation_scale`은 이 명시적 목표와 base 3축 속도 상한을 같은
+비율로 줄인다. 목표만 줄이면 손 task가 base Jacobian 열을 다시 크게 쓸 수 있고,
+상한만 줄이면 작은 참여율에서도 base가 계속 포화될 수 있기 때문이다. 따라서 비용의
+상대적 선호는 `damping_weights`, 실제 허용 참여량은 `participation_scale`로 나누어
+조절한다.
+
+QP 표현을 사용하면 이 자유도별 비용 외에도 위치/자세/양손 task weight, 속도 상한,
+joint-limit bound, Whole-body OFF hard pin과 collision CBF를 같은 변수 $\dot q$에
+일관되게 적용할 수 있다. 이것이 전신 경로를 단일 팔의 닫힌형 DLS 식 그대로 두지
+않고 constrained QP 기반 DLS로 구성한 핵심 이유다.
 
 ## 제어 변수와 출력
 
@@ -83,19 +125,33 @@ site pose, world-aligned Jacobian, signed-distance gradient가 만들어지는 �
 [기구학과 충돌 거리](kinematics.md)에 분리해 설명한다. 이 문서는 그 결과를 어떻게
 전신 task와 safety constraint로 조립하는지에 집중한다.
 
-## Whole-body ON/OFF
+## Whole-body와 모바일 베이스 참여 모드 {#whole-body-modes}
 
-UI의 **Whole-body Control** 버튼은 같은 solver를 두 참여 범위로 실행한다.
+UI의 **Whole-body Control** 버튼과 YAML의 `whole_body_ik.base`는 서로 다른 범위를
+제어한다.
 
 | 모드 | differential IK 변수 | 동작 |
 |---|---|---|
-| ON | base x/y/yaw + lift + IK 모드 팔 | 양손 공통 이동은 base hierarchy도 사용 |
+| ON + `participation_scale: 1.0` | base x/y/yaw + lift + IK 모드 팔 | 기본 전신 QP |
+| ON + `participation_scale: 0.05` | 제한된 base + lift + IK 모드 팔 | base 목표와 속도 상한을 5%로 축소 |
+| ON + `participation_scale: 0.0` | lift + IK 모드 팔 | base 3축만 `[0, 0]` bound로 고정 |
 | OFF (arm-only) | IK 모드 팔 | base/lift 네 속도 bound를 `[0, 0]`으로 고정 |
 
-OFF는 task weight를 낮추는 방식이 아니므로 damping, nominal posture, collision slack의
-수치 절충으로 잔류 base/lift 속도가 생길 수 없다. Joint-limit CBF와 collision CBF는
-동일하게 남아 있으며, OFF에서는 허용된 팔 관절만으로 제약을 만족시킨다. 리프트
-slider와 키보드 base 주행은 IK 밖의 독립 수동 명령이므로 계속 사용할 수 있다.
+모바일 베이스를 거의 움직이지 않으려면 다음 사용자 YAML을 사용한다. 기본 속도 상한
+`[0.55, 0.55, 1.4]`도 `[0.0275, 0.0275, 0.07]`로 함께 낮아진다.
+
+```yaml
+whole_body_ik:
+  base:
+    participation_scale: 0.05
+```
+
+베이스 자동 명령을 정확히 0으로 만들면서 lift와 팔은 계속 쓰려면 참여율을 `0.0`으로
+설정한다. 반면 UI의 Whole-body OFF는 base뿐 아니라 lift도 고정하는 arm-only 모드다.
+두 hard gate는 task weight를 낮추는 방식이 아니므로 damping, nominal posture와
+collision slack의 수치 절충으로 잔류 속도가 생기지 않는다. Joint-limit CBF와 collision
+CBF는 그대로 남아 있고, 리프트 slider와 키보드 base 주행은 IK 밖의 독립 수동
+명령이므로 계속 사용할 수 있다.
 
 전환 시 앱은 양손/virtual-object의 world pose를 먼저 저장한 뒤 새 모드 좌표계로
 target 값을 역변환한다. smoothing 값도 함께 맞추고 solver reference를 `rebase()`하며
@@ -125,7 +181,8 @@ K_R e_{R,i}
 \dot x_i = J_i(q)\dot q
 \]
 
-양손 task, damping, home posture task를 한 least-squares 문제에 쌓는다.
+양손 task, 자유도별 damping 비용과 home posture task를 한 weighted DLS 목적함수에
+쌓은 뒤 표준 QP의 Hessian과 선형항으로 변환한다.
 
 \[
 \min_{\dot q}
@@ -142,10 +199,11 @@ subject to:
 
 ```mermaid
 flowchart TD
-    TASKS["soft task rows<br>오른손 · 왼손 pose<br>base hierarchy · damping · home posture"] --> STACK["least-squares 행렬에<br>task row를 세로로 쌓기"]
-    STACK --> BVLS["bounded least squares"]
-    BOUNDS["속도 한계 · joint-limit CBF<br>FK/OFF hard pin"] --> BVLS
-    BVLS --> QDOT["18-DOF q_dot"]
+    TASKS["soft task rows<br>오른손 · 왼손 pose<br>base hierarchy · damping · home posture"] --> STACK["weighted DLS<br>A, b 적층"]
+    STACK --> COST["QP cost 변환<br>H=2AᵀA · g=-2Aᵀb"]
+    COST --> QP["box-QP active set"]
+    BOUNDS["속도 한계 · joint-limit CBF<br>FK/OFF hard pin"] --> QP
+    QP --> QDOT["18-DOF q_dot"]
 ```
 
 그림에서 세로로 쌓인 각 row는 “이 요구를 얼마나 잘 맞출 것인가”를 뜻한다. 반면
@@ -256,9 +314,11 @@ linear 1.2 m/s, angular 3.0 rad/s로 제한하고, base x/y·yaw, lift, arm 속�
 양손이 함께 움직일 때 14개 팔 자유도만으로 공통 오차를 흡수하면 물리 베이스가
 늦게 따라오고 해의 작은 부호 변화가 스워브 반전을 반복시킬 수 있다. 그래서 첫
 solve에서 base pose와 양손 pose를 기준으로 저장하고, 이후 두 target의 평균 이동과
-평균 yaw 변화를 명시적인 base x/y/yaw 목표로 만든다. 강한 selector row로 이 목표를
-least-squares에 넣고 최종 base 3축에는 계층 우선순위를 정확히 적용한다. lift와 팔은
-같은 문제 안에서 각 손의 나머지 residual을 푼다.
+평균 yaw 변화를 명시적인 base x/y/yaw 목표로 만든다. selector row에 높은 가중치를
+주되 이 목표도 QP 내부에서 손 task, 자유도 비용, 속도·충돌 제약과 함께 푼다. 과거처럼
+QP 계산 뒤 base 3축을 별도 값으로 덮어쓰지 않는다. 따라서 `damping_weights`와
+`base.participation_scale`을 바꾸면 최종 base 명령이 실제로 달라지며, lift와 팔은 같은
+문제 안에서 각 손의 나머지 residual을 푼다.
 
 base 명령은 큰 오차에서는 빠르게 사용하되 손 위치 오차 8 cm, 자세 오차 0.25 rad
 안쪽에서 점차 fade한다. 선형 8 m/s², 각 4 rad/s² 가속 제한으로 한 프레임짜리 부호
@@ -284,7 +344,7 @@ flowchart LR
     REF --> ERR["저장값 - 현재값<br>relative drift"]
     REL --> ERR
     ERR --> ROW["강한 rigid-grasp task row"]
-    ROW --> SOLVE["양손 pose task와 함께<br>bounded least squares"]
+    ROW --> SOLVE["양손 pose task와 함께<br>constrained DLS/QP"]
     SOLVE --> HOLD["virtual object 이동 중<br>양손 간격·자세 유지"]
 ```
 
@@ -302,23 +362,24 @@ whole-body 모드에서는 앱 시작 시 base pose를 target anchor로 캡처�
 `pos_r/l`은 그 anchor 축에서 표현하되 최종 target world pose는 고정된다. 따라서
 solver가 base Jacobian 열을 사용해 실제 task error를 줄일 수 있다.
 
-## 제한된 least-squares 구현
+## 명시적 QP active-set 구현
 
-OSQP, SciPy, Pinocchio, ROS를 추가하지 않기 위해 18변수 box-QP를 NumPy의
-bounded-variable least squares(BVLS) active set으로 푼다.
+OSQP, SciPy, Pinocchio, ROS를 추가하지 않고 18변수 convex box-QP를 NumPy
+active-set으로 푼다. 런타임 호출 순서는 다음과 같다.
 
-1. unconstrained `numpy.linalg.lstsq` 해를 box로 투영해 시작한다.
-2. 현재 active bound를 고정하고 free 변수의 최소제곱 해를 구한다.
-3. 새 해가 box 밖이면 경계까지 line search하고 그 bound를 active로 만든다.
-4. feasible 해에서는 gradient의 KKT 부호를 검사해 잘못 고정된 bound를 해제한다.
-5. 모든 active/free 변수가 KKT 조건을 만족하면 종료한다.
+1. `least_squares_to_qp(A, b)`가 $H=2A^TA$, $g=-2A^Tb$를 만든다.
+2. unconstrained $H\dot q=-g$ 해를 box로 투영해 시작한다.
+3. 현재 active bound를 고정하고 free 변수의 reduced QP 해를 구한다.
+4. 새 해가 box 밖이면 경계까지 line search하고 그 bound를 active로 만든다.
+5. feasible 해에서는 QP gradient $H\dot q+g$의 KKT 부호를 검사해 잘못 고정된 bound를 해제한다.
+6. 모든 active/free 변수가 KKT 조건을 만족하면 종료한다.
 
 이전 one-way active set은 한 번 bound에 고정한 변수를 다시 해제하지 못해 결합된
 Jacobian 열에서 feasible하지만 최적이 아닌 해를 낼 수 있었다. 새 solver는 bound에
 들어갔다가 나오는 좌표를 자연스럽게 처리한다. 3변수 문제의 모든 active set을
-완전탐색하는 회귀와 비교해 목적함수 차이가 \(10^{-14}\) 미만인지 검사한다.
-BVLS 전환 후 현재 머신의 충돌 비활성 양손 solve는 약 0.7 ms, 현재 table 회귀에서
-workspace constraint 2개가 활성화된 solve는 약 0.95 ms다. 회귀 gate는 5 ms 미만을 요구해 25 Hz 앱의
+완전탐색하는 회귀와 비교하고, QP 목적함수와 원래 least-squares 비용이 상수항을
+제외하고 일치하는지도 검사한다. 현재 머신의 충돌 비활성 양손 solve는 약 1.0 ms,
+table CBF가 활성화된 solve는 약 1.6 ms다. 회귀 gate는 5 ms 미만을 요구해 25 Hz 앱의
 40 ms 프레임 예산을 잠식하는 구현 회귀를 막는다.
 
 ## 수식에서 코드까지
@@ -327,10 +388,11 @@ workspace constraint 2개가 활성화된 solve는 약 0.95 ms다. 회귀 gate�
 |---|---|---|
 | \(\dot x_i^*=K e_i-D\dot x_i\) | `pose_error()`, `pose_velocity_command()` | `kinematics/tasks.py` |
 | weighted task를 \(A\dot q\approx b\)로 적층 | `rows`, `rhs`, `matrix`, `vector` | `WholeBodyIK.solve()` |
+| $\lVert A\dot q-b\rVert^2$를 QP로 변환 | `least_squares_to_qp()` | `control/optimization.py` |
 | \(\dot q_{min}\le\dot q\le\dot q_{max}\) | `lower`, `upper`, `_velocity_bounds()` | `control/whole_body.py` |
-| box-constrained \(\min\|A\dot q-b\|^2\) | `bounded_least_squares()` | `control/optimization.py` |
+| box-constrained QP | `bounded_quadratic_program()` | `control/optimization.py` |
 | \(\nabla d\,\dot q\ge-\alpha(d-d_{safe})\) | `_collision_constraints()` | `control/whole_body.py` |
-| CBF soft slack penalty | `bounded_least_squares_with_barriers()` | `control/optimization.py` |
+| CBF soft slack penalty | `bounded_quadratic_program_with_barriers()` | `control/optimization.py` |
 | 양손 상대 pose 보존 | `rigid_grasp_task()` | `control/bimanual.py` |
 
 각 행을 만드는 정책은 `WholeBodyIK`, robot model을 모르는 수치 최적화는
@@ -346,7 +408,7 @@ flowchart TD
     S --> K["shared KinematicTree<br>양손 FK + 18-DOF Jacobian"]
     K --> J["KinematicsSolver.forward<br>조상 경로의 열 직접 계산"]
     E --> V["bounded desired task velocity"]
-    J --> LS["weighted bounded least squares"]
+    J --> LS["weighted DLS → explicit box-QP"]
     T --> H["dual-hand centroid/yaw<br>explicit base hierarchy"]
     H --> LS
     K --> R["rigid-grasp relative Jacobian / joint CBF bounds"]
@@ -369,6 +431,7 @@ flowchart TD
 - 스워브 역기구학→정기구학 100개 무작위 왕복
 - 주입한 ±90° 조향 범위의 동치각과 전역 wheel saturation
 - 3변수 box-QP 25개의 완전탐색 optimum 비교
+- 전신 런타임이 legacy least-squares wrapper가 아니라 명시적 QP API를 호출하는지
 - 관절 한계 접근 감속·한 step 안전·margin 밖 복귀 CBF
 - self-collision 최근접점 distance gradient와 중앙 유한차분의 최대 오차
 - 손-상체 자기충돌 접근 명령이 분리 속도로 바뀌는지

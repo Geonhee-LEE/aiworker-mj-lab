@@ -18,33 +18,20 @@ from ..config import SETTINGS
 
 JOG_POS_STEP_DEFAULT = SETTINGS.number("ui.jog_position_step_m", positive=True)
 JOG_RPY_STEP_DEFAULT = SETTINGS.number("ui.jog_rotation_step_deg", positive=True)
-HAND_POS_OFFSET_RANGE = tuple(float(value) for value in SETTINGS.get(
-    "ui.hand_position_offset_range_m"))
-HAND_RPY_RANGE = tuple(float(value) for value in SETTINGS.get(
-    "ui.hand_rotation_range_deg"))
-VIRTUAL_POS_RANGE = tuple(float(value) for value in SETTINGS.get(
-    "ui.virtual_position_range_m"))
-MOVE_TIME_RANGE = tuple(float(value) for value in SETTINGS.get(
-    "ui.move_time_range_s"))
-JOG_POS_STEP_RANGE = tuple(float(value) for value in SETTINGS.get(
-    "ui.jog_position_step_range_m"))
-JOG_RPY_STEP_RANGE = tuple(float(value) for value in SETTINGS.get(
-    "ui.jog_rotation_step_range_deg"))
+# 다음 범위는 제어 이득이 아니라 위젯의 고정 표시 범위다. YAML에는 사용자가 자주
+# 바꾸는 조그 기본값만 노출하고 UI 안전 범위는 구현과 함께 관리한다.
+HAND_POS_OFFSET_RANGE = (-0.35, 0.35)
+HAND_RPY_RANGE = (-90.0, 90.0)
+VIRTUAL_POS_RANGE = (-0.2, 1.2)
+MOVE_TIME_RANGE = (0.2, 8.0)
+JOG_POS_STEP_RANGE = (0.001, 0.050)
+JOG_RPY_STEP_RANGE = (0.5, 15.0)
 POS_AXES = ("X", "Y", "Z")
 RPY_AXES = ("Roll", "Pitch", "Yaw")
 UI_WINDOW_SPECS = SETTINGS.get("ui.windows")
 for _spec in UI_WINDOW_SPECS.values():
     _spec["position"] = tuple(_spec["position"])
     _spec["size"] = tuple(_spec["size"])
-for _name, _range in (
-        ("hand_position_offset_range_m", HAND_POS_OFFSET_RANGE),
-        ("hand_rotation_range_deg", HAND_RPY_RANGE),
-        ("virtual_position_range_m", VIRTUAL_POS_RANGE),
-        ("move_time_range_s", MOVE_TIME_RANGE),
-        ("jog_position_step_range_m", JOG_POS_STEP_RANGE),
-        ("jog_rotation_step_range_deg", JOG_RPY_STEP_RANGE)):
-    if _range[0] >= _range[1]:
-        raise ValueError(f"ui.{_name}은 [최솟값, 최댓값] 순서여야 합니다.")
 
 
 def _begin_expanded(title, flags=0):

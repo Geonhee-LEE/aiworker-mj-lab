@@ -220,7 +220,7 @@ flowchart TB
 | `kinematics/rotations.py` | 회전 행렬과 쿼터니언 수학 | 모델·solver 상태 없음 |
 | `kinematics/collision.py` | signed-distance gradient | target/solver 정책 없음 |
 | `control/bimanual.py` | rigid-grasp 상대 pose와 Jacobian 계산 | actuator·solver 상태 없음 |
-| `control/optimization.py` | box BVLS와 soft barrier 계산 | robot model 상태 없음 |
+| `control/optimization.py` | 명시적 box-QP와 soft barrier 계산 | robot model 상태 없음 |
 | `control/whole_body.py` | WBIK task·bound·상태를 조립하고 command 계산 | 반환 command만 |
 | `control/base.py` | body twist를 steer/drive command로 변환 | controller 내부 상태 |
 | `control/arm.py` | 목표 관절각을 torque로 변환 | arm `data.ctrl` |
@@ -247,7 +247,7 @@ flowchart TB
 | tree와 FK | MJCF 경로를 따라 site pose를 어떻게 합성하는가? | [Tree](kinematic-tree.md), [FK](forward-kinematics.md) | 구현 범위 설명 완료 |
 | 자세와 Jacobian | quaternion 오차와 6×N Jacobian의 frame은 왜 일치하는가? | [Quaternion](quaternion-math.md), [FK](forward-kinematics.md) | 구현 범위 설명 완료 |
 | 단일 팔 IK | DLS normal equation, SVD gain, null-space 항이 코드의 어느 줄이 되는가? | [DLS 수학](ik-math.md), [단일 팔 IK](ik.md) | 구현 범위 설명 완료 |
-| 전신 IK | weighted task, box bound, BVLS, CBF, rigid-grasp 항이 어떻게 한 문제에 들어가는가? | [전신 IK](whole_body_ik.md) | 구현 범위 설명 완료 |
+| 전신 IK | weighted DLS, 자유도별 비용, box-QP, CBF, rigid-grasp 항이 어떻게 한 문제에 들어가는가? | [전신 IK](whole_body_ik.md) | 구현 범위 설명 완료 |
 | 충돌 거리 | 최근접점 속도에서 \(\dot d=\nabla d\dot q\)를 어떻게 얻는가? | [Collision distance](collision-kinematics.md) | 구현 범위 설명 완료 |
 | 팔·베이스·손 | IK 출력을 torque, wheel command, finger command로 어떻게 변환하는가? | [팔](arm_control.md), [스워브](base_teleop.md), [파지](grasp.md) | 구현 범위 설명 완료 |
 

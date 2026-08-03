@@ -28,7 +28,7 @@ flowchart TB
     end
     subgraph Decision["명령 계산"]
         W["control/whole_body.py<br>WBIK task · bound · command 조립"]
-        K["계산 모듈군<br>tree · collision · bimanual · BVLS"]
+        K["계산 모듈군<br>tree · collision · bimanual · box-QP"]
         B["control/base.py<br>BodyTwist · swerve · reversal FSM"]
         A["control/arm.py<br>PD + bias torque"]
         G["control/grasp.py<br>finger synergy · contact 판정"]
@@ -185,7 +185,7 @@ wheel controller를 사용하지 않는다.
 |---|---|
 | target/UI/state transition | `test_phase_6.py` |
 | swerve input/FSM/물리 | `test_phase_5.py` |
-| WBIK/BVLS/collision/physical mobile | `test_whole_body.py` |
+| WBIK/QP/collision/physical mobile | `test_whole_body.py` |
 | 단일 팔 FK/Jacobian/IK | `test_phase_3.py` |
 | grasp/contact | `test_phase_1.py`, `test_phase_2.py` |
 
