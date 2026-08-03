@@ -18,10 +18,12 @@ from ffw_sh5_grasp.config import load_settings  # noqa: E402
 
 
 def _write(path, content):
+    """설정 회귀에서 사용할 임시 YAML 문자열을 UTF-8 파일로 기록한다."""
     path.write_text(content, encoding="utf-8")
 
 
 def main():
+    """기본값·부분 override·오류 검증과 YAML 한국어 주석 존재 여부를 검사한다."""
     defaults = load_settings()
     assert defaults.path == DEFAULT_CONFIG
     assert defaults.number("arm_control.proportional_gain") == 600.0

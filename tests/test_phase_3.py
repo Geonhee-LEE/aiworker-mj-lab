@@ -111,6 +111,7 @@ def run_fk_jacobian_test(solver):
 
 
 def run_ik_unit_test(model, solver, rng):
+    """도달 가능한 무작위 pose에서 단일 팔 IK 수렴률과 오차 분포를 검사한다."""
     joint_ranges = np.array([model.jnt_range[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]
                               for n in ARM_JOINTS])
     scratch = mujoco.MjData(model)
@@ -144,6 +145,7 @@ def run_ik_unit_test(model, solver, rng):
 
 
 def _read_arm_q(model, data):
+    """오른팔 7개 관절의 현재 qpos를 solver 순서로 반환한다."""
     return np.array([data.qpos[model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]]
                       for n in ARM_JOINTS])
 
@@ -175,6 +177,7 @@ def _move(model, data, controller, q_from, q_to, duration, dt, grasp_frac=None, 
 
 
 def run_pick_trial(model, data, solver, controller, rng):
+    """무작위 캔에 접근·파지·들기를 실행하고 단일 pick 성공 정보를 반환한다."""
     key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     mujoco.mj_resetDataKeyframe(model, data, key_id)
     can_jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "can_free")
@@ -240,6 +243,7 @@ def run_pick_trial(model, data, solver, controller, rng):
 
 
 def run_pick_test(model, solver, controller, rng):
+    """단일 팔 pick trial을 반복해 Phase 3 최소 성공률을 판정한다."""
     data = mujoco.MjData(model)
     results = []
     for trial in range(N_PICK_TRIALS):
@@ -253,6 +257,7 @@ def run_pick_test(model, solver, controller, rng):
 
 
 def main():
+    """자체 FK/Jacobian, 단일 팔 IK와 물리 pick Phase 3 gate를 실행한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     solver = ik.InverseKinematics(model, "grasp_target", ARM_JOINTS)
     controller = arm_control.ArmTorqueController(model, ARM_JOINTS)

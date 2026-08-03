@@ -32,16 +32,19 @@ HOME_Q_L = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
 
 
 def _make_sim_only_app():
+    """창 없이 모델·제어 상태만 초기화한 테스트용 ``TeleopApp``을 반환한다."""
     app = teleop_app.TeleopApp.__new__(teleop_app.TeleopApp)
     app._setup_sim()
     return app
 
 
 def _set_hand_base_target(app, side, base_pos):
+    """베이스 좌표의 손 목표를 현재 UI target 표현으로 변환해 저장한다."""
     app.targets[f"pos_{side}"] = (np.array(base_pos) - app.home_pos_local[side]).tolist()
 
 
 def run_model_gate(model):
+    """Phase 6에 필요한 자유 캔과 mocap 가상 마커가 모델에 존재하는지 검사한다."""
     can_jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "can_free")
     virtual_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "virtual_object_marker")
     ok = can_jid != -1 and virtual_body != -1 and model.nq == len(model.key_qpos[0])
@@ -51,7 +54,10 @@ def run_model_gate(model):
 
 
 def run_cyclo_marker_jog_gate():
+    """Cyclo jog가 손·가상 물체 목표를 올바르게 변경하고 범위를 지키는지 검사한다."""
     class FakeApp:
+        """UI jog 함수에 필요한 최소 target 상태만 제공하는 테스트 대역이다."""
+
         arm_mode = {"l": "ik", "r": "ik"}
         cyclo_controller = "movel"
         cyclo_grasp_captured = False
@@ -65,6 +71,7 @@ def run_cyclo_marker_jog_gate():
         }
 
         def apply_virtual_object_target(self):
+            """가상 물체 적용 callback을 부작용 없이 대체한다."""
             return None
 
     app = FakeApp()
@@ -105,6 +112,7 @@ def run_cyclo_marker_jog_gate():
 
 
 def run_initial_ik_target_origin_gate():
+    """앱 시작 시 양손 IK 목표가 실제 손 pose와 정확히 겹치는지 검사한다."""
     app = _make_sim_only_app()
     offsets_zero = (
         np.allclose(app.targets["pos_r"], [0.0, 0.0, 0.0])
@@ -127,6 +135,7 @@ def run_initial_ik_target_origin_gate():
 
 
 def run_cyclo_bimanual_virtual_object_gate():
+    """양손 캡처·가상 물체 이동·release 상태 전환의 pose 보존을 검사한다."""
     app = _make_sim_only_app()
     _set_hand_base_target(app, "r", [0.34, -0.08, 0.88])
     _set_hand_base_target(app, "l", [0.34, 0.08, 0.88])
@@ -163,6 +172,7 @@ def run_cyclo_bimanual_virtual_object_gate():
 
 
 def run_cyclo_3d_gizmo_pose_gate():
+    """3D 기즈모 행렬 왕복과 손·가상 물체 목표 pose 반영을 검사한다."""
     app = _make_sim_only_app()
     world_pos = np.array([0.42, -0.11, 0.94])
     world_quat = rotations.rpy_deg_to_quat([13.0, -8.0, 21.0])
@@ -200,6 +210,7 @@ def run_cyclo_3d_gizmo_pose_gate():
 
 
 def run_bimanual_marker_visibility_gate():
+    """가상 물체 마커가 양손 캡처 중에만 보이고 release 뒤 숨는지 검사한다."""
     app = _make_sim_only_app()
     geom_id = app.virtual_object_marker_geom_id
     site_id = app.virtual_object_marker_site_id
@@ -232,6 +243,7 @@ def run_bimanual_marker_visibility_gate():
 
 
 def run_numeric_target_marker_sync_gate():
+    """수치 XYZ/RPY 목표가 MuJoCo mocap 마커 pose에 정확히 동기화되는지 검사한다."""
     app = _make_sim_only_app()
     app.data.qpos[app.base_x_qadr] = 0.12
     app.data.qpos[app.base_y_qadr] = -0.04
@@ -420,6 +432,7 @@ def run_collision_visualization_gate():
 
 
 def run_manual_xyz_rpy_ik_gate(model):
+    """수동 XYZ/RPY 목표에서 양손 IK가 위치·자세 허용 오차로 수렴하는지 검사한다."""
     data = mujoco.MjData(model)
     key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     mujoco.mj_resetDataKeyframe(model, data, key_id)
@@ -500,6 +513,7 @@ def run_split_ui_and_tree_gate():
 
 
 def main():
+    """마커·기즈모·양손 제어·모드 전환·UI 트리 Phase 6 gate를 실행한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     ok = (run_model_gate(model)
           and run_split_ui_and_tree_gate()

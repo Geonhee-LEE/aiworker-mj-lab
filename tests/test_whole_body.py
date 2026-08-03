@@ -133,12 +133,14 @@ def run_tree_kinematics_dependency_gate():
 
 
 def _reset(model, data):
+    """전신 모델을 home 키프레임으로 초기화하고 모든 파생 상태를 갱신한다."""
     key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     mujoco.mj_resetDataKeyframe(model, data, key)
     mujoco.mj_forward(model, data)
 
 
 def _sites(model):
+    """오른손과 왼손 grasp target site ID를 side 키 사전으로 반환한다."""
     return {
         side: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"grasp_target_{side}")
         for side in ("r", "l")
@@ -146,6 +148,7 @@ def _sites(model):
 
 
 def _target_poses(data, sites, delta):
+    """현재 양손 pose에 공통 위치 증분을 더한 WBIK 목표 사전을 만든다."""
     targets = {}
     for side, site_id in sites.items():
         quat = np.zeros(4)
@@ -169,6 +172,7 @@ def _pose_error_metric(data, targets, sites):
 
 
 def run_swerve_kinematics_gate():
+    """스워브 역·정기구학 왕복, 조향 실행 가능성과 포화 비율을 검사한다."""
     kin = base_teleop.SwerveKinematics()
     limited_kin = base_teleop.SwerveKinematics(steer_range=(-1.58, 1.58))
     rng = np.random.default_rng(42)
@@ -288,6 +292,7 @@ HAND_COLLISION_Q = np.array([
 
 
 def _self_collision_fixture(model):
+    """자기 충돌에 가까운 고정 관절 자세와 solver를 재현 가능한 fixture로 만든다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     solver = whole_body_ik.WholeBodyIK(
@@ -569,6 +574,7 @@ def run_rigid_grasp_physical_gate():
 
 
 def run_world_anchor_gate():
+    """베이스 이동 중 전신 목표가 월드에 고정되고 실제 손 오차가 생기는지 검사한다."""
     app = teleop_app.TeleopApp.__new__(teleop_app.TeleopApp)
     app._setup_sim()
     app.targets["pos_r"] = [0.08, -0.03, 0.04]
@@ -626,6 +632,7 @@ def run_manual_handover_gate():
     rotation = np.array([[c, -s], [s, c]])
 
     def expected_position(position):
+        """이전 베이스 기준 월드 점의 수동 이동 후 기대 위치를 계산한다."""
         expected = np.asarray(position).copy()
         expected[:2] = current_base[:2] + rotation @ (expected[:2] - previous_base[:2])
         return expected
@@ -714,6 +721,7 @@ def run_manual_release_physical_gate():
 
 
 def run_whole_body_solver_gate(model):
+    """WBIK가 상태를 쓰지 않고 base·lift·양팔을 한계 안에서 함께 사용하는지 검사한다."""
     data = mujoco.MjData(model)
     _reset(model, data)
     sites = _sites(model)
@@ -1011,6 +1019,7 @@ def run_physical_whole_body_gate(model):
 
 
 def main():
+    """스워브·BVLS·CBF·양손·WBIK 수치 및 물리 통합 회귀를 순서대로 실행한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     ok = (run_ros_free_dependency_gate()
           and run_tree_kinematics_dependency_gate()

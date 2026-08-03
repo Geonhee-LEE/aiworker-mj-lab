@@ -75,6 +75,7 @@ CAN_NOISE = 0.005
 
 
 def _reset_home(model, data):
+    """전신 모델을 home 키프레임으로 되돌리고 파생 상태를 계산한다."""
     key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     mujoco.mj_resetDataKeyframe(model, data, key_id)
     mujoco.mj_forward(model, data)
@@ -92,6 +93,7 @@ def _hold_whole_body(model, data, ctrl_r, ctrl_l, q_r, q_l, grasp_r=0.0, thumb_r
 
 
 def run_hold_test(model):
+    """양팔 홈 자세 유지 중 가속도와 손 site drift가 허용 범위인지 검사한다."""
     data = mujoco.MjData(model)
     _reset_home(model, data)
     ctrl_r = arm_control.ArmTorqueController(model, ARM_R)
@@ -122,6 +124,7 @@ def run_hold_test(model):
 
 
 def run_ik_unit_test(model, solver, rng):
+    """전신 모델 문맥에서 오른팔 IK의 무작위 pose 수렴률을 검사한다."""
     joint_ranges = np.array([model.jnt_range[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]
                               for n in ARM_R])
     scratch = mujoco.MjData(model)
@@ -157,11 +160,13 @@ def run_ik_unit_test(model, solver, rng):
 
 
 def _read_arm_q(model, data, joint_names):
+    """지정 관절 이름 순서로 현재 팔 qpos 벡터를 읽는다."""
     return np.array([data.qpos[model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]]
                       for n in joint_names])
 
 
 def _hold(model, data, ctrl_r, ctrl_l, q_r_des, duration, dt, grasp_frac=None, thumb_frac=None):
+    """양팔 목표를 유지하며 선택적 오른손 파지 명령과 물리 step을 적용한다."""
     n = int(duration / dt)
     for _ in range(n):
         ctrl_r.apply(data, q_r_des)
@@ -172,6 +177,7 @@ def _hold(model, data, ctrl_r, ctrl_l, q_r_des, duration, dt, grasp_frac=None, t
 
 
 def _move(model, data, ctrl_r, ctrl_l, q_from, q_to, duration, dt, grasp_frac=None, thumb_frac=None):
+    """오른팔 목표를 보간하고 왼팔을 유지하며 선택적 파지와 물리 step을 적용한다."""
     n = int(duration / dt)
     for i in range(n):
         frac = i / n
@@ -183,6 +189,7 @@ def _move(model, data, ctrl_r, ctrl_l, q_from, q_to, duration, dt, grasp_frac=No
 
 
 def run_pick_trial(model, data, solver, ctrl_r, ctrl_l, rng):
+    """전신 장면에서 오른팔 접근·파지·들기 한 회를 실행해 결과를 반환한다."""
     _reset_home(model, data)
     can_jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "can_free")
     can_qadr = model.jnt_qposadr[can_jid]
@@ -239,6 +246,7 @@ def run_pick_trial(model, data, solver, ctrl_r, ctrl_l, rng):
 
 
 def run_pick_test(model, solver, ctrl_r, ctrl_l, rng):
+    """전신 pick trial을 반복해 Phase 4 성공률 기준을 판정한다."""
     data = mujoco.MjData(model)
     results = []
     for trial in range(N_PICK_TRIALS):
@@ -252,6 +260,7 @@ def run_pick_test(model, solver, ctrl_r, ctrl_l, rng):
 
 
 def main():
+    """양팔 유지·IK·물리 pick을 묶은 Phase 4 통합 gate를 실행한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     solver = ik.InverseKinematics(model, "grasp_target_r", ARM_R)
     ctrl_r = arm_control.ArmTorqueController(model, ARM_R)

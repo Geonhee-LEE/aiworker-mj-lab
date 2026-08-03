@@ -47,6 +47,11 @@ class ArmTorqueController:
     """
 
     def __init__(self, model, joint_names, kp=DEFAULT_KP, kd=DEFAULT_KD):
+        """팔 관절과 motor actuator 주소, 토크 범위, PD 이득을 한 번 찾아 저장한다.
+
+        ``joint_names``의 순서는 목표 관절 벡터 ``q_des``의 순서가 된다. 각 관절에
+        연결된 액추에이터가 없으면 잘못된 모델 연결로 보고 ``ValueError``를 낸다.
+        """
         self.model = model
         joint_names = tuple(joint_names)
         self.joint_ids = np.array([

@@ -122,6 +122,7 @@ _COMMAND_COEFFICIENT_CACHE = {}
 
 
 def _validate_side(side):
+    """손 구분자가 ``'l'`` 또는 ``'r'``인지 확인하고 잘못된 값은 거부한다."""
     if side not in SIDES:
         raise ValueError(f"side must be one of {SIDES}, got {side!r}")
 
@@ -159,6 +160,7 @@ def _command_coefficients(model, side):
     thumb_slopes = []
 
     def add(joint_name, offset, grasp_slope=0.0, thumb_slope=0.0):
+        """관절 하나의 actuator ID와 선형 명령 계수를 현재 손 목록에 추가한다."""
         joint_id, actuator_id = _resolve_joint_actuator(model, joint_name)
         if joint_id == -1 or actuator_id is None:
             raise ValueError(f"no actuated joint found for {joint_name}")
@@ -168,6 +170,7 @@ def _command_coefficients(model, side):
         thumb_slopes.append(thumb_slope)
 
     def joint_range(joint_name):
+        """관절 이름에 대응하는 ``(최솟값, 최댓값, 범위 폭)``을 반환한다."""
         joint_id, _actuator_id = _resolve_joint_actuator(model, joint_name)
         lo, hi = model.jnt_range[joint_id]
         return lo, hi, hi - lo

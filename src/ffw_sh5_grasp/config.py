@@ -19,6 +19,7 @@ CONFIG_ENV_VAR = "FFW_SH5_CONFIG"
 
 
 def _read_yaml(path):
+    """UTF-8 YAML 파일을 매핑으로 읽고 파일·문법·최상위 형식 오류를 설명한다."""
     try:
         with path.open("r", encoding="utf-8") as stream:
             data = yaml.safe_load(stream)
@@ -80,10 +81,12 @@ class Settings:
     """점으로 구분한 경로로 읽는 불변 설정 스냅샷."""
 
     def __init__(self, data, path):
+        """검증된 설정 매핑을 깊은 복사하고 원본 YAML 경로를 함께 보관한다."""
         self._data = deepcopy(data)
         self.path = Path(path)
 
     def get(self, dotted_path):
+        """점으로 구분한 키 경로의 값을 찾아 호출자가 바꿀 수 없는 복사본으로 반환한다."""
         value = self._data
         for key in dotted_path.split("."):
             if not isinstance(value, dict) or key not in value:
@@ -92,6 +95,7 @@ class Settings:
         return deepcopy(value)
 
     def number(self, dotted_path, *, minimum=None, positive=False):
+        """설정값을 실수로 읽고 양수 여부와 선택적 최솟값을 검증한다."""
         value = self.get(dotted_path)
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             raise TypeError(f"설정 {dotted_path}는 숫자여야 합니다.")
@@ -103,6 +107,7 @@ class Settings:
         return result
 
     def integer(self, dotted_path, *, minimum=None):
+        """설정값을 정수로 읽고 선택적 최솟값 조건을 검증한다."""
         value = self.get(dotted_path)
         if not isinstance(value, int) or isinstance(value, bool):
             raise TypeError(f"설정 {dotted_path}는 정수여야 합니다.")

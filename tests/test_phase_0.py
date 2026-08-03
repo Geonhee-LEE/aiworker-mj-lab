@@ -36,10 +36,12 @@ GEOM_TYPE_NAMES = {
 
 
 def joint_name(model, jid):
+    """관절 ID를 보고서에 표시할 이름으로 변환하고 익명 관절에는 대체 이름을 붙인다."""
     return mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jid)
 
 
 def actuator_for_joint(model, jid):
+    """지정 관절을 전달 대상으로 삼는 첫 actuator ID를 찾고 없으면 ``None``을 반환한다."""
     for aid in range(model.nu):
         if (
             model.actuator_trntype[aid] == mujoco.mjtTrn.mjTRN_JOINT
@@ -50,6 +52,7 @@ def actuator_for_joint(model, jid):
 
 
 def build_report(model):
+    """모델 옵션·관절·actuator·geom 구조를 사람이 읽는 Markdown 보고서로 만든다."""
     lines = []
     lines.append(f"nq={model.nq}  nv={model.nv}  nu={model.nu}  ngeom={model.ngeom}")
     lines.append("")
@@ -146,6 +149,7 @@ def build_report(model):
 
 
 def run_divergence_test(model, seconds=5.0):
+    """무제어 중력 시뮬레이션을 실행해 최대 가속도와 수치 발산 여부를 반환한다."""
     data = mujoco.MjData(model)
     mujoco.mj_resetData(model, data)
     n_steps = int(seconds / model.opt.timestep)
@@ -159,6 +163,7 @@ def run_divergence_test(model, seconds=5.0):
 
 
 def main():
+    """공식 모델 로드·구조 보고서·중력 안정성 Phase 0 gate를 실행한다."""
     if not SCENE_PATH.exists():
         print(f"ERROR: scene not found at {SCENE_PATH}", file=sys.stderr)
         sys.exit(1)

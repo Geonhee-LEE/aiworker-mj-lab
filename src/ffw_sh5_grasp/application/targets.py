@@ -21,6 +21,11 @@ SIDES = ("r", "l")
 
 
 def set_home_references(app):
+    """현재 양손 pose와 베이스 pose를 UI 목표의 홈·월드 기준으로 저장한다.
+
+    손별 홈 위치·쿼터니언과 전신 제어용 시작 anchor를 ``app``에 기록한다. 이후
+    XYZ/RPY 슬라이더의 0은 이 시점의 손 pose를 뜻한다.
+    """
     site_states = {
         side: app.whole_body_solver.site_state(app.data, side)
         for side in SIDES
@@ -60,6 +65,7 @@ def carry_world_targets_with_base(app, previous_base_pose, current_base_pose):
     new_xy = np.array([new_x, new_y])
 
     def transform_position(position):
+        """이전 베이스 기준 월드 점을 현재 베이스의 동일한 상대 위치로 옮긴다."""
         result = np.asarray(position, dtype=float).copy()
         relative = result[:2] - old_xy
         result[:2] = new_xy + np.array([
@@ -83,6 +89,7 @@ def carry_world_targets_with_base(app, previous_base_pose, current_base_pose):
 
 
 def base_pose(app):
+    """MuJoCo 베이스 qpos에서 x·y·yaw, 삼각함수와 yaw 쿼터니언을 함께 반환한다."""
     base_x = app.data.qpos[app.base_x_qadr]
     base_y = app.data.qpos[app.base_y_qadr]
     base_yaw = app.data.qpos[app.base_yaw_qadr]
@@ -92,12 +99,14 @@ def base_pose(app):
 
 
 def local_to_world_pos(app, p_local):
+    """현재 베이스 좌표의 3차원 점을 MuJoCo 월드 좌표로 변환한다."""
     base_x, base_y, _base_yaw, cy, sy, _base_quat = base_pose(app)
     x, y, z = p_local
     return np.array([base_x + cy * x - sy * y, base_y + sy * x + cy * y, z])
 
 
 def world_to_base_pos(app, p_world):
+    """MuJoCo 월드 좌표의 3차원 점을 현재 베이스 좌표로 역변환한다."""
     base_x, base_y, _base_yaw, cy, sy, _base_quat = base_pose(app)
     dx, dy = p_world[0] - base_x, p_world[1] - base_y
     return np.array([cy * dx + sy * dy, -sy * dx + cy * dy, p_world[2]])
@@ -115,6 +124,7 @@ def anchor_local_to_world_pos(app, p_local):
 
 
 def world_to_anchor_local_pos(app, p_world):
+    """월드 점을 전신 제어 시작 시 저장한 anchor의 로컬 좌표로 변환한다."""
     cy, sy = math.cos(app.target_anchor_yaw), math.sin(app.target_anchor_yaw)
     dx = p_world[0] - app.target_anchor_xy[0]
     dy = p_world[1] - app.target_anchor_xy[1]
@@ -122,6 +132,11 @@ def world_to_anchor_local_pos(app, p_world):
 
 
 def target_pos_to_world_pos(app, side, pos_target):
+    """손별 XYZ 목표값을 현재 제어 모드에 맞는 월드 위치로 변환한다.
+
+    Whole-body 모드에서는 시작 anchor에 고정된 홈을, 팔 전용 모드에서는 움직이는
+    현재 베이스에 고정된 홈을 기준으로 사용한다.
+    """
     if getattr(app, "whole_body_enabled", False):
         offset = np.asarray(pos_target, dtype=float)
         cy, sy = math.cos(app.target_anchor_yaw), math.sin(app.target_anchor_yaw)
@@ -136,6 +151,7 @@ def target_pos_to_world_pos(app, side, pos_target):
 
 
 def world_to_target_pos(app, side, world_pos):
+    """손의 월드 위치를 현재 제어 모드의 XYZ 슬라이더 값으로 역변환한다."""
     if getattr(app, "whole_body_enabled", False):
         delta = np.asarray(world_pos, dtype=float) - app.home_pos_world[side]
         cy, sy = math.cos(app.target_anchor_yaw), math.sin(app.target_anchor_yaw)
@@ -155,10 +171,12 @@ def target_rpy_to_world_quat(app, side, rpy_deg):
 
 
 def target_world_quat(app, side):
+    """손별 RPY 슬라이더 목표를 월드 좌표계 쿼터니언으로 반환한다."""
     return target_rpy_to_world_quat(app, side, app.targets[f"rpy_{side}"])
 
 
 def world_quat_to_target_rpy(app, side, world_quat):
+    """월드 쿼터니언을 현재 제어 모드의 손별 홈 기준 RPY 각도로 역변환한다."""
     if getattr(app, "whole_body_enabled", False):
         delta = rotations.multiply_quaternions(
             rotations.inverse_quaternion(app.home_quat_world[side]), world_quat
@@ -175,6 +193,7 @@ def world_quat_to_target_rpy(app, side, world_quat):
 
 
 def world_quat_to_virtual_rpy(app, world_quat):
+    """가상 물체의 월드 쿼터니언을 활성 베이스/anchor 기준 RPY 각도로 바꾼다."""
     if getattr(app, "whole_body_enabled", False):
         base_quat = app.target_anchor_quat
     else:
@@ -186,6 +205,7 @@ def world_quat_to_virtual_rpy(app, world_quat):
 
 
 def target_world_pose(app, side):
+    """손별 UI 목표를 WBIK와 마커가 사용하는 ``(월드 위치, 쿼터니언)``으로 반환한다."""
     return (
         target_pos_to_world_pos(app, side, app.targets[f"pos_{side}"]),
         target_world_quat(app, side),
@@ -193,6 +213,7 @@ def target_world_pose(app, side):
 
 
 def virtual_object_world_pose(app):
+    """가상 양손 물체의 UI 위치·RPY를 월드 pose로 변환해 반환한다."""
     if getattr(app, "whole_body_enabled", False):
         pos = anchor_local_to_world_pos(app, app.targets["virtual_object_pos"])
         base_quat = app.target_anchor_quat
@@ -206,6 +227,7 @@ def virtual_object_world_pose(app):
 
 
 def sync_virtual_object_to_hand_targets(app):
+    """가상 물체 목표를 현재 두 손 목표의 중점으로 옮기고 회전 오프셋을 초기화한다."""
     pos_r, _quat_r = target_world_pose(app, "r")
     pos_l, _quat_l = target_world_pose(app, "l")
     midpoint = 0.5 * (pos_r + pos_l)
@@ -235,12 +257,14 @@ def capture_grasp(app):
 
 
 def release_grasp(app):
+    """캡처한 가상 물체-양손 상대 변환을 지우고 독립 손 목표 모드로 돌아간다."""
     app.cyclo_grasp_captured = False
     app.cyclo_capture_offsets = None
     app.cyclo_status = "released"
 
 
 def apply_virtual_object_target(app):
+    """캡처 당시 상대 변환을 보존하며 가상 물체 pose를 양손 목표 pose로 전개한다."""
     if not app.cyclo_grasp_captured or app.cyclo_capture_offsets is None:
         return
     obj_pos, obj_quat = virtual_object_world_pose(app)
@@ -253,6 +277,7 @@ def apply_virtual_object_target(app):
 
 
 def sync_marker_visibility(app):
+    """양손 MoveL 캡처 상태에 맞춰 가상 물체 geom/site 마커의 투명도를 갱신한다."""
     if not hasattr(app, "virtual_object_marker_geom_id"):
         return
     visible = (getattr(app, "cyclo_controller", "movel") == "bimanual_movel"
@@ -267,6 +292,7 @@ def sync_marker_visibility(app):
 
 
 def active_gizmo_target(app):
+    """현재 3D 기즈모가 편집할 오른손·왼손·가상 물체 식별자를 반환한다."""
     if app.cyclo_controller == "bimanual_movel" and app.cyclo_grasp_captured:
         return "virtual"
     side = getattr(app, "jog_side", "r")
@@ -274,12 +300,17 @@ def active_gizmo_target(app):
 
 
 def gizmo_target_world_pose(app, target):
+    """기즈모 대상 식별자에 대응하는 현재 월드 pose를 반환한다."""
     if target == "virtual":
         return virtual_object_world_pose(app)
     return target_world_pose(app, target)
 
 
 def set_gizmo_target_world_pose(app, target, world_pos, world_quat):
+    """기즈모에서 편집한 월드 pose를 대상의 UI 좌표로 역변환해 저장한다.
+
+    가상 물체를 편집한 경우 캡처된 상대 변환을 이용해 두 손 목표도 즉시 동기화한다.
+    """
     if target == "virtual":
         if getattr(app, "whole_body_enabled", False):
             app.targets["virtual_object_pos"] = world_to_anchor_local_pos(app, world_pos).tolist()
@@ -293,6 +324,7 @@ def set_gizmo_target_world_pose(app, target, world_pos, world_quat):
 
 
 def sync_ik_mocaps_from_targets(app):
+    """수치 UI 목표를 MuJoCo 손·가상 물체 mocap 마커 pose와 가시성에 반영한다."""
     if not hasattr(app, "ik_target_mocap_ids"):
         return
     for side, mocap_id in app.ik_target_mocap_ids.items():

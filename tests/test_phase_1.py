@@ -32,6 +32,7 @@ CAN_INIT_QUAT = np.array([1.0, 0.0, 0.0, 0.0])
 
 
 def actuator_for_joint(model, jid):
+    """지정 손 관절을 구동하는 actuator ID를 찾아 반환한다."""
     for aid in range(model.nu):
         if (
             model.actuator_trntype[aid] == mujoco.mjtTrn.mjTRN_JOINT
@@ -42,6 +43,7 @@ def actuator_for_joint(model, jid):
 
 
 def reset_trial(model, data):
+    """파지 접촉 시험을 홈 자세와 초기 캔 상태로 되돌린다."""
     # Phase 1은 배치 강건성이 아니라 닫힘 동작 자체를 검사한다. 배치 강건성은 Phase 2의
     # ±5 mm 무작위 파지·들기 시험에서 다루므로 여기서는 일관된 고정 캔 자세를 반복한다.
     mujoco.mj_resetData(model, data)
@@ -54,6 +56,7 @@ def reset_trial(model, data):
 
 
 def close_hand(model, data):
+    """정해진 시간 동안 손가락 actuator를 닫아 캔 접촉 상태를 만든다."""
     for jid in range(model.njnt):
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jid)
         if name in CURL_JOINTS:
@@ -65,6 +68,7 @@ def close_hand(model, data):
 
 
 def worst_finger_can_penetration(model, data):
+    """현재 접촉 중 손가락과 캔 사이의 가장 깊은 관통량을 반환한다."""
     can_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "can_geom")
     worst = 0.0
     for i in range(data.ncon):
@@ -81,6 +85,7 @@ def worst_finger_can_penetration(model, data):
 
 
 def main():
+    """여러 초기 조건에서 손가락-캔 관통 깊이와 실행 속도 Phase 1 gate를 검사한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     data = mujoco.MjData(model)
 

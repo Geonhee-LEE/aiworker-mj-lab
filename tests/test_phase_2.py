@@ -41,6 +41,7 @@ def hand_frame_offset(model, data, can_qadr):
 
 
 def run_trial(model, data, rng):
+    """무작위 캔 위치에서 손을 닫고 들어 올려 파지 성공·미끄러짐 지표를 반환한다."""
     key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "pregrasp")
     mujoco.mj_resetDataKeyframe(model, data, key_id)
 
@@ -107,6 +108,7 @@ def run_trial(model, data, rng):
 
 
 def main():
+    """반복 파지·들기 성공률이 Phase 2 기준을 만족하는지 검사한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     data = mujoco.MjData(model)
     rng = np.random.default_rng(0)

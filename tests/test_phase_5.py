@@ -49,6 +49,7 @@ IDLE_DRIFT_LIMIT = 0.002  # 정지 상태 허용 표류량 2 mm
 
 
 def run_unit_tests():
+    """키 입력 평활화와 스워브 역기구학·반전 FSM의 순수 단위 회귀를 실행한다."""
     ok = True
 
     bt = base_teleop.BaseTeleop()
@@ -152,12 +153,14 @@ def run_unit_tests():
 
 
 def _reset_home(model, data):
+    """모바일 전신 모델을 home 키프레임으로 초기화하고 파생 상태를 계산한다."""
     key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     mujoco.mj_resetDataKeyframe(model, data, key_id)
     mujoco.mj_forward(model, data)
 
 
 def _make_rig(model):
+    """물리 주행 시험에 필요한 wheel joint·actuator 주소 묶음을 생성한다."""
     ctrl_r = arm_control.ArmTorqueController(model, ARM_R)
     ctrl_l = arm_control.ArmTorqueController(model, ARM_L)
     steer_aids = {w: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{w}_steer") for w in WHEELS}
@@ -182,6 +185,7 @@ def _make_rig(model):
 
 
 def _step(model, data, rig, drive, keys, frame_dt):
+    """키 입력에서 wheel 명령을 만들고 한 렌더 프레임 동안 물리를 진행한다."""
     yaw = data.qpos[rig["base_yaw_qadr"]]
     steering_positions = {w: float(data.qpos[qadr]) for w, qadr in rig["steer_qadrs"].items()}
     wheel_velocities = {w: float(data.qvel[dof]) for w, dof in rig["drive_dofs"].items()}
@@ -202,6 +206,7 @@ def _step(model, data, rig, drive, keys, frame_dt):
 
 
 def _step_twist(model, data, rig, drive, twist, frame_dt):
+    """직접 지정한 차체 twist로 wheel을 제어하고 한 프레임 물리를 진행한다."""
     steering_positions = {w: float(data.qpos[qadr]) for w, qadr in rig["steer_qadrs"].items()}
     wheel_velocities = {w: float(data.qvel[dof]) for w, dof in rig["drive_dofs"].items()}
     cmds = drive.update_twist(twist, frame_dt, steering_positions, wheel_velocities)
@@ -220,6 +225,7 @@ def _step_twist(model, data, rig, drive, twist, frame_dt):
 
 
 def _run_twist_trial(model, twist, duration):
+    """일정 차체 twist를 지정 시간 실행해 최종 베이스 pose와 내부 접촉 수를 반환한다."""
     data = mujoco.MjData(model)
     _reset_home(model, data)
     rig = _make_rig(model)
@@ -380,6 +386,7 @@ def run_collision_test(model):
 
 
 def main():
+    """스워브 단위·정지·주행·충돌·전방향 물리 Phase 5 gate를 실행한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
 
     print("Part 1: BaseTeleop + SwerveDrive unit tests")

@@ -29,6 +29,7 @@ MESHES = [
 
 
 def main():
+    """각 손 mesh의 로컬 AABB, 크기와 중심을 미터 단위로 측정해 출력한다."""
     for fname in MESHES:
         path = MESH_DIR / fname
         mesh = trimesh.load(path, force="mesh")

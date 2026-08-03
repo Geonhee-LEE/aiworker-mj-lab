@@ -19,7 +19,7 @@ UI target, 3D marker/gizmo pose, IK world pose 사이의 변환을 담당한다.
 > **왜 startup anchor가 필요한가**: 입력 축은 로봇 시작 방향의 앞/옆/위를
 > 유지하되 최종 target world pose는 고정돼야 한다. 현재 base pose에 target을 붙이면
 > whole-body IK가 베이스를 움직일 때 goal도 똑같이 움직여 오차가 줄지 않는다. 자세한 이유는
-> 각 변환의 입력·출력은 [애플리케이션 API](../api/application.md)에서
+> 각 변환의 입력·출력은 [목표 좌표 API](../api/application-targets.md)에서
 > 한 표로 찾을 수 있다.
 
 startup-anchor 위치 \((x,y,z)\) → world 위치, 앱 시작 시 캡처한 베이스 pose
@@ -62,7 +62,7 @@ p_{hand} = p_{obj} + R_{obj}\,p_{\text{offset}}, \quad R_{hand} = R_{obj}\,R_{\t
 ## 함수
 
 RPY↔quaternion과 quaternion↔회전행렬 변환은
-[`kinematics.rotations`](../api/kinematics.md#rotation-utilities)에
+[`kinematics.rotations`](../api/kinematics-rotations.md)에
 모아 두었다. 이 모듈은 그 공용 연산을 조합해 target 좌표계만 처리한다.
 
 | 함수 | 역할 |

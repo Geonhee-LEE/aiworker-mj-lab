@@ -42,12 +42,16 @@ GIF_FRAME_MS = 90  # 약 11 fps로 재생한다.
 
 
 def _read_arm_q(model, data, joint_names):
+    """관절 이름 순서에 맞춰 현재 팔 qpos를 NumPy 벡터로 반환한다."""
     return np.array([data.qpos[model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]]
                       for n in joint_names])
 
 
 class FrameGrabber:
+    """MuJoCo offscreen 프레임을 일정 간격으로 모아 GIF로 저장한다."""
+
     def __init__(self, model):
+        """오른손 추적 카메라, 접촉 표시 옵션과 빈 프레임 버퍼를 초기화한다."""
         self.renderer = mujoco.Renderer(model, height=360, width=480)
         self.cam = mujoco.MjvCamera()
         self.cam.lookat[:] = [0.5055, 0.0, 0.85]
@@ -61,6 +65,7 @@ class FrameGrabber:
         self._next_t = 0.0
 
     def maybe_capture(self, data):
+        """시뮬레이션 시각이 다음 촬영 시각에 도달했을 때 한 프레임을 저장한다."""
         if data.time < self._next_t:
             return
         self._next_t += FRAME_EVERY_S
@@ -68,6 +73,7 @@ class FrameGrabber:
         self.frames.append(Image.fromarray(self.renderer.render()))
 
     def save(self, path):
+        """누적 프레임을 128색으로 양자화해 반복 재생 GIF로 기록한다."""
         # 평평한 로봇 shading, 격자 바닥과 적은 색으로 구성되어 적응형 palette 양자화를
         # 적용해도 시각적 손실이 거의 없다. PIL 기본 프레임별 full-color GIF보다 용량을
         # 몇 배 줄일 수 있다.
@@ -78,6 +84,7 @@ class FrameGrabber:
 
 
 def _move(model, data, ctrl_r, ctrl_l, grabber, q_from, q_to, duration, dt, grasp_frac=None, thumb_frac=None):
+    """오른팔 목표를 선형 보간하며 물리 진행·선택적 파지·촬영을 수행한다."""
     n = int(duration / dt)
     for i in range(n):
         frac = i / n
@@ -90,6 +97,7 @@ def _move(model, data, ctrl_r, ctrl_l, grabber, q_from, q_to, duration, dt, gras
 
 
 def _hold(model, data, ctrl_r, ctrl_l, grabber, q_des, duration, dt, grasp_frac=None, thumb_frac=None):
+    """오른팔 목표를 유지하며 물리 진행·선택적 파지·촬영을 수행한다."""
     n = int(duration / dt)
     for _ in range(n):
         ctrl_r.apply(data, q_des)
@@ -101,6 +109,7 @@ def _hold(model, data, ctrl_r, ctrl_l, grabber, q_des, duration, dt, grasp_frac=
 
 
 def main():
+    """접근·파지·들기 동작을 자동 실행해 문서용 GIF 데모를 생성한다."""
     out_path = sys.argv[1] if len(sys.argv) > 1 else str(REPO_ROOT / "docs" / "assets" / "demo.gif")
     pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
 

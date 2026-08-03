@@ -67,6 +67,12 @@ class KinematicsSolver:
 
     def __init__(self, model, site_name, joint_names, damping=DEFAULT_DAMPING,
                  max_joint_delta=DEFAULT_MAX_JOINT_DELTA, *, tree=None):
+        """제어할 site와 scalar joint를 검증하고 반복 IK에 필요한 배열을 준비한다.
+
+        ``model``은 이름과 주소 확인에 사용한다. ``site_name``은 목표 말단 site,
+        ``joint_names``는 해에 포함할 hinge/slide 관절 순서다. ``tree``를 생략하면
+        모델에서 새 :class:`KinematicTree`를 만들며, 전달하면 기존 트리를 공유한다.
+        """
         self.model = model
         self.tree = KinematicTree(model) if tree is None else tree
         joint_names = tuple(joint_names)
@@ -138,6 +144,7 @@ class KinematicsSolver:
         return self.forward(q, context_qpos)
 
     def _clamp_to_limits(self, q):
+        """제한이 설정된 관절만 MJCF 범위로 자른 새 관절 벡터를 반환한다."""
         result = np.asarray(q, dtype=float).copy()
         result[self.joint_limited] = np.clip(
             result[self.joint_limited],
@@ -147,6 +154,7 @@ class KinematicsSolver:
 
     @staticmethod
     def _pose_error(state, target_position, target_quaternion):
+        """현재 site 상태에서 목표까지의 위치·최단 회전 오차 벡터를 계산한다."""
         position_error = np.asarray(target_position, dtype=float) - state.position
         orientation_error = shortest_orientation_error(
             target_quaternion, state.quaternion)

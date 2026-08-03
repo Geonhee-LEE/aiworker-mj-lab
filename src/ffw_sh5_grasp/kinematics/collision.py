@@ -120,6 +120,7 @@ def default_collision_pairs(model):
     pairs = {}
 
     def add(kind, body_a, body_b, geom_b=None, mode="geom"):
+        """유효하고 중복되지 않은 geom 조합을 이름 붙인 충돌 쌍으로 등록한다."""
         geom_a = body_geom.get(body_a)
         other = body_geom.get(body_b) if geom_b is None else geom_b
         if geom_a is None or other is None or geom_a == other:

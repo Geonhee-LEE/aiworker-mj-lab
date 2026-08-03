@@ -102,6 +102,7 @@ def _named_id(model, object_type, name):
 
 
 def _joint_address(model, name, addresses):
+    """관절 이름을 qpos 또는 dof 주소 배열의 정수 인덱스로 변환한다."""
     joint_id = _named_id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
     return int(addresses[joint_id])
 
@@ -127,9 +128,11 @@ class KeyEdge:
     """키를 누른 순간에만 한 번 참을 반환하는 엣지 입력 검사기."""
 
     def __init__(self):
+        """이전 프레임에 눌려 있던 키 집합을 빈 상태로 초기화한다."""
         self._prev = set()
 
     def pressed(self, window, key):
+        """지정 GLFW 키가 이번 프레임에 새로 눌렸을 때만 ``True``를 반환한다."""
         down = glfw.get_key(window, key) == glfw.PRESS
         was_down = key in self._prev
         if down:
@@ -145,6 +148,7 @@ class TeleopApp:
     UI 패널 -> 물리 스텝 -> 렌더링. 상태는 전부 인스턴스 속성(self.*)에 있다."""
 
     def __init__(self):
+        """시뮬레이션·렌더링·루프 상태를 순서대로 구성해 실행 가능한 앱을 만든다."""
         self._setup_sim()
         render.setup_render(self, WINDOW_W, WINDOW_H)
         self._setup_loop_state()
@@ -350,9 +354,11 @@ class TeleopApp:
     # (ui.draw_panel) 양쪽에서 똑같이 호출하는 공용 메서드.
 
     def reset_can(self):
+        """캔을 홈 주변의 작은 무작위 위치와 단위 자세로 재배치한다."""
         _reset_can_random(self.model, self.data, self.rng)
 
     def reset_active_object(self):
+        """캔과 파지·가상 물체 상태를 함께 초기화해 새 작업을 시작할 준비를 한다."""
         self.reset_can()
         self.grab_state = {"r": None, "l": None}
         self.cyclo_grasp_captured = False
@@ -377,10 +383,12 @@ class TeleopApp:
         self.model.geom_rgba[gid][3] = 0.0
 
     def cycle_camera(self):
+        """두 개의 사전 정의 카메라 프리셋을 번갈아 선택하고 렌더 카메라에 적용한다."""
         self.camera_preset = 1 - self.camera_preset
         render.set_camera_preset(self.cam, self.camera_preset)
 
     def toggle_collision_visualization(self):
+        """충돌 거리와 최근접점을 나타내는 진단 오버레이 표시 여부를 전환한다."""
         self.collision_viz = not self.collision_viz
 
     def set_arm_mode(self, side, mode):
@@ -471,6 +479,7 @@ class TeleopApp:
         targets.sync_ik_mocaps_from_targets(self)
 
     def toggle_whole_body_control(self):
+        """현재 상태의 반대 값으로 전신 IK 활성 여부를 안전하게 전환한다."""
         self.set_whole_body_enabled(not self.whole_body_enabled)
 
     def capture_grasp(self):
@@ -489,11 +498,17 @@ class TeleopApp:
         self.whole_body_solver.set_rigid_grasp(self.data, False)
 
     def apply_virtual_object_target(self):
+        """가상 물체 목표를 캡처된 상대 변환에 따라 양손 목표로 반영한다."""
         targets.apply_virtual_object_target(self)
 
     # 메인 루프
 
     def run(self):
+        """창이 닫힐 때까지 입력·제어·물리·렌더링 프레임 루프를 실행한다.
+
+        종료 조건을 만나면 렌더러, ImGui와 GLFW 자원을 ``render.shutdown``으로
+        정리한다. 이 메서드는 앱의 최상위 blocking 실행 진입점이다.
+        """
         # 매 프레임 (1) 입력 처리 (2) IK 풀기 (3) 물리 스텝 (4) 렌더링을 전부 한
         # 스레드/한 루프 안에서 순서대로 실행한다.
         while not glfw.window_should_close(self.window):
@@ -741,6 +756,7 @@ class TeleopApp:
         self._step_actuators(wheel_cmds)
 
 def _parse_args(argv):
+    """텔레옵 CLI 인자를 파싱하고 설정 파일이 import 전에 적용됐는지 확인한다."""
     parser = argparse.ArgumentParser(description="FFW-SH5 teleop app")
     parser.add_argument(
         "--config", metavar="YAML",
@@ -756,6 +772,7 @@ def _parse_args(argv):
 
 
 def main(argv=None):
+    """명령행 인자를 검사한 뒤 :class:`TeleopApp`을 생성하고 메인 루프를 시작한다."""
     _parse_args(sys.argv[1:] if argv is None else argv)
     TeleopApp().run()
 

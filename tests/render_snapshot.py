@@ -15,6 +15,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def main():
+    """CLI로 지정한 MJCF의 손 자세를 offscreen 렌더링해 PNG로 저장한다."""
     model_path = sys.argv[1]
     out_path = sys.argv[2]
     grasp = 0.0

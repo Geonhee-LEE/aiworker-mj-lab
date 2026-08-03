@@ -123,10 +123,12 @@ def _ik_err_text(app, side):
 
 
 def _clamp(value, lo, hi):
+    """스칼라 UI 값을 닫힌 구간 ``[lo, hi]`` 안으로 제한한다."""
     return min(hi, max(lo, value))
 
 
 def _slider_float_clamped(label, value, lo, hi, fmt):
+    """실수 슬라이더를 그리고 변경값을 범위 안으로 재확인해 ``(변경, 값)``으로 반환한다."""
     changed, value = imgui.slider_float(label, value, lo, hi, fmt)
     if changed:
         value = _clamp(value, lo, hi)
@@ -134,6 +136,7 @@ def _slider_float_clamped(label, value, lo, hi, fmt):
 
 
 def _draw_vector_sliders(prefix, values, axes, lo, hi, fmt, on_change=None):
+    """벡터 각 축의 실수 슬라이더를 그리고 하나라도 바뀌었는지 반환한다."""
     changed_any = False
     for i, axis in enumerate(axes):
         changed, values[i] = _slider_float_clamped(f"{axis}##{prefix}_{axis}", values[i], lo, hi, fmt)
@@ -145,6 +148,7 @@ def _draw_vector_sliders(prefix, values, axes, lo, hi, fmt, on_change=None):
 
 
 def _ensure_jog_state(app):
+    """이전 저장 상태에 없는 jog 대상과 위치·회전 step 기본값을 지연 초기화한다."""
     if not hasattr(app, "jog_side"):
         app.jog_side = "virtual" if getattr(app, "cyclo_grasp_captured", False) else "r"
     if not hasattr(app, "jog_pos_step_m"):
@@ -154,6 +158,7 @@ def _ensure_jog_state(app):
 
 
 def _clamp_pose_targets(targets, side):
+    """지정 손의 XYZ 오프셋과 RPY 목표를 UI 허용 범위 안으로 제한한다."""
     pos = targets[f"pos_{side}"]
     rpy = targets[f"rpy_{side}"]
     for i in range(3):
@@ -162,6 +167,7 @@ def _clamp_pose_targets(targets, side):
 
 
 def _apply_cartesian_jog(app, side, pos_delta=(0.0, 0.0, 0.0), rpy_delta=(0.0, 0.0, 0.0)):
+    """선택한 손 또는 가상 물체 목표에 Cartesian 위치·RPY 증분을 적용한다."""
     if side == "virtual":
         pos = app.targets["virtual_object_pos"]
         rpy = app.targets["virtual_object_rpy"]
@@ -184,12 +190,14 @@ def _apply_cartesian_jog(app, side, pos_delta=(0.0, 0.0, 0.0), rpy_delta=(0.0, 0
 
 
 def _repeat_button(label):
+    """버튼을 처음 누른 프레임과 누르고 있는 프레임 모두에서 참을 반환한다."""
     pressed = imgui.button(label)
     active = imgui.is_item_active()
     return pressed or active
 
 
 def _draw_jog_row(app, title, axis_labels, step, is_rotation=False):
+    """XYZ 또는 RPY 각 축의 음·양 방향 반복 jog 버튼 한 줄을 그린다."""
     imgui.text(f"{title} jog")
     for i, axis in enumerate(axis_labels):
         if i:
@@ -212,12 +220,14 @@ def _draw_jog_row(app, title, axis_labels, step, is_rotation=False):
 
 
 def _active_marker_choices(app):
+    """현재 독립 손/양손 캡처 상태에서 사용자가 선택할 수 있는 마커 목록을 반환한다."""
     if app.cyclo_controller == "bimanual_movel" and app.cyclo_grasp_captured:
         return (("virtual", "Virtual object"),)
     return (("r", "Right goal"), ("l", "Left goal"))
 
 
 def _selected_marker_label(app):
+    """현재 jog 대상에 대응하는 사용자 표시용 마커 이름을 반환한다."""
     choices = dict(_active_marker_choices(app))
     jog_side = getattr(app, "jog_side", None)
     if jog_side in choices:
@@ -226,6 +236,7 @@ def _selected_marker_label(app):
 
 
 def _draw_cyclo_control_panel(app):
+    """MoveL 모드, 파지 캡처, 활성 마커와 Cartesian jog 제어 UI를 그린다."""
     _ensure_jog_state(app)
     imgui.text("Controller")
     for controller, label in (("movel", "MoveL"), ("bimanual_movel", "Bimanual MoveL")):
@@ -283,6 +294,7 @@ def _draw_cyclo_control_panel(app):
         pos = app.targets["virtual_object_pos"]
         rpy = app.targets["virtual_object_rpy"]
         def apply_virtual_edit():
+            """가상 물체 슬라이더 변경을 캡처된 양손 목표에 즉시 반영한다."""
             app.apply_virtual_object_target()
         _draw_vector_sliders(
             "virtual_object_pos", pos, POS_AXES, *VIRTUAL_POS_RANGE,
@@ -293,6 +305,7 @@ def _draw_cyclo_control_panel(app):
 
 
 def _draw_status_panel(app, data):
+    """시간·IK 오차·베이스 명령·충돌 CBF와 키 도움말을 상태 패널에 표시한다."""
     imgui.text(f"CAN  |  {app.cyclo_controller}  |  marker: {_selected_marker_label(app)}")
     imgui.text(f"sim {data.time:6.1f}s  wall {time.perf_counter()-app.wall_start:6.1f}s  "
                f"{app.freq_ema:4.1f} Hz")
@@ -317,6 +330,7 @@ def _draw_status_panel(app, data):
 
 
 def _draw_ik_pose_controls(app, targets, side):
+    """지정 손의 홈 기준 위치 오프셋과 RPY IK 목표 슬라이더를 그린다."""
     pos = targets[f"pos_{side}"]
     rpy = targets[f"rpy_{side}"]
     imgui.text("Position offset from home (startup/world anchor)")
@@ -330,6 +344,7 @@ def _draw_ik_pose_controls(app, targets, side):
 
 
 def _draw_fk_joint_controls(app, side):
+    """지정 팔의 각 관절 목표를 도 단위 FK 슬라이더로 그린다."""
     imgui.text("Joint angles (deg)")
     fk_deg = app.fk_q_deg[side]
     for i, (lo, hi) in enumerate(app.arm_joint_ranges_deg[side]):
@@ -337,6 +352,7 @@ def _draw_fk_joint_controls(app, side):
 
 
 def _draw_arm_panel(app, targets, side):
+    """한 팔의 IK/FK 모드 전환 버튼과 선택된 모드의 목표 제어 UI를 그린다."""
     mode = app.arm_mode[side]
     imgui.text(f"Mode: {'IK pose' if mode == 'ik' else 'FK joints'}")
     imgui.same_line()
@@ -350,6 +366,7 @@ def _draw_arm_panel(app, targets, side):
 
 
 def _draw_can_grasp_panel(app, targets):
+    """양손의 원터치 파지 버튼과 grasp·thumb 연속 명령 슬라이더를 그린다."""
     for side, label in (("r", "Right"), ("l", "Left")):
         if side == "l":
             imgui.separator()
@@ -366,6 +383,7 @@ def _draw_can_grasp_panel(app, targets):
 
 
 def _draw_lift_utils_panel(app, targets):
+    """전신 제어 전환, 리프트 목표, reset·진단·카메라 유틸리티를 그린다."""
     whole_body_enabled = getattr(app, "whole_body_enabled", True)
     button_label = ("Whole-body Control: ON##wholebody"
                     if whole_body_enabled else "Whole-body Control: OFF (arm-only)##wholebody")
@@ -391,6 +409,7 @@ def _draw_lift_utils_panel(app, targets):
 
 
 def _draw_joint_monitor(app, data):
+    """감시 대상 관절의 현재 위치를 제한 범위 대비 진행 막대로 표시한다."""
     imgui.begin_child("joint_monitor", (0, 0), True)
     for name in app.monitor_qposadr:
         val = float(data.qpos[app.monitor_qposadr[name]])
@@ -421,6 +440,7 @@ def kinematic_tree_body_ids(app, scope=None, show_full=None):
 
 
 def _joint_state_text(app, joint):
+    """관절 종류에 맞춰 현재 qpos를 각도·거리 또는 multi-DOF 설명 문자열로 만든다."""
     value = float(app.data.qpos[joint.qpos_adr])
     if joint.kind_name == "hinge":
         return f"{math.degrees(value):+.1f} deg"
@@ -431,6 +451,7 @@ def _joint_state_text(app, joint):
 
 def _draw_kinematic_body(app, body_id, visible_body_ids, controlled_joint_ids,
                          target_site_ids):
+    """기구학 body 하나와 소속 joint/site, 표시 대상 자식 body를 재귀적으로 그린다."""
     tree = app.whole_body_solver.kinematic_tree
     body = tree.bodies[body_id]
     body_name = body.name or "world"
@@ -461,6 +482,7 @@ def _draw_kinematic_body(app, body_id, visible_body_ids, controlled_joint_ids,
 
 
 def _draw_kinematic_tree(app):
+    """손 범위·전체 트리 선택 UI와 필터링된 MJCF 기구학 계층을 그린다."""
     tree = app.whole_body_solver.kinematic_tree
     imgui.text("Scope")
     for index, (scope, label) in enumerate(
@@ -492,6 +514,7 @@ def _draw_kinematic_tree(app):
 
 
 def _draw_window_visibility(app):
+    """도구 창 분리·복귀와 작업 공간별 표시 여부를 제어하는 UI를 그린다."""
     imgui.separator_text("Workspaces")
     if imgui.button("Detach tools outside"):
         app.ui_layout_request = "detach"
@@ -521,6 +544,7 @@ def _draw_window_visibility(app):
 
 
 def _draw_status_window(app, data):
+    """주 viewport 좌상단에 항상 고정되는 상태·창 관리 도구 창을 그린다."""
     main_viewport = imgui.get_main_viewport()
     imgui.set_next_window_pos(
         (main_viewport.pos.x + 10.0, main_viewport.pos.y + 10.0),
@@ -533,6 +557,7 @@ def _draw_status_window(app, data):
 
 
 def _draw_if_visible(app, key, draw_contents):
+    """지정 작업 창이 활성일 때만 창을 열고 전달받은 내용 그리기 함수를 호출한다."""
     if not app.ui_windows[key]:
         return
     expanded = _begin_tool_window(app, key)
@@ -562,6 +587,7 @@ def _draw_control_center(app, targets):
         lambda: _draw_arm_panel(app, targets, "l"))
 
     def draw_robot_controls():
+        """리프트·유틸리티와 캔 파지 제어를 Robot/Grasp 탭에 묶어 그린다."""
         imgui.separator_text("Lift / Utilities")
         _draw_lift_utils_panel(app, targets)
         imgui.separator_text("Can Grasp")

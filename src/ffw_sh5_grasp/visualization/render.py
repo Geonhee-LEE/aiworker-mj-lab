@@ -52,6 +52,7 @@ if FREQUENCY_EMA_PREVIOUS_WEIGHT >= 1.0:
 
 
 def set_camera_preset(cam, preset):
+    """YAML에 정의된 카메라 프리셋의 시점·거리·방위·고도를 MuJoCo 카메라에 적용한다."""
     settings = CAMERA_PRESETS[0 if preset == 0 else 1]
     cam.lookat[:] = settings["lookat"]
     cam.distance = float(settings["distance"])
@@ -60,6 +61,11 @@ def set_camera_preset(cam, preset):
 
 
 def setup_render(app, window_w, window_h):
+    """GLFW 창, ImGui 다중 뷰포트와 MuJoCo 렌더링 자원을 생성해 ``app``에 연결한다.
+
+    초기화 단계가 실패하면 이미 만든 하위 자원을 역순으로 정리하고 예외를 발생시킨다.
+    성공하면 scene, camera, option, perturbation과 GPU context를 사용할 수 있다.
+    """
     if not glfw.init():
         raise RuntimeError("glfw.init() failed")
     window = glfw.create_window(window_w, window_h, "FFW-SH5 Teleop", None, None)
@@ -99,6 +105,7 @@ def setup_render(app, window_w, window_h):
 
 
 def begin_frame(app):
+    """운영체제 이벤트를 처리하고 새 ImGui 프레임을 시작한 뒤 입력 상태를 반환한다."""
     glfw.poll_events()
     imgui.backends.opengl3_new_frame()
     imgui.backends.glfw_new_frame()
@@ -107,6 +114,7 @@ def begin_frame(app):
 
 
 def shutdown(app):
+    """ImGui backend·다중 창·주 GLFW 창을 안전한 역순으로 종료한다."""
     imgui.destroy_platform_windows()
     imgui.backends.opengl3_shutdown()
     imgui.backends.glfw_shutdown()
@@ -116,6 +124,7 @@ def shutdown(app):
 
 
 def handle_camera_mouse(app, io):
+    """UI와 기즈모가 사용하지 않은 마우스 드래그·휠 입력으로 MuJoCo 카메라를 조작한다."""
     cur_mouse = list(glfw.get_cursor_pos(app.window))
     dx, dy = cur_mouse[0] - app.last_mouse[0], cur_mouse[1] - app.last_mouse[1]
     app.last_mouse = cur_mouse
@@ -142,6 +151,7 @@ def handle_camera_mouse(app, io):
 
 
 def pose_to_imguizmo_matrix(world_pos, world_quat):
+    """월드 위치와 wxyz 쿼터니언을 ImGuizmo 열 우선 4×4 변환 행렬로 바꾼다."""
     mat = np.eye(4)
     mat[:3, :3] = rotations.rotation_from_quaternion(world_quat)
     mat[:3, 3] = world_pos
@@ -149,6 +159,7 @@ def pose_to_imguizmo_matrix(world_pos, world_quat):
 
 
 def imguizmo_matrix_to_pose(matrix):
+    """ImGuizmo 열 우선 변환 행렬에서 월드 위치와 wxyz 쿼터니언을 복원한다."""
     mat = np.array(matrix.values, dtype=float).reshape((4, 4), order="F")
     world_pos = mat[:3, 3].copy()
     world_quat = rotations.quaternion_from_rotation(mat[:3, :3])
@@ -156,6 +167,7 @@ def imguizmo_matrix_to_pose(matrix):
 
 
 def _imguizmo_camera_matrices(app, viewport):
+    """MuJoCo 렌더 카메라를 ImGuizmo가 요구하는 view·projection 행렬로 변환한다."""
     glcam = app.scene.camera[0]
     forward = np.array(glcam.forward, dtype=float)
     forward /= max(np.linalg.norm(forward), 1e-9)
@@ -241,6 +253,7 @@ def collision_visualization_data(app):
 
 
 def _collision_color(distance, safe_distance):
+    """충돌 거리의 관통·위험·buffer 상태에 대응하는 RGBA 색상 복사본을 반환한다."""
     if distance <= 0.0:
         return PENETRATION_RGBA.copy()
     if distance < safe_distance:
@@ -249,6 +262,7 @@ def _collision_color(distance, safe_distance):
 
 
 def _append_visual_geom(scene, geom_type, size, pos, mat, rgba):
+    """scene 용량 안에서 장식용 geom 하나를 추가하고 생성된 geom을 반환한다."""
     if scene.ngeom >= scene.maxgeom:
         return None
     geom = scene.geoms[scene.ngeom]
@@ -287,6 +301,7 @@ def _append_collision_overlay(app, constraints):
 
 
 def render_scene(app):
+    """목표 마커·충돌 오버레이·MuJoCo scene·ImGui 다중 창을 한 프레임 렌더링한다."""
     targets.sync_ik_mocaps_from_targets(app)
     app.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = app.contact_viz
     app.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = app.contact_viz
@@ -314,6 +329,7 @@ def render_scene(app):
 
 
 def end_frame(app, t0):
+    """프레임 주파수 EMA를 갱신하고 목표 제어 주기를 넘지 않도록 남은 시간을 쉰다."""
     elapsed = time.perf_counter() - t0
     current_weight = 1.0 - FREQUENCY_EMA_PREVIOUS_WEIGHT
     app.freq_ema = (

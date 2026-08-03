@@ -25,9 +25,19 @@ _JOINT_KIND_NAMES = {
 }
 
 
+# dataclass(frozen=True)는 KinematicBody, KinematicSite, SiteKinematics,
+# KinematicJoint 클래스의 인스턴스를 만든 뒤 속성을 변경할 수 없게 한다.
+# 이는 기구학 트리에서 각 body, site, joint의 정보가 변경되지 않도록 보장하기 위해 사용된다.
 @dataclass(frozen=True)
 class SiteKinematics:
-    """site의 world pose와 world-frame 6×N geometric Jacobian."""
+    """site의 world pose와 world-frame 6×N geometric Jacobian.
+    여기서 site는 로봇의 특정 지점이나 좌표계를 나타내며, world pose는 site의 위치와 회전을 나타낸다.
+    geometric Jacobian은 site의 위치와 회전 변화에 대한 관절 속도의 관계를 나타내는 행렬이다.
+    position: site의 world 좌표계에서의 위치를 나타내는 3차원 벡터.
+    quaternion: site의 world 좌표계에서의 회전을 나타내는 4차원 쿼터니언.
+    jacobian: site의 위치와 회전 변화에 대한 관절 속도의 관계를 나타내는 6×N 행렬. 상위 3행은 위치 변화에 대한 Jacobian이고, 하위 3행은 회전 변화에 대한 Jacobian이다.
+    N은 고려되는 관절의 수를 나타낸다.
+    """
 
     position: np.ndarray
     quaternion: np.ndarray
@@ -36,8 +46,22 @@ class SiteKinematics:
 
 @dataclass(frozen=True)
 class KinematicJoint:
-    """FK에 필요한 scalar joint 정보."""
+    """FK에 필요한 scalar joint 정보.
+    id: joint의 고유 식별자.
+    name: joint의 이름.
+    kind: joint의 종류를 나타내는 정수 값. (예: hinge, slide 등)
+    kind_name: joint의 종류를 나타내는 문자열.(예: "hinge", "slide" 등)
+    qpos_adr: joint의 위치 변수(qpos)가 저장된 배열에서의 시작 인덱스.
+    dof_adr: joint의 자유도(dof)가 저장된 배열에서의 시작 인덱스.
+    position: joint의 위치를 나타내는 3차원 벡터. (joint의 anchor point)
+    axis: joint의 회전 축을 나타내는 3차원 벡터. (joint의 회전 방향)
+    limited: joint의 회전 범위 제한 여부를 나타내는 불리언 값.
+    range: joint의 회전 범위를 나타내는 2차원 벡터. (최소값, 최대값)
 
+    즉, KinematicJoint 클래스는 로봇의 관절에 대한 정보를 담고 있으며,
+    FK 계산에 필요한 joint의 위치, 회전 축, 자유도, 제한 여부 등을 포함하고 있다.
+
+    """
     id: int
     name: str
     kind: int
@@ -52,7 +76,17 @@ class KinematicJoint:
 
 @dataclass(frozen=True)
 class KinematicBody:
-    """부모 기준 고정 변환과 소속 joint를 가진 body 노드."""
+    """부모 기준 고정 변환과 소속 joint를 가진 body 노드.
+    body는 로봇의 링크를 나타내며, 부모 body에 대한 고정 변환과 소속된 joint 정보를 포함한다.
+    id: body의 고유 식별자.
+    name: body의 이름.
+    parent_id: 부모 body의 고유 식별자. (루트 body의 경우 0)
+    position: 부모 body 기준의 위치를 나타내는 3차원 벡터. (body의 anchor point)
+    rotation: 부모 body 기준의 회전을 나타내는 3×3 회전 행렬. (body의 orientation)
+    joint_ids: body에 소속된 joint들의 고유 식별자 목록. (body에 연결된 joint들의 ID)
+
+    즉, KinematicBody 클래스는 로봇의 링크에 대한 정보를 담고 있으며, 부모 body에 대한 위치와 회전, 소속된 joint들의 정보를 포함하고 있다.
+    """
 
     id: int
     name: str
@@ -64,7 +98,15 @@ class KinematicBody:
 
 @dataclass(frozen=True)
 class KinematicSite:
-    """body에 고정된 site 변환."""
+    """body에 고정된 site 변환.
+    id: site의 고유 식별자.
+    name: site의 이름.
+    body_id: site가 소속된 body의 고유 식별자.
+    position: body 기준의 위치를 나타내는 3차원 벡터.
+    rotation: body 기준의 회전을 나타내는 3×3 회전 행렬.
+    즉, KinematicSite 클래스는 로봇의 특정 지점이나 좌표계를 나타내며, 소속된 body에 대한 위치와 회전 정보를 포함하고 있다.
+
+    """
 
     id: int
     name: str
@@ -77,6 +119,31 @@ class KinematicTree:
     """MJCF body-joint-site 계층을 복사한 읽기 전용 기구학 트리."""
 
     def __init__(self, model):
+        """컴파일된 MuJoCo 모델에서 FK에 필요한 불변 정보만 복사한다.
+
+        ``model``의 body, joint, site와 기본 qpos를 NumPy 기반 자료구조로 옮기고,
+        각 body/site까지의 부모 경로를 미리 계산한다. 초기화 이후 FK 계산은 원본
+        MuJoCo 모델이나 ``MjData``에 의존하지 않는다.
+        """
+
+        """
+        nq = int(model.nq)  # 모델의 자유도 수를 가져온다. ex) 7
+        qpos0 = np.asarray(model.qpos0, dtype=float).copy()  # 모델의 초기 관절 위치를 NumPy 배열로 복사한다.
+        bodies = tuple(
+            self._copy_body(model, body_id) for body_id in range(model.nbody))
+        # 모델의 모든 body를 순회하며 KinematicBody 객체로 복사한다.
+        joints = tuple(
+            self._copy_joint(model, joint_id) for joint_id in range(model.njnt))
+        # 모델의 모든 joint를 순회하며 KinematicJoint 객체로 복사한다.
+        sites = tuple(
+            self._copy_site(model, site_id) for site_id in range(model.nsite))
+        # 모델의 모든 site를 순회하며 KinematicSite 객체로 복사한다.
+        joint_by_name = {
+            joint.name: joint for joint in self.joints if joint.name}
+        # joint 이름을 키로, KinematicJoint 객체를 값으로 하는 딕셔너리를 생성한다. 이름이 없는 joint는 제외한다.
+        site_by_name = {site.name: site for site in self.sites if site.name}
+        # site 이름을 키로, KinematicSite 객체를 값으로 하는 딕셔너리를 생성한다. 이름이 없는 site는 제외한다.
+        """
         self.nq = int(model.nq)
         self.qpos0 = np.asarray(model.qpos0, dtype=float).copy()
         self.bodies = tuple(
@@ -104,10 +171,12 @@ class KinematicTree:
 
     @staticmethod
     def _name(model, object_type, object_id):
+        """MuJoCo 객체 ID를 이름으로 바꾸며 이름이 없으면 빈 문자열을 반환한다."""
         return mujoco.mj_id2name(model, object_type, object_id) or ""
 
     @classmethod
     def _copy_body(cls, model, body_id):
+        """MuJoCo body 하나의 부모 변환과 소속 joint ID를 불변 노드로 복사한다."""
         joint_address = int(model.body_jntadr[body_id])
         joint_count = int(model.body_jntnum[body_id])
         joint_ids = (() if joint_count == 0 else
@@ -123,6 +192,7 @@ class KinematicTree:
 
     @classmethod
     def _copy_joint(cls, model, joint_id):
+        """MuJoCo joint 하나의 형식·주소·축·제한 정보를 불변 노드로 복사한다."""
         kind = int(model.jnt_type[joint_id])
         return KinematicJoint(
             id=joint_id,
@@ -139,6 +209,7 @@ class KinematicTree:
 
     @classmethod
     def _copy_site(cls, model, site_id):
+        """MuJoCo site 하나의 소속 body와 고정 변환을 불변 노드로 복사한다."""
         return KinematicSite(
             id=site_id,
             name=cls._name(model, mujoco.mjtObj.mjOBJ_SITE, site_id),
@@ -148,6 +219,7 @@ class KinematicTree:
         )
 
     def _body_path(self, body_id):
+        """월드 body 다음 노드부터 지정 body까지의 ID 경로를 부모 순서로 반환한다."""
         path = []
         while body_id != 0:
             path.append(body_id)
@@ -215,11 +287,21 @@ class KinematicTree:
         return self._point_jacobian_from_frames(
             point_world, joint_ids, joint_frames)
 
+
+    # 입력 : qpos (관절 위치), site_id (사이트 ID), joint_ids (관절 ID 목록)
+    # 여기서 site_id는 계산하려는 site의 ID이며, joint_ids는 Jacobian을 계산할 때 고려할 관절들의 ID 목록이다.
+    # site id가 뭐냐면 site는 MuJoCo에서 정의된 특정 지점이나 좌표계를 나타내며, site_id는 그 site를 식별하는 고유한 정수 값이다.
+    # joint_ids는 Jacobian을 계산할 때 어떤 관절들을 포함할지 지정하는 리스트나 배열이다. Jacobian은 선택된 관절들에 대한 site의 위치 변화를 나타내므로, joint_ids를 통해 어떤 관절들이 영향을 미치는지 선택할 수 있다.
+    # 출력 : site의 world pose와 선택된 joint 열의 6×N Jacobian
     def forward_site(self, qpos, site_id, joint_ids):
         """site world pose와 선택된 joint 열의 6×N Jacobian을 반환한다."""
+        # site Jacobian은 point Jacobian과 hinge joint axis를 합쳐서 만든다.
+        # site Jacobian은 6×N 행렬로, 상위 3행은 site의 위치 변화에 대한 Jacobian이고, 하위 3행은 site의 회전 변화에 대한 Jacobian이다. 이를 위해 먼저 point Jacobian을 계산하고, hinge joint의 경우에는 회전 축을 고려하여 하위 3행을 채운다.
         qpos = np.asarray(qpos, dtype=float)
+        # 만약 qpos가 올바른 shape이 아니면 ValueError를 발생시킨다.
         if qpos.shape != (self.nq,):
             raise ValueError(f"expected qpos shape ({self.nq},), got {qpos.shape}")
+        # site_id가 올바른 범위에 있는지 확인한다.
         if site_id < 0 or site_id >= len(self.sites):
             raise ValueError(f"invalid site id: {site_id}")
 

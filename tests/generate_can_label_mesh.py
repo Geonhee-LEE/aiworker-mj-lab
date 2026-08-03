@@ -38,6 +38,7 @@ SIDE_Z_FRAC_HI = 0.92
 
 
 def write_obj(path, verts, faces, uvs_per_face_corner=None):
+    """정점·삼각형 면과 선택적 면 꼭짓점 UV를 OBJ 형식으로 기록한다."""
     lines = [f"# tests/generate_can_label_mesh.py가 생성한 파일이므로 직접 수정하지 않는다.\n"]
     for v in verts:
         lines.append(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
@@ -58,6 +59,7 @@ def write_obj(path, verts, faces, uvs_per_face_corner=None):
 
 
 def main():
+    """캔 STL을 라벨 옆면과 뚜껑 mesh로 분리해 두 OBJ asset을 생성한다."""
     mesh = trimesh.load(STL_PATH)
     verts = mesh.vertices
     faces = mesh.faces

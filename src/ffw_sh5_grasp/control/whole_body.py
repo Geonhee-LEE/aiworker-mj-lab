@@ -56,6 +56,13 @@ SIDES = ("r", "l")
 
 @dataclass
 class WholeBodyCommand:
+    """한 WBIK 주기에서 actuator 계층으로 전달할 명령과 진단값 묶음.
+
+    ``base_twist``는 차체 좌표 속도, ``arm_positions``는 손별 관절 목표,
+    ``lift_position``은 리프트 위치 목표다. 나머지 필드는 손 pose 오차, 전체 일반화
+    속도와 충돌 회피 상태를 UI·테스트에서 확인할 수 있도록 보존한다.
+    """
+
     base_twist: BodyTwist = BodyTwist()
     arm_positions: dict = field(default_factory=dict)
     lift_position: float = 0.0
@@ -87,6 +94,12 @@ class WholeBodyIK:
                  collision_safe_distance=DEFAULT_COLLISION_SAFE_DISTANCE,
                  collision_barrier_gain=DEFAULT_COLLISION_BARRIER_GAIN,
                  collision_slack_weight=DEFAULT_COLLISION_SLACK_WEIGHT):
+        """전신 자유도와 손 site를 연결하고 task·제약·충돌 회피 설정을 준비한다.
+
+        ``site_names``와 ``arm_joint_names``는 ``'r'``/``'l'`` 키를 사용한다. 생성자는
+        모델 주소, 기구학 트리, 속도·위치 한계와 충돌 쌍을 미리 계산하며 live qpos를
+        변경하지 않는다.
+        """
         self.model = model
         self.site_ids = {
             side: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, name)
@@ -504,6 +517,7 @@ class WholeBodyIK:
         return result
 
     def _velocity_bounds(self, current_q, dt):
+        """속도 한계와 joint-limit barrier를 결합한 관절별 하한·상한을 반환한다."""
         lower = -self.velocity_limits.copy()
         upper = self.velocity_limits.copy()
         barrier_gain = min(self.joint_limit_gain, 1.0 / max(float(dt), 1e-5))
@@ -526,6 +540,7 @@ class WholeBodyIK:
         return lower, upper
 
     def _clip_positions(self, q):
+        """위치 제한이 있는 자유도만 안전 범위로 자른 관절 벡터를 반환한다."""
         result = q.copy()
         limited = self.position_limited
         result[limited] = np.clip(

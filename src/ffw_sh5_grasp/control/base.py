@@ -106,6 +106,7 @@ class BodyTwist:
     wz: float = 0.0
 
     def is_zero(self):
+        """세 속도 성분이 YAML deadband보다 작으면 정지 명령으로 판정한다."""
         return (
             abs(self.vx) < LINEAR_VEL_DEADBAND
             and abs(self.vy) < LINEAR_VEL_DEADBAND
@@ -117,6 +118,7 @@ class BaseTeleop:
     """키보드 입력 의도를 평활화된 차체 좌표계 속도 명령으로 변환한다."""
 
     def __init__(self):
+        """병진과 회전 명령의 내부 평활화 상태를 정지값으로 초기화한다."""
         self.v_local = np.zeros(2)
         self.w = 0.0
 
@@ -176,6 +178,11 @@ class SwerveKinematics:
     def __init__(self, wheel_positions=WHEEL_POS, wheel_radius=WHEEL_RADIUS,
                  steer_range=STEER_RANGE, angle_offsets=MODULE_ANGLE_OFFSETS,
                  wheel_speed_limit=WHEEL_SPEED_LIMIT):
+        """모듈 위치·반지름·조향 보정값과 actuator 한계를 복사해 보관한다.
+
+        기본값은 FFW-SH5 YAML 설정이며, 테스트나 다른 플랫폼은 같은 형식의 기하를
+        주입해 역기구학과 정기구학을 재사용할 수 있다.
+        """
         self.wheel_positions = dict(wheel_positions)
         self.wheel_radius = float(wheel_radius)
         self.steer_range = tuple(float(v) for v in steer_range)
@@ -235,6 +242,11 @@ class SwerveKinematics:
         return BodyTwist(*(float(v) for v in solution))
 
     def _nearest_feasible_state(self, current, target_angle, preferred_direction=1.0):
+        """동일한 구름 방향 후보 중 조향 범위 안에서 이동 비용이 가장 작은 상태를 고른다.
+
+        반환값은 ``(joint_angle, drive_direction)``이다. 목표에 π를 더할 때마다 같은
+        바퀴 속도 벡터를 만들도록 구동 부호를 번갈아 반전한다.
+        """
         lo, hi = self.steer_range
         candidates = []
         for k in range(-3, 4):
@@ -255,6 +267,8 @@ class SwerveKinematics:
 
 
 class ReversalPhase(Enum):
+    """구동 부호 반전 중 감속·조향·재가속의 진행 단계를 나타낸다."""
+
     NORMAL = 0
     DECELERATING = 1
     STEERING = 2
@@ -265,6 +279,7 @@ class SwerveDrive:
     """차체 twist를 액추에이터용 모듈 명령으로 바꾸는 피드백 제어기."""
 
     def __init__(self, kinematics=None):
+        """모듈별 조향 명령, 구동 방향과 반전 FSM 상태를 정지값으로 초기화한다."""
         self.base = BaseTeleop()
         self.kinematics = kinematics or SwerveKinematics()
         self.wheels = tuple(self.kinematics.wheel_positions)
@@ -353,6 +368,7 @@ class SwerveDrive:
         return result
 
     def _hold_zero(self, steering_positions):
+        """정지 명령에서 반전 상태를 지우고 현재 조향각을 유지한 영속도 명령을 만든다."""
         for name in self.wheels:
             self.reversal_phase[name] = ReversalPhase.NORMAL
             self.wheel_speed_scale[name] = 1.0
@@ -364,6 +380,11 @@ class SwerveDrive:
 
     def _control_module(self, name, target_angle, target_wheel_speed, dt,
                         steering_positions, wheel_velocities):
+        """모듈 하나에 반전 FSM·조향 변화율·정렬 게이트를 적용한다.
+
+        반환값은 ``(조향 명령, 구동 각속도 명령, 정렬 여부)``다. 실제 조향이 허용
+        오차 밖이면 잘못된 방향으로 밀지 않도록 구동 명령을 0으로 만든다.
+        """
         current_steering = _feedback_value(
             steering_positions, name, self.previous_commands[name])
         current_wheel_velocity = _feedback_value(wheel_velocities, name, 0.0)
@@ -393,6 +414,7 @@ class SwerveDrive:
         return steering_cmd, wheel_cmd, aligned
 
     def _update_reversal_phase(self, name, direction, target, current, wheel_velocity, dt):
+        """바퀴 방향 변경을 감속→조향→가속 순서로 진행하고 현재 조향 목표를 반환한다."""
         previous_direction = self.previous_wheel_rotation_direction[name]
         phase = self.reversal_phase[name]
 
@@ -449,6 +471,7 @@ class SwerveDrive:
 
 
 def _limit_steering_rate(current, target, dt, steer_range=STEER_RANGE):
+    """한 제어 주기 조향 변화량을 속도 한계로 제한하고 허용 각도 범위에 맞춘다."""
     max_change = STEERING_ANGULAR_VELOCITY_LIMIT * dt
     desired = target - current
     if abs(desired) <= max_change:
@@ -464,8 +487,10 @@ def _feedback_value(feedback, name, fallback):
 
 
 def _normalize_angle(angle):
+    """라디안 각도를 ``[-π, π)`` 범위의 동치각으로 정규화한다."""
     return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
 
 def _clamp(value, lo, hi):
+    """스칼라 값을 닫힌 구간 ``[lo, hi]`` 안으로 제한한다."""
     return min(hi, max(lo, value))
