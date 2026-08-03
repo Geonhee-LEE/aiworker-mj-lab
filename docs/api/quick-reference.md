@@ -56,12 +56,15 @@ from ffw_sh5_grasp.control.whole_body import WholeBodyIK
 | `rpy_deg_to_quat(rpy_deg)` | UI RPY를 MuJoCo quaternion으로 변환 | `wxyz` 4-vector |
 | `quat_to_rpy_deg(quaternion)` | Quaternion을 UI RPY로 변환 | degree 3-vector |
 | `shortest_orientation_error(target, current)` | 최단 world-frame 자세 오차 | axis-angle 3-vector |
+| `pose_error(current_pos, current_quat, target_pos, target_quat)` | 모든 IK가 공유하는 pose 오차 | `PoseError` |
+| `pose_velocity_command(error, ...)` | 오차 피드백과 norm 제한으로 목표 twist 생성 | world-frame 6-vector |
 | `KinematicTree.forward_site(qpos, site_id, joint_ids)` | Tree FK와 geometric Jacobian 계산 | `SiteKinematics` |
 | `KinematicTree.point_jacobian(...)` | Body 위 한 점의 선속도 Jacobian 계산 | `(3, N)` 행렬 |
 | `KinematicsSolver.solve_pose(...)` | 위치 우선 DLS 단일 팔 IK | 해와 위치·자세 오차 |
 | `collision_distance_gradient(...)` | signed distance와 관절 gradient 계산 | `CollisionConstraint` 또는 `None` |
 
-회전 함수는 `ffw_sh5_grasp.kinematics.rotations`에서 가져온다.
+회전 함수는 `ffw_sh5_grasp.kinematics.rotations`, pose task 함수는
+`ffw_sh5_grasp.kinematics.tasks`에서 가져온다.
 [기구학 API 전체 안내](kinematics.md)
 
 ## 제어

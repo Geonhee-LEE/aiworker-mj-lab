@@ -187,8 +187,9 @@ flowchart TB
 ```
 
 의존 방향의 핵심은 `application/teleop.py`가 조립을 담당하고, 계산 모듈은 UI나 renderer를
-알지 않는다는 점이다. `kinematics/solver.py`는 단일 팔 IK와 전신 IK가 함께 사용하는 가장
-낮은 수학 계층이다.
+알지 않는다는 점이다. `kinematics/tree.py`는 공통 FK/Jacobian을,
+`kinematics/tasks.py`는 단일 팔·전신·양손이 공유하는 pose 오차 규칙을 제공한다.
+각 solver는 그 위에서 출력과 제약에 맞는 해법만 소유한다.
 
 ## 수정 목적별 경로 { #change-paths }
 

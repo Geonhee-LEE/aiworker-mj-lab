@@ -130,6 +130,7 @@ nav:
         - 기구학:
             - 전체 안내: api/kinematics.md
             - 회전 수학: api/kinematics-rotations.md
+            - Pose 오차와 Task: api/kinematics-tasks.md
             - Tree와 FK: api/kinematics-tree.md
             - 단일 팔 Solver: api/kinematics-solver.md
             - 충돌 기구학: api/kinematics-collision.md

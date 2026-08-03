@@ -90,6 +90,10 @@ tree를 만든 목적은 XML을 다시 표현하는 데 있지 않다. **같은 
 candidate configuration을 live physics와 분리해 반복 평가하고, 단일 팔·전신·충돌
 계산이 같은 joint/frame 정의를 공유하게 하는 것**이 핵심이다.
 
+FK 뒤의 목표-현재 pose 오차도 `kinematics/tasks.py`에 한 번만 정의한다. 단일 팔은
+이 오차를 반복 DLS step에 사용하고 전신·양손 경로는 같은 오차를 bounded Cartesian
+속도 명령으로 바꾼다.
+
 ## Direct geometric Jacobian { #direct-geometric-jacobian }
 
 Jacobian의 slide/hinge 열 유도와 실제 `_point_jacobian_from_frames()` 대응은
@@ -113,6 +117,7 @@ Jacobian의 slide/hinge 열 유도와 실제 `_point_jacobian_from_frames()` 대
 - orientation error와 rotational Jacobian은 같은 world frame을 사용한다.
 - analytic Jacobian과 collision gradient는 중앙 유한차분으로 검증한다.
 - 단일 팔과 전신 solver는 같은 `KinematicTree` 구현을 사용한다.
+- 단일 팔·전신·양손 task는 같은 `pose_error()` 부호와 world frame을 사용한다.
 
 ```bash
 python3 tests/test_phase_3.py

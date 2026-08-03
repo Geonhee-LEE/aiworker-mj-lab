@@ -22,16 +22,44 @@
 | `control/whole_body.py` | robot state, task row, 속도/관절 bound와 최종 command 조립 |
 | `control/optimization.py` | 모델을 모르는 BVLS와 collision soft-barrier 수치 해법 |
 | `control/bimanual.py` | rigid-grasp reference와 상대 pose/Jacobian 계산 |
+| `kinematics/tasks.py` | 모든 IK가 공유하는 pose 오차와 bounded Cartesian 속도 명령 |
 | `kinematics/rotations.py` | 회전 행렬·쿼터니언·각도·벡터 공용 함수 |
 | `kinematics/collision.py` | geometry signed distance와 gradient 계산 |
 
 중복된 private 호환 별칭은 두지 않는다. 수치 최적화는 `control.optimization`, 강체
-양손 task는 `control.bimanual`, 회전 계산은 `kinematics.rotations`의 공개 함수를
-직접 호출한다.
+양손 task는 `control.bimanual`, pose 오차·속도 명령은 `kinematics.tasks`, 회전 계산은
+`kinematics.rotations`의 공개 함수를 직접 호출한다.
 
 ROS2/MoveIt 관점의 개념 비교와 legacy DLS 식의 역할은
 [DLS와 위치 우선 IK 수학](ik-math.md)과 [단일 팔 IK](ik.md)를 먼저 보면,
 같은 pose task가 18축 bounded 문제로 확장되는 차이를 확인할 수 있다.
+
+## 단일 팔·전신·양손 해석의 관계 { #solver-comparison }
+
+세 경로는 FK/Jacobian, 위치 오차 부호, quaternion 최단 회전과 world frame 규칙을
+공유하지만 출력과 실행 시점이 달라 수치해법 전체를 하나로 강제하지 않는다.
+
+| 경로 | 실제 정체 | 출력 | 유지해야 하는 고유 처리 |
+|---|---|---|---|
+| `KinematicsSolver.solve_pose()` | 반복형 position-level IK | 최종 관절각 $q$ | 위치 우선 null-space DLS, backtracking, multistart |
+| `WholeBodyIK.solve()` | 실시간 velocity-level constrained IK | 다음 주기의 $\dot q$와 actuator 목표 | 속도·관절 한계, posture, base hierarchy, collision CBF |
+| `bimanual.rigid_grasp_task()` | 전신 문제에 넣는 상대 pose task 생성기 | 상대 Jacobian과 목표 twist | 캡처한 두 손 관계와 spatial transform |
+
+즉 `bimanual.py`는 세 번째 IK solver가 아니다. 만든 행이 `WholeBodyIK`의 동일한
+bounded least-squares 문제에 추가된다. 세 경로에서 실제로 같아야 하는 계산만
+`kinematics.tasks.pose_error()`와 `pose_velocity_command()`로 통일했다.
+
+전신 목적함수는 수학적으로 **제약 DLS를 QP 형태로 확장한 것**으로 볼 수 있다.
+적층한 식을 $\min\|A\dot q-b\|^2$로 쓰면 다음 convex QP와 동치다.
+
+\[
+\min_{\dot q}\;\frac12\dot q^T(2A^TA)\dot q-(2A^Tb)^T\dot q
+\]
+
+제약과 task weight를 제거하고 정규화 행을 $\lambda I$로 두면 일반적인 DLS 해로
+돌아간다. 구현은 범용 QP 패키지가 아니라 box 구조에 특화된 BVLS active-set과
+collision soft-barrier active-set을 사용한다. 따라서 “모든 IK가 하나의 QP solver”는
+아니지만, 전신 IK는 “QP로 표현 가능한 constrained DLS”라고 부를 수 있다.
 
 ## 제어 변수와 출력
 
@@ -297,7 +325,7 @@ workspace constraint 2개가 활성화된 solve는 약 0.95 ms다. 회귀 gate�
 
 | 수식 단계 | 코드 표현 | 담당 모듈 |
 |---|---|---|
-| \(\dot x_i^*=K e_i-D\dot x_i\) | `desired`, `clip_norm()` | `WholeBodyIK.solve()` |
+| \(\dot x_i^*=K e_i-D\dot x_i\) | `pose_error()`, `pose_velocity_command()` | `kinematics/tasks.py` |
 | weighted task를 \(A\dot q\approx b\)로 적층 | `rows`, `rhs`, `matrix`, `vector` | `WholeBodyIK.solve()` |
 | \(\dot q_{min}\le\dot q\le\dot q_{max}\) | `lower`, `upper`, `_velocity_bounds()` | `control/whole_body.py` |
 | box-constrained \(\min\|A\dot q-b\|^2\) | `bounded_least_squares()` | `control/optimization.py` |

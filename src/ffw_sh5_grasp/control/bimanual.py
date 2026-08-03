@@ -1,12 +1,13 @@
 """양손 rigid-grasp reference와 상대 pose task 계산.
 
 Whole-body solver의 weight나 actuator 상태는 알지 않는다. 두 손의 현재 pose/Jacobian과
-캡처한 상대 pose만 받아 6차원 상대 Jacobian과 drift-correction 속도를 만든다.
+캡처한 상대 pose만 받아 6차원 상대 Jacobian을 만들고, drift-correction 속도는 단일
+팔·전신과 같은 ``kinematics.tasks`` 규칙으로 계산한다.
 """
 
 import numpy as np
 
-from ..kinematics import rotations
+from ..kinematics import rotations, tasks as pose_tasks
 
 
 def capture_reference(right, left):
@@ -36,13 +37,19 @@ def rigid_grasp_task(reference, site_states, dt,
     desired_left_quaternion = rotations.quaternion_from_rotation(
         desired_left_rotation)
 
+    error = pose_tasks.pose_error(
+        left.position,
+        left.quaternion,
+        desired_left_position,
+        desired_left_quaternion,
+    )
     # 1/dt 보정은 충돌 직후 지나치게 커질 수 있어 방향을 보존한 채 norm을 제한한다.
     correction_dt = max(float(dt), 1e-5)
-    linear = rotations.clip_norm(
-        (desired_left_position - left.position) / correction_dt,
-        max_linear_speed)
-    angular = rotations.clip_norm(
-        rotations.shortest_orientation_error(
-            desired_left_quaternion, left.quaternion) / correction_dt,
-        max_angular_speed)
-    return grasp_jacobian, np.concatenate((linear, angular))
+    correction_velocity = pose_tasks.pose_velocity_command(
+        error,
+        position_gain=1.0 / correction_dt,
+        orientation_gain=1.0 / correction_dt,
+        max_linear_speed=max_linear_speed,
+        max_angular_speed=max_angular_speed,
+    )
+    return grasp_jacobian, correction_velocity

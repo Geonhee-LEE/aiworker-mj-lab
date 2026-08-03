@@ -23,6 +23,8 @@ solve(
 - **반환:** `WholeBodyCommand`.
 - **OFF:** `whole_body_enabled=False`이면 base·lift 속도를 0으로 hard pin한다.
 - **부작용:** actuator와 live `data.qpos`를 쓰지 않는다.
+- **공통 규칙:** 손 pose 오차와 목표 twist는
+  [`kinematics.tasks`](kinematics-tasks.md)의 공통 함수로 만든다.
 
 ## `WholeBodyCommand`
 

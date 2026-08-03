@@ -6,7 +6,8 @@
 
 이 파일은 task 조립과 로봇 상태 관리만 담당한다. 순수 bounded least-squares 계산은
 ``control.optimization``, 양손 상대 pose 계산은 ``control.bimanual``, 충돌 거리
-계산은 ``kinematics.collision``에 분리되어 있다.
+계산은 ``kinematics.collision``, 공통 pose 오차·속도 명령은 ``kinematics.tasks``에
+분리되어 있다.
 """
 
 from dataclasses import dataclass, field
@@ -18,7 +19,7 @@ import numpy as np
 from .base import BodyTwist
 from . import bimanual, optimization
 from ..config import SETTINGS
-from ..kinematics import collision, rotations
+from ..kinematics import collision, rotations, tasks as pose_tasks
 from ..kinematics.solver import KinematicsSolver
 from ..kinematics.tree import KinematicTree
 
@@ -277,27 +278,24 @@ class WholeBodyIK:
             jac = state.jacobian
             site_velocity = jac @ data.qvel[self.dof_ids]
 
-            current_pos = state.position
-            pos_error = np.asarray(target_pos, dtype=float) - current_pos
-            ori_error_world = rotations.shortest_orientation_error(
-                target_quat, state.quaternion)
-
-            desired = np.concatenate((
-                rotations.clip_norm(
-                    self.position_gain * pos_error
-                    - self.linear_velocity_damping * site_velocity[:3],
-                    self.max_task_linear_speed),
-                rotations.clip_norm(
-                    self.orientation_gain * ori_error_world
-                    - self.angular_velocity_damping * site_velocity[3:],
-                    self.max_task_angular_speed),
-            ))
+            error = pose_tasks.pose_error(
+                state.position, state.quaternion, target_pos, target_quat)
+            desired = pose_tasks.pose_velocity_command(
+                error,
+                position_gain=self.position_gain,
+                orientation_gain=self.orientation_gain,
+                current_twist=site_velocity,
+                linear_velocity_damping=self.linear_velocity_damping,
+                angular_velocity_damping=self.angular_velocity_damping,
+                max_linear_speed=self.max_task_linear_speed,
+                max_angular_speed=self.max_task_angular_speed,
+            )
             weights = np.sqrt(np.array(
                 [self.position_weight] * 3 + [self.orientation_weight] * 3))
             rows.append(weights[:, None] * jac)
             rhs.append(weights * desired)
-            position_errors[side] = float(np.linalg.norm(pos_error))
-            orientation_errors[side] = float(np.linalg.norm(ori_error_world))
+            position_errors[side] = error.position_norm
+            orientation_errors[side] = error.orientation_norm
 
         if rigid_grasp and all(side in site_states for side in SIDES):
             if self._rigid_grasp_reference is None:

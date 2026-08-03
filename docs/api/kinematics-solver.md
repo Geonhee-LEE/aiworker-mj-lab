@@ -37,6 +37,8 @@ solve_pose(
 - **기능:** 위치 우선 DLS step을 반복해 한 초기 자세에서 목표 pose로 수렴한다.
 - **반환:** `(q_solution, position_error_norm, orientation_error_norm)`.
 - **종료:** 두 오차가 tolerance 안이거나 `max_iter` 도달.
+- **공통 규칙:** 위치·자세 오차는 [`kinematics.tasks`](kinematics-tasks.md)의
+  `pose_error()`를 사용한다.
 
 ### `KinematicsSolver.solve_pose_multistart(...)`
 

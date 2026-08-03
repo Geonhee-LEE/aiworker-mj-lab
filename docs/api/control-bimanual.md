@@ -14,5 +14,8 @@
 - **입력:** reference, `{"r": state, "l": state}`, frame 간격, 속도 제한.
 - **반환:** `(relative_jacobian, correction_velocity)`, shape `(6,N)`과 `(6,)`.
 - **부작용:** 없음.
+- **공통 규칙:** drift pose 오차와 제한 속도는
+  [`kinematics.tasks`](kinematics-tasks.md)의 `pose_error()`와
+  `pose_velocity_command()`를 사용한다.
 
 [전신 IK API](control-whole-body.md)는 반환 task에 가중치를 붙여 전체 문제에 추가한다.

@@ -3,6 +3,7 @@
 세부 구현은 다음 파일로 분리되어 있다.
 
 - :mod:`.rotations`: 회전 행렬과 쿼터니언 수학
+- :mod:`.tasks`: 모든 IK 경로가 공유하는 pose 오차와 Cartesian 속도 명령
 - :mod:`.tree`: MJCF body-joint-site 트리와 FK/Jacobian
 - :mod:`.collision`: live MuJoCo geometry 거리와 충돌 gradient
 
@@ -34,6 +35,7 @@ from .rotations import (
     normalize_quaternion,
     shortest_orientation_error,
 )
+from .tasks import PoseError, pose_error, pose_velocity_command
 
 
 DEFAULT_DAMPING = SETTINGS.number("kinematics.damping", positive=True)
@@ -152,14 +154,6 @@ class KinematicsSolver:
             self.joint_ranges[self.joint_limited, 1])
         return result
 
-    @staticmethod
-    def _pose_error(state, target_position, target_quaternion):
-        """현재 site 상태에서 목표까지의 위치·최단 회전 오차 벡터를 계산한다."""
-        position_error = np.asarray(target_position, dtype=float) - state.position
-        orientation_error = shortest_orientation_error(
-            target_quaternion, state.quaternion)
-        return position_error, orientation_error
-
     def solve_pose(self, q_init, target_pos, target_quat, max_iter=DEFAULT_MAX_ITER,
                    pos_tol=POSITION_TOLERANCE, ori_tol=ORIENTATION_TOLERANCE,
                    ori_weight=ORIENTATION_COST_WEIGHT, context_qpos=None):
@@ -172,10 +166,11 @@ class KinematicsSolver:
         if q.shape != (self.n,):
             raise ValueError(f"expected {self.n} initial joint positions, got {q.shape}")
         state = self.forward(q, context_qpos)
-        position_error, orientation_error = self._pose_error(
-            state, target_pos, target_quat)
-        position_norm = float(np.linalg.norm(position_error))
-        orientation_norm = float(np.linalg.norm(orientation_error))
+        error = pose_error(
+            state.position, state.quaternion, target_pos, target_quat)
+        position_error, orientation_error = error.position, error.orientation
+        position_norm = error.position_norm
+        orientation_norm = error.orientation_norm
         damping_squared = self.damping ** 2
         identity3 = np.eye(3)
 
@@ -205,12 +200,13 @@ class KinematicsSolver:
             for _ in range(BACKTRACKING_STEPS):
                 candidate_q = self._clamp_to_limits(q + step * full_delta)
                 candidate_state = self.forward(candidate_q, context_qpos)
-                candidate_position_error, candidate_orientation_error = self._pose_error(
-                    candidate_state, target_pos, target_quat)
-                candidate_position_norm = float(
-                    np.linalg.norm(candidate_position_error))
-                candidate_orientation_norm = float(
-                    np.linalg.norm(candidate_orientation_error))
+                candidate_error = pose_error(
+                    candidate_state.position, candidate_state.quaternion,
+                    target_pos, target_quat)
+                candidate_position_error = candidate_error.position
+                candidate_orientation_error = candidate_error.orientation
+                candidate_position_norm = candidate_error.position_norm
+                candidate_orientation_norm = candidate_error.orientation_norm
                 cost = (candidate_position_norm
                         + ori_weight * candidate_orientation_norm)
                 if best is None or cost < best[0]:
@@ -272,8 +268,11 @@ __all__ = [
     "ORIENTATION_TOLERANCE",
     "POSITION_TOLERANCE",
     "SiteKinematics",
+    "PoseError",
     "collision_distance_gradient",
     "default_collision_pairs",
     "normalize_quaternion",
+    "pose_error",
+    "pose_velocity_command",
     "shortest_orientation_error",
 ]

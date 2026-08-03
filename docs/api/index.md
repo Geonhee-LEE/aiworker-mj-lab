@@ -25,6 +25,7 @@ ffw_sh5_grasp
 │   └── targets             UI target ↔ world pose
 ├── kinematics
 │   ├── rotations           Quaternion·회전행렬 공용 수학
+│   ├── tasks               공통 pose 오차·Cartesian 속도 명령
 │   ├── tree                MJCF Tree·FK·Jacobian
 │   ├── solver              단일 팔 DLS IK
 │   └── collision           거리와 gradient

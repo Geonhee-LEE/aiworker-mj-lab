@@ -24,6 +24,7 @@ from ffw_sh5_grasp.control import grasp  # noqa: E402
 from ffw_sh5_grasp.control import optimization as bounded_optimization  # noqa: E402
 from ffw_sh5_grasp.control import whole_body as whole_body_ik  # noqa: E402
 from ffw_sh5_grasp.kinematics import rotations as kinematics_math  # noqa: E402
+from ffw_sh5_grasp.kinematics import tasks as pose_tasks  # noqa: E402
 import kinematics  # noqa: E402
 import teleop_app  # noqa: E402
 
@@ -40,6 +41,7 @@ def run_ros_free_dependency_gate():
         "ffw_sh5_grasp/control/optimization.py",
         "ffw_sh5_grasp/control/whole_body.py",
         "ffw_sh5_grasp/kinematics/solver.py",
+        "ffw_sh5_grasp/kinematics/tasks.py",
         "ffw_sh5_grasp/kinematics/rotations.py",
         "ffw_sh5_grasp/kinematics/tree.py",
         "ffw_sh5_grasp/kinematics/collision.py",
@@ -68,6 +70,7 @@ def run_tree_kinematics_dependency_gate():
     """런타임의 모든 손 FK/Jacobian이 자체 기구학 트리를 사용하는지 검사한다."""
     runtime_files = (
         "ffw_sh5_grasp/kinematics/solver.py",
+        "ffw_sh5_grasp/kinematics/tasks.py",
         "ffw_sh5_grasp/kinematics/rotations.py",
         "ffw_sh5_grasp/kinematics/tree.py",
         "ffw_sh5_grasp/kinematics/collision.py",
@@ -169,6 +172,43 @@ def _pose_error_metric(data, targets, sites):
         total += np.linalg.norm(target_pos - data.site_xpos[site])
         total += ORIENTATION_ERROR_LENGTH * np.linalg.norm(orientation_error)
     return float(total)
+
+
+def run_shared_pose_task_gate():
+    """세 IK 경로가 공유하는 pose 오차와 속도 제한 규칙을 검사한다."""
+    current_position = np.array([0.2, -0.1, 0.5])
+    target_position = np.array([0.5, 0.3, 0.4])
+    current_quaternion = kinematics_math.rpy_deg_to_quat([10.0, -5.0, 20.0])
+    target_quaternion = kinematics_math.rpy_deg_to_quat([-15.0, 8.0, 70.0])
+    error = pose_tasks.pose_error(
+        current_position, current_quaternion,
+        target_position, target_quaternion)
+    same_rotation_error = pose_tasks.pose_error(
+        current_position, -current_quaternion,
+        target_position, -target_quaternion)
+    command = pose_tasks.pose_velocity_command(
+        error,
+        position_gain=4.0,
+        orientation_gain=3.0,
+        current_twist=np.array([0.1, -0.2, 0.3, -0.1, 0.2, -0.3]),
+        linear_velocity_damping=0.5,
+        angular_velocity_damping=0.25,
+        max_linear_speed=0.7,
+        max_angular_speed=1.1,
+    )
+    position_ok = np.allclose(
+        error.position, target_position - current_position)
+    double_cover_ok = np.allclose(
+        error.orientation, same_rotation_error.orientation, atol=1e-12)
+    bounded = (
+        np.linalg.norm(command[:3]) <= 0.7 + 1e-12
+        and np.linalg.norm(command[3:]) <= 1.1 + 1e-12
+    )
+    ok = position_ok and double_cover_ok and bounded
+    print(f"Shared pose-task gate: position={position_ok} "
+          f"quaternion_double_cover={double_cover_ok} bounded={bounded}: "
+          f"{'OK' if ok else 'FAIL'}")
+    return ok
 
 
 def run_swerve_kinematics_gate():
@@ -1023,6 +1063,7 @@ def main():
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
     ok = (run_ros_free_dependency_gate()
           and run_tree_kinematics_dependency_gate()
+          and run_shared_pose_task_gate()
           and run_swerve_kinematics_gate()
           and run_box_qp_gate()
           and run_joint_limit_cbf_gate(model)

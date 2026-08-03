@@ -87,7 +87,7 @@ flowchart TD
 
 | 수식 단계 | `KinematicsSolver.solve_pose()` 표현 | 의미 |
 |---|---|---|
-| \(e_p=p^*-p(q)\), \(e_R=\log(q^*q^{-1})\) | `_pose_error()` | 같은 world frame의 위치·자세 오차 |
+| \(e_p=p^*-p(q)\), \(e_R=\log(q^*q^{-1})\) | `kinematics.tasks.pose_error()` | 모든 IK가 공유하는 world-frame 위치·자세 오차 |
 | \(J_p^T(J_pJ_p^T+\lambda^2I)^{-1}e_p\) | `position_delta` | 위치 우선 DLS step |
 | \(N_{p,\lambda}J_R^Te_R\) | `orientation_delta` | 위치 영향을 억제한 자세 보정 |
 | \(|\Delta q_i|\le\Delta q_{max}\) | `np.clip(full_delta, ...)` | iteration별 관절 변화 제한 |
@@ -105,7 +105,7 @@ flowchart TD
 | `forward(q, context_qpos)` | 트리에서 정규화 world pose와 world-aligned 6×N Jacobian 계산 |
 | `forward_kinematics(q, context_qpos)` | 기존 caller를 위한 `forward()` 호환 이름 |
 | `_clamp_to_limits(q)` | joint range로 clamp |
-| `_pose_error(state, target_pos, target_quat)` | 트리 FK 결과와 목표의 위치/자세 오차 계산 |
+| `pose_error(current_pos, current_quat, target_pos, target_quat)` | 단일 팔·전신·양손이 공유하는 위치/자세 오차 계산 |
 | `solve_pose(q_init, target_pos, target_quat, ...)` | 위치 우선 + 자세 보정 6DOF IK |
 | `solve_pose_multistart(q_init, target_pos, target_quat, rng, ...)` | 여러 초기값으로 재시도해 local minimum 회피 |
 
@@ -120,7 +120,7 @@ flowchart TD
     B --> C["context_qpos 또는 qpos0 복사<br>호출자 상태와 분리된 배열 생성"]
     C --> D["제어 joint 후보 기록 · range clamp"]
     D --> F["KinematicTree.forward_site()<br>body 변환과 Jacobian 열 직접 누적"]
-    F --> G["_pose_error()<br>목표와 현재 위치/자세 오차 계산"]
+    F --> G["kinematics.tasks.pose_error()<br>공통 목표-현재 위치/자세 오차"]
     F --> I["position_system solve<br>감쇠 최소제곱으로 위치 보정량 계산"]
     F --> J["orientation null-space projection<br>위치 해를 크게 망치지 않고 자세 보정"]
     I --> K["combine / clamp dq<br>관절 변화량 합성 및 제한"]
