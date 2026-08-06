@@ -22,6 +22,7 @@ MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
 import ik  # noqa: E402
+from offline_pose_ik import solve_offline_pose_multistart  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
 ARM_L = [f"arm_l_joint{i}" for i in range(1, 8)]
@@ -133,8 +134,10 @@ def main():
 
     ctx = data.qpos.copy()
     pregrasp_pos = can_pos0 + PRE_GRASP_OFFSET
-    q_pregrasp, _, _, ok1 = solver.solve_pose_multistart(HOME_Q_R, pregrasp_pos, target_quat, rng, context_qpos=ctx)
-    q_grasp, _, _, ok2 = solver.solve_pose_multistart(q_pregrasp, can_pos0, target_quat, rng, context_qpos=ctx)
+    q_pregrasp, _, _, ok1 = solve_offline_pose_multistart(
+        solver, HOME_Q_R, pregrasp_pos, target_quat, rng, context_qpos=ctx)
+    q_grasp, _, _, ok2 = solve_offline_pose_multistart(
+        solver, q_pregrasp, can_pos0, target_quat, rng, context_qpos=ctx)
     assert ok1 and ok2, "IK failed to set up demo -- check models/full_scene.xml"
 
     q_home = _read_arm_q(model, data, ARM_R)
@@ -162,7 +165,8 @@ def main():
 
     print("lift")
     lift_target_pos = can_pos0 + np.array([0, 0, LIFT_HEIGHT])
-    q_lift, _, _, _ = solver.solve_pose_multistart(q_grasp, lift_target_pos, target_quat, rng, context_qpos=ctx)
+    q_lift, _, _, _ = solve_offline_pose_multistart(
+        solver, q_grasp, lift_target_pos, target_quat, rng, context_qpos=ctx)
     lift_time = LIFT_HEIGHT / LIFT_SPEED
     _move(model, data, ctrl_r, ctrl_l, grabber, q_grasp, q_lift, lift_time, dt, grasp_frac=1.0, thumb_frac=1.0)
     _hold(model, data, ctrl_r, ctrl_l, grabber, q_lift, POST_LIFT_HOLD, dt, grasp_frac=1.0, thumb_frac=1.0)

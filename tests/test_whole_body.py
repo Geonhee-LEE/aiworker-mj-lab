@@ -21,8 +21,8 @@ from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
 from ffw_sh5_grasp.control import base as base_teleop  # noqa: E402
 from ffw_sh5_grasp.control import bimanual  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
-from ffw_sh5_grasp.control import optimization as bounded_optimization  # noqa: E402
 from ffw_sh5_grasp.control import whole_body as whole_body_ik  # noqa: E402
+from ffw_sh5_grasp.kinematics import optimization as bounded_optimization  # noqa: E402
 from ffw_sh5_grasp.kinematics import rotations as kinematics_math  # noqa: E402
 from ffw_sh5_grasp.kinematics import tasks as pose_tasks  # noqa: E402
 import kinematics  # noqa: E402
@@ -38,8 +38,9 @@ def run_ros_free_dependency_gate():
     runtime_files = (
         "ffw_sh5_grasp/control/base.py",
         "ffw_sh5_grasp/control/bimanual.py",
-        "ffw_sh5_grasp/control/optimization.py",
         "ffw_sh5_grasp/control/whole_body.py",
+        "ffw_sh5_grasp/kinematics/optimization.py",
+        "ffw_sh5_grasp/kinematics/constraints.py",
         "ffw_sh5_grasp/kinematics/solver.py",
         "ffw_sh5_grasp/kinematics/tasks.py",
         "ffw_sh5_grasp/kinematics/rotations.py",
@@ -69,13 +70,14 @@ def run_ros_free_dependency_gate():
 def run_tree_kinematics_dependency_gate():
     """런타임의 모든 손 FK/Jacobian이 자체 기구학 트리를 사용하는지 검사한다."""
     runtime_files = (
+        "ffw_sh5_grasp/kinematics/optimization.py",
+        "ffw_sh5_grasp/kinematics/constraints.py",
         "ffw_sh5_grasp/kinematics/solver.py",
         "ffw_sh5_grasp/kinematics/tasks.py",
         "ffw_sh5_grasp/kinematics/rotations.py",
         "ffw_sh5_grasp/kinematics/tree.py",
         "ffw_sh5_grasp/kinematics/collision.py",
         "ffw_sh5_grasp/control/bimanual.py",
-        "ffw_sh5_grasp/control/optimization.py",
         "ffw_sh5_grasp/control/whole_body.py",
         "ffw_sh5_grasp/application/targets.py",
         "ffw_sh5_grasp/application/teleop.py")
@@ -86,7 +88,7 @@ def run_tree_kinematics_dependency_gate():
     # 구현 분리 후에도 tree와 solver가 각각 의도한 모듈에 있어야 한다.
     expected_classes = {
         "ffw_sh5_grasp/kinematics/tree.py": "KinematicTree",
-        "ffw_sh5_grasp/kinematics/solver.py": "KinematicsSolver",
+        "ffw_sh5_grasp/kinematics/solver.py": "DifferentialIKSolver",
     }
     solver_classes = {
         filename: {
@@ -117,10 +119,12 @@ def run_tree_kinematics_dependency_gate():
         class_name in solver_classes[filename]
         for filename, class_name in expected_classes.items())
     expected_functions = {
-        "ffw_sh5_grasp/control/optimization.py": {
+        "ffw_sh5_grasp/kinematics/optimization.py": {
             "least_squares_to_qp", "bounded_quadratic_program",
-            "bounded_quadratic_program_with_barriers",
-            "bounded_least_squares", "bounded_least_squares_with_barriers"},
+            "bounded_quadratic_program_with_barriers"},
+        "ffw_sh5_grasp/kinematics/constraints.py": {
+            "joint_velocity_bounds", "collision_velocity_barriers",
+            "clip_joint_positions"},
         "ffw_sh5_grasp/control/bimanual.py": {
             "capture_reference", "rigid_grasp_task"},
     }
@@ -279,7 +283,6 @@ def run_box_qp_gate():
     rng = np.random.default_rng(20260719)
     worst_gap = 0.0
     worst_conversion_error = 0.0
-    worst_wrapper_delta = 0.0
     for _ in range(25):
         matrix = rng.normal(size=(8, 3))
         vector = rng.normal(size=8)
@@ -289,8 +292,6 @@ def run_box_qp_gate():
             matrix, vector)
         solution = bounded_optimization.bounded_quadratic_program(
             hessian, linear, lower, upper)
-        wrapper_solution = bounded_optimization.bounded_least_squares(
-            matrix, vector, lower, upper)
         qp_objective = float(
             0.5 * solution @ hessian @ solution + linear @ solution)
         objective = qp_objective + float(vector @ vector)
@@ -301,48 +302,238 @@ def run_box_qp_gate():
         worst_conversion_error = max(
             worst_conversion_error,
             abs(objective - least_squares_objective))
-        worst_wrapper_delta = max(
-            worst_wrapper_delta,
-            float(np.max(np.abs(solution - wrapper_solution))))
     ok = (worst_gap < 1e-9
-          and worst_conversion_error < 1e-10
-          and worst_wrapper_delta < 1e-10)
+          and worst_conversion_error < 1e-10)
     print(f"Box-QP gate: objective_gap={worst_gap:.2e} "
-          f"conversion={worst_conversion_error:.2e} "
-          f"wrapper_delta={worst_wrapper_delta:.2e}: "
+          f"conversion={worst_conversion_error:.2e}: "
           f"{'OK' if ok else 'FAIL'}")
     return ok
 
 
 def run_explicit_qp_path_gate():
-    """전신 런타임이 호환 wrapper가 아니라 명시적 QP API를 호출하는지 검사한다."""
-    filename = REPO_ROOT / "src" / "ffw_sh5_grasp" / "control" / "whole_body.py"
-    source = filename.read_text(encoding="utf-8")
-    parsed = ast.parse(source, filename=str(filename))
-    optimization_calls = {
+    """control은 문제만 조립하고 실제 세 해법은 kinematics solver가 소유하는지 검사한다."""
+    whole_body_path = (
+        REPO_ROOT / "src" / "ffw_sh5_grasp" / "control" / "whole_body.py")
+    optimization_path = (
+        REPO_ROOT / "src" / "ffw_sh5_grasp" / "kinematics" / "optimization.py")
+    whole_body_source = whole_body_path.read_text(encoding="utf-8")
+    whole_body_tree = ast.parse(whole_body_source, filename=str(whole_body_path))
+    optimization_tree = ast.parse(
+        optimization_path.read_text(encoding="utf-8"),
+        filename=str(optimization_path))
+    imported_optimization = any(
+        isinstance(node, ast.ImportFrom)
+        and any(alias.name == "optimization" for alias in node.names)
+        for node in ast.walk(whole_body_tree))
+    solver_calls = {
         node.func.attr
-        for node in ast.walk(parsed)
+        for node in ast.walk(whole_body_tree)
         if (isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "optimization")
+            and node.func.attr in {"solve", "enforce_constraints"})
     }
-    required = {
+    solver_functions = {
+        node.name for node in optimization_tree.body
+        if isinstance(node, ast.FunctionDef)
+    }
+    required_functions = {
         "least_squares_to_qp",
         "bounded_quadratic_program",
         "bounded_quadratic_program_with_barriers",
     }
-    legacy = {
-        "bounded_least_squares",
-        "bounded_least_squares_with_barriers",
-    }
-    missing = sorted(required - optimization_calls)
-    legacy_calls = sorted(legacy & optimization_calls)
-    forced_base_override = "qdot[:3] =" in source
-    ok = not missing and not legacy_calls and not forced_base_override
-    print(f"Explicit QP path gate: missing={missing} legacy_calls={legacy_calls} "
+    missing = sorted(required_functions - solver_functions)
+    forced_base_override = "qdot[:3] =" in whole_body_source
+    ok = (not imported_optimization and not missing
+          and {"solve", "enforce_constraints"} <= solver_calls
+          and not forced_base_override)
+    print(f"Solver ownership gate: optimization_import={imported_optimization} "
+          f"missing={missing} calls={sorted(solver_calls)} "
           f"forced_base_override={forced_base_override}: "
           f"{'OK' if ok else 'FAIL'}")
+    return ok
+
+
+def run_selectable_ik_methods_gate():
+    """pseudoinverse, DLS, QP가 같은 공개 문제 API에서 유한한 제약 해를 내는지 검사한다."""
+    matrix = np.array([[1.0, 0.0], [0.0, 2.0], [1.0, 1.0]])
+    vector = np.array([0.4, -0.3, 0.1])
+    lower = np.array([-0.6, -0.4])
+    upper = np.array([0.7, 0.8])
+    barrier_matrix = np.array([[1.0, 1.0]])
+    barrier_lower = np.array([-0.2])
+    solutions = {}
+    for method in ("pseudoinverse", "dls", "qp"):
+        solver = kinematics.DifferentialIKSolver(method, dls_damping=0.1)
+        nominal = solver.solve(matrix, vector, lower, upper)
+        solutions[method] = solver.enforce_constraints(
+            nominal, lower, upper, barrier_matrix, barrier_lower, 1000.0)
+    bounded = all(
+        np.all(solution >= lower - 1e-12)
+        and np.all(solution <= upper + 1e-12)
+        and np.all(np.isfinite(solution))
+        for solution in solutions.values())
+    barriers = all(
+        (barrier_matrix @ solution).item() >= -0.201
+        for solution in solutions.values())
+    distinct = not np.allclose(
+        solutions["pseudoinverse"], solutions["dls"], atol=1e-8)
+    # 첫 번째 변수를 고정한 뒤 두 번째 변수가 전체 task를 다시 맡아야 한다. 예전의
+    # solve-then-clip 구현은 [0, 0.5]를 반환해 residual 절반을 그대로 남겼다.
+    fixed_matrix = np.array([[1.0, 1.0]])
+    fixed_vector = np.array([1.0])
+    fixed_lower = np.array([0.0, -2.0])
+    fixed_upper = np.array([0.0, 2.0])
+    fixed_solutions = {
+        method: kinematics.DifferentialIKSolver(
+            method, dls_damping=0.01).solve(
+                fixed_matrix, fixed_vector, fixed_lower, fixed_upper)
+        for method in ("pseudoinverse", "dls")
+    }
+    fixed_reallocated = all(
+        abs(solution[0]) < 1e-12 and solution[1] > 0.999
+        for solution in fixed_solutions.values())
+    rng = np.random.default_rng(20260805)
+    worst_active_set_gap = 0.0
+    for method in ("pseudoinverse", "dls"):
+        damping = 0.08
+        for _ in range(20):
+            active_matrix = rng.normal(size=(8, 6))
+            active_vector = rng.normal(size=8)
+            active_lower = rng.uniform(-1.2, -0.05, size=6)
+            active_upper = rng.uniform(0.05, 1.2, size=6)
+            fixed = rng.random(6) < 0.2
+            fixed_values = rng.uniform(-0.3, 0.3, size=np.count_nonzero(fixed))
+            active_lower[fixed] = fixed_values
+            active_upper[fixed] = fixed_values
+            active_solution = kinematics.DifferentialIKSolver(
+                method, dls_damping=damping).solve(
+                    active_matrix, active_vector, active_lower, active_upper)
+            if method == "dls":
+                reference_matrix = np.vstack([
+                    active_matrix, damping * np.eye(6)])
+                reference_vector = np.concatenate([
+                    active_vector, np.zeros(6)])
+            else:
+                reference_matrix, reference_vector = active_matrix, active_vector
+            reference_hessian, reference_linear = (
+                bounded_optimization.least_squares_to_qp(
+                    reference_matrix, reference_vector))
+            reference = bounded_optimization.bounded_quadratic_program(
+                reference_hessian, reference_linear,
+                active_lower, active_upper)
+            objective = lambda value: np.linalg.norm(
+                reference_matrix @ value - reference_vector) ** 2
+            worst_active_set_gap = max(
+                worst_active_set_gap,
+                float(objective(active_solution) - objective(reference)))
+    active_set_optimal = worst_active_set_gap < 1e-9
+    ok = (bounded and barriers and distinct and fixed_reallocated
+          and active_set_optimal)
+    print(f"Selectable IK methods gate: bounded={bounded} barriers={barriers} "
+          f"pinv_vs_dls_distinct={distinct} reallocated={fixed_reallocated} "
+          f"active_set_gap={worst_active_set_gap:.1e}: "
+          f"{'OK' if ok else 'FAIL'}")
+    return ok
+
+
+def run_arm_only_selectable_methods_gate(model):
+    """Whole-body OFF에서도 pseudoinverse/DLS가 고정 body 몫을 팔로 재분배하는지 검사한다."""
+    data = mujoco.MjData(model)
+    _reset(model, data)
+    solver = whole_body_ik.WholeBodyIK(
+        model, {side: f"grasp_target_{side}" for side in ("r", "l")}, ARMS,
+        collision_avoidance=False)
+    targets = {}
+    for side in ("r", "l"):
+        state = solver.site_state(data, side)
+        lateral = 0.03 if side == "r" else -0.03
+        targets[side] = (
+            state.position + np.array([0.08, lateral, 0.04]),
+            state.quaternion,
+        )
+
+    rates = {}
+    body_fixed = True
+    for method in ("pseudoinverse", "dls", "qp"):
+        solver.set_solver_method(method)
+        command = solver.solve(
+            data, targets, 0.04, whole_body_enabled=False)
+        qdot = command.generalized_velocity
+        body_fixed &= np.linalg.norm(qdot[:4]) < 1e-12
+        rates[method] = min(
+            float(np.linalg.norm(solver.site_state(data, side).jacobian[:3] @ qdot))
+            for side in ("r", "l"))
+    comparable = (
+        rates["pseudoinverse"] >= 0.90 * rates["qp"]
+        and rates["dls"] >= 0.90 * rates["qp"])
+    ok = body_fixed and comparable and min(rates.values()) > 0.5
+    print(f"Arm-only selectable methods gate: rates={rates} body_fixed={body_fixed} "
+          f"comparable={comparable}: {'OK' if ok else 'FAIL'}")
+    return ok
+
+
+def run_qp_velocity_normalization_gate(model):
+    """모든 QP strength가 대응 속도로 무차원화되고 명령에 반영되는지 검사한다."""
+    data = mujoco.MjData(model)
+    _reset(model, data)
+
+    def make_solver():
+        return whole_body_ik.WholeBodyIK(
+            model, {side: f"grasp_target_{side}" for side in ("r", "l")},
+            ARMS, collision_avoidance=False)
+
+    probe = make_solver()
+    unit_cost = pose_tasks.normalized_weights(
+        np.ones(len(probe.joint_names)), probe.velocity_limits)
+    normalized = np.allclose(
+        unit_cost, 1.0 / np.square(probe.velocity_limits))
+    # schema 5에도 유지된 strength 기본값은 이전 raw 비용을 그대로 재현하므로 단위 통일 자체가
+    # 기본 동작을 바꾸지 않는다.
+    damping_cost = pose_tasks.normalized_weights(
+        probe.damping_weights, probe.velocity_limits)
+    posture_cost = pose_tasks.normalized_weights(
+        probe.posture_weights, probe.velocity_limits)
+    hand_cost = pose_tasks.normalized_weights(
+        [probe.position_weight, probe.orientation_weight],
+        [probe.max_task_linear_speed, probe.max_task_angular_speed])
+    rigid_cost = pose_tasks.normalized_weights(
+        [probe.rigid_grasp_position_weight,
+         probe.rigid_grasp_orientation_weight],
+        [probe.max_task_linear_speed, probe.max_task_angular_speed])
+    common_base_cost = pose_tasks.normalized_weights(
+        [probe.common_base_weights[0], probe.common_base_weights[2]],
+        [probe.velocity_limits[0], probe.velocity_limits[2]])
+    defaults_preserved = (
+        np.allclose(damping_cost[[0, 2, 3, 4]], [0.25, 0.20, 0.12, 0.045])
+        and np.allclose(posture_cost[[3, 4]], [0.10, 0.025])
+        and np.allclose(hand_cost, [10.0, 5.0])
+        and np.allclose(rigid_cost, [250.0, 250.0])
+        and np.allclose(common_base_cost, [30.0, 100.0])
+        and {"rigid_grasp_position", "rigid_grasp_orientation"}
+        <= set(probe.qp_weights()))
+
+    command_norms = {}
+    for strength in (1e-4, 1e3):
+        solver = make_solver()
+        targets = {}
+        for side in ("r", "l"):
+            state = solver.site_state(data, side)
+            targets[side] = (
+                state.position + np.array([0.04, 0.0, 0.02]),
+                state.quaternion,
+            )
+        for name in (
+                "damping_base_linear", "damping_base_yaw",
+                "damping_lift", "damping_arm"):
+            solver.set_qp_weight(name, strength)
+        command = solver.solve(data, targets, 0.04)
+        command_norms[strength] = float(np.linalg.norm(
+            command.generalized_velocity))
+    sensitive = command_norms[1e3] < 0.25 * command_norms[1e-4]
+    ok = normalized and defaults_preserved and sensitive
+    print(f"QP velocity normalization gate: normalized={normalized} "
+          f"defaults={defaults_preserved} command={command_norms} "
+          f"sensitive={sensitive}: {'OK' if ok else 'FAIL'}")
     return ok
 
 
@@ -486,8 +677,9 @@ def run_self_collision_cbf_gate(model):
     free = free_solver.solve(data, targets, 0.04, active_sides=("r",))
     safe = safe_solver.solve(data, targets, 0.04, active_sides=("r",))
     constraints = safe_solver._collision_constraints(data, 0.04)
-    constraint, lower = next(
-        item for item in constraints if item[0].name == pair.name)
+    constraint = next(
+        item for item in constraints if item.name == pair.name)
+    lower = constraint.lower
     free_rate = float(constraint.gradient @ free.generalized_velocity)
     safe_rate = float(constraint.gradient @ safe.generalized_velocity)
     ok = (np.array_equal(data.qpos, qpos_before)
@@ -521,13 +713,13 @@ def run_table_collision_cbf_gate(model):
     free = free_solver.solve(data, targets, 0.04)
     safe = safe_solver.solve(data, targets, 0.04)
     constraints = safe_solver._collision_constraints(data, 0.04)
-    matrix = np.vstack([constraint.gradient for constraint, _lower in constraints])
-    lower = np.array([bound for _constraint, bound in constraints])
+    matrix = np.vstack([constraint.gradient for constraint in constraints])
+    lower = np.array([constraint.lower for constraint in constraints])
     free_violation = float(np.max(lower - matrix @ free.generalized_velocity))
     safe_violation = float(np.max(np.maximum(
         lower - matrix @ safe.generalized_velocity, 0.0)))
     predicted_distances = np.array([
-        constraint.distance for constraint, _bound in constraints
+        constraint.distance for constraint in constraints
     ]) + 0.04 * (matrix @ safe.generalized_velocity)
 
     # 충돌 검사는 25 Hz UI의 프레임 예산 40 ms보다 충분히 빨라야 한다.
@@ -538,17 +730,22 @@ def run_table_collision_cbf_gate(model):
         safe_solver.solve(data, targets, 0.04)
     milliseconds = 1000.0 * (time.perf_counter() - start) / 100.0
     workspace_only = all(
-        constraint.name.startswith("workspace:") for constraint, _lower in constraints)
+        constraint.name.startswith("workspace:") for constraint in constraints)
+    normalized_correction = float(np.linalg.norm(
+        (safe.generalized_velocity - free.generalized_velocity)
+        / safe_solver.velocity_limits))
     ok = (len(constraints) >= 2 and workspace_only
           and free_violation > 0.10 and safe_violation < 1e-3
           and np.min(predicted_distances) >= safe_solver.collision_safe_distance - 1e-4
-          and safe.generalized_velocity[probe.index["lift_joint"]]
-          > free.generalized_velocity[probe.index["lift_joint"]] + 0.10
+          # 정규화 projection은 lift만 강제하지 않고 속도 여유가 큰 팔과 역할을
+          # 나누므로 특정 raw 관절속도 대신 전체 무차원 safety correction을 검사한다.
+          and normalized_correction > 0.05
           and milliseconds < 5.0)
     print(f"Table collision CBF gate: active={len(constraints)} "
           f"violation={free_violation:.3f}->{safe_violation:.2e} "
           f"lift={free.generalized_velocity[3]:+.3f}->"
-          f"{safe.generalized_velocity[3]:+.3f} {milliseconds:.2f}ms: "
+          f"{safe.generalized_velocity[3]:+.3f} correction={normalized_correction:.3f} "
+          f"{milliseconds:.2f}ms: "
           f"{'OK' if ok else 'FAIL'}")
     return ok
 
@@ -1161,6 +1358,9 @@ def main():
           and run_swerve_kinematics_gate()
           and run_box_qp_gate()
           and run_explicit_qp_path_gate()
+          and run_selectable_ik_methods_gate()
+          and run_arm_only_selectable_methods_gate(model)
+          and run_qp_velocity_normalization_gate(model)
           and run_joint_limit_cbf_gate(model)
           and run_collision_gradient_gate(model)
           and run_self_collision_cbf_gate(model)

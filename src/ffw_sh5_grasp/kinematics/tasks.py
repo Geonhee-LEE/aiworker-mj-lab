@@ -1,9 +1,8 @@
-"""단일 팔·전신·양손 IK가 공유하는 pose 오차와 속도 명령 계산.
+"""Differential IK가 공유하는 soft task와 pose residual 계산.
 
-IK마다 자유도와 제약 조건은 달라도 위치 오차는 ``target - current``, 자세 오차는
-world frame의 최단 회전 벡터라는 같은 규칙을 사용해야 한다. 이 모듈은 그 규칙과
-오차를 bounded Cartesian velocity로 바꾸는 계산을 한곳에 둔다. 로봇 모델이나
-MuJoCo 상태를 직접 알지 않으므로 오프라인 IK와 실시간 제어에서 함께 사용할 수 있다.
+PyRoki의 residual/cost 카탈로그와 같은 경계다. 로봇 모델과 제어 상태는 모르며,
+Jacobian과 목표 속도를 무차원 weighted least-squares 행으로 바꾸는 규칙만 소유한다.
+하드 bound와 barrier는 :mod:`.constraints`, 실제 해법은 :mod:`.solver`에 둔다.
 """
 
 from dataclasses import dataclass
@@ -35,6 +34,15 @@ class PoseError:
     def orientation_norm(self):
         """최단 회전 오차의 크기를 rad 단위 실수로 반환한다."""
         return float(np.linalg.norm(self.orientation))
+
+
+@dataclass(frozen=True)
+class VelocityTask:
+    """이미 단위 정규화된 ``||matrix @ qdot - target||²`` 목적식 하나."""
+
+    name: str
+    matrix: np.ndarray
+    target: np.ndarray
 
 
 def pose_error(current_position, current_quaternion,
@@ -91,4 +99,78 @@ def pose_velocity_command(error, *, position_gain, orientation_gain,
     return np.concatenate((linear, angular))
 
 
-__all__ = ["PoseError", "pose_error", "pose_velocity_command"]
+def normalized_weights(strengths, velocity_scales):
+    """무차원 strength를 물리 속도 residual의 계수로 변환한다.
+
+    각 residual을 대표 속도로 나눈 뒤 strength를 적용하므로 비용은
+    ``strength * (velocity_error / velocity_scale)²``가 된다.
+    """
+    strengths = np.asarray(strengths, dtype=float)
+    velocity_scales = np.asarray(velocity_scales, dtype=float)
+    if strengths.shape != velocity_scales.shape:
+        raise ValueError("task strengths and velocity scales must have the same shape")
+    if np.any(strengths < 0.0) or np.any(velocity_scales <= 0.0):
+        raise ValueError("task strengths must be non-negative and scales positive")
+    return strengths / np.square(velocity_scales)
+
+
+def velocity_task(name, jacobian, target_velocity, strengths, velocity_scales):
+    """Jacobian task를 단위가 제거된 weighted least-squares 행으로 만든다."""
+    jacobian = np.asarray(jacobian, dtype=float)
+    target_velocity = np.asarray(target_velocity, dtype=float)
+    if jacobian.ndim != 2 or target_velocity.shape != (jacobian.shape[0],):
+        raise ValueError("incompatible velocity task Jacobian/target shapes")
+    weights = normalized_weights(strengths, velocity_scales)
+    if weights.shape != target_velocity.shape:
+        raise ValueError("one task strength and scale are required per residual row")
+    scale = np.sqrt(weights)
+    return VelocityTask(
+        name=str(name),
+        matrix=scale[:, None] * jacobian,
+        target=scale * target_velocity,
+    )
+
+
+def regularization_task(name, target_velocity, strengths, velocity_limits):
+    """자유도별 damping/posture를 무차원 velocity task로 만든다."""
+    target_velocity = np.asarray(target_velocity, dtype=float)
+    if target_velocity.ndim != 1:
+        raise ValueError("regularization target must be a vector")
+    return velocity_task(
+        name,
+        np.eye(target_velocity.size),
+        target_velocity,
+        strengths,
+        velocity_limits,
+    )
+
+
+def stack_velocity_tasks(task_list, variable_count):
+    """독립 task들을 solver 입력 행렬/벡터 하나로 결합한다."""
+    task_list = tuple(task_list)
+    if not task_list:
+        raise ValueError("at least one velocity task is required")
+    variable_count = int(variable_count)
+    for task in task_list:
+        if not isinstance(task, VelocityTask):
+            raise TypeError("task_list must contain VelocityTask values")
+        if task.matrix.ndim != 2 or task.matrix.shape[1] != variable_count:
+            raise ValueError(f"task {task.name!r} has an incompatible variable count")
+        if task.target.shape != (task.matrix.shape[0],):
+            raise ValueError(f"task {task.name!r} has incompatible matrix/target shapes")
+    return (
+        np.vstack([task.matrix for task in task_list]),
+        np.concatenate([task.target for task in task_list]),
+    )
+
+
+__all__ = [
+    "PoseError",
+    "VelocityTask",
+    "normalized_weights",
+    "pose_error",
+    "pose_velocity_command",
+    "regularization_task",
+    "stack_velocity_tasks",
+    "velocity_task",
+]

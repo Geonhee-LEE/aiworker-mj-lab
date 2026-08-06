@@ -62,7 +62,8 @@ flowchart TB
 | `application/targets.py` | UI target, base/anchor pose | world hand/virtual pose | actuator 접근 없음 |
 | `kinematics/` | model/data, site/geom id | 정규화 pose/Jacobian/distance gradient | target 정책 없음 |
 | `control/bimanual.py` | 두 손 pose/Jacobian, 캡처 reference | rigid-grasp 상대 task | actuator 접근 없음 |
-| `control/optimization.py` | 행렬·벡터·bound | box/soft-barrier 최소제곱 해 | robot model 접근 없음 |
+| `kinematics/solver.py` | pose 또는 행렬·벡터·bound·해법 | 반복 IK와 pseudoinverse/DLS/QP 해 | control 정책 없음 |
+| `kinematics/optimization.py` | Hessian·선형항·제약 | box/soft-barrier QP 해 | robot model 접근 없음 |
 | `control/whole_body.py` | current state, world target | base twist, lift/arm position | 수치 solver 중복·live qpos write 없음 |
 | `control/base.py` | keys/BodyTwist, wheel feedback | steer angle + wheel speed | MuJoCo/ROS import 없음 |
 | `control/arm.py` | current arm state, `q_des` | motor torque | IK target 해석 없음 |
@@ -164,7 +165,7 @@ wheel controller를 사용하지 않는다.
 | tf2 frame | MuJoCo body/site와 `application/targets.py`의 명시적 변환 |
 | URDF | `models/*.xml`의 MJCF |
 | joint state | `data.qpos`, `data.qvel` 직접 읽기 |
-| MoveIt Servo/IK | `WholeBodyIK.solve()`와 `KinematicsSolver.solve_pose()` |
+| MoveIt Servo/IK | `WholeBodyIK.solve()`와 `DifferentialIKSolver.solve()` |
 | collision checker | MuJoCo geom distance + 자체 점 Jacobian CBF |
 | `cmd_vel` | `BodyTwist(vx, vy, wz)` |
 | `twist_mux` | `_step_physics()`의 keyboard/WBIK 명령 우선순위 |

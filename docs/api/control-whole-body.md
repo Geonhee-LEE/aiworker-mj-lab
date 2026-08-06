@@ -1,6 +1,7 @@
 # `control.whole_body`
 
-Base x/y/yaw, lift와 양팔 14축을 하나의 bounded differential IK로 조립한다.
+Base x/y/yaw, lift와 양팔 14축의 task·제약을 하나의 differential IK 문제로 조립한다.
+실제 pseudoinverse·DLS·QP 계산은 `kinematics.solver`에 위임한다.
 
 ## `WholeBodyIK(model, site_names, arm_joint_names, **weights)`
 
@@ -11,6 +12,8 @@ Base x/y/yaw, lift와 양팔 14축을 하나의 bounded differential IK로 조�
 - **베이스 참여:** `base_participation_scale=0.05`는 base 목표와 속도 상한을 기본값의
   5%로 낮추고, `0.0`은 base 3축만 hard pin하면서 lift·팔은 유지한다.
 - **유효 범위:** `base_participation_scale`은 `0.0` 이상 `1.0` 이하다.
+- **해법 선택:** `solver_method="pseudoinverse" | "dls" | "qp"`. 생략하면 YAML의
+  `whole_body_ik.solver.method`를 사용한다.
 
 ## `WholeBodyIK.solve(...)`
 
@@ -29,13 +32,38 @@ solve(
 - **부작용:** actuator와 live `data.qpos`를 쓰지 않는다.
 - **공통 규칙:** 손 pose 오차와 목표 twist는
   [`kinematics.tasks`](kinematics-tasks.md)의 공통 함수로 만든다.
-- **QP 비용:** `damping_weights`가 base·lift·팔 속도의 상대 비용을 정하며 큰 값일수록
-  해당 자유도의 불필요한 참여를 더 강하게 억제한다.
+- **QP 비용:** 모든 task·정규화·slack 값은 대응 속도 상한으로 정규화한 무차원
+  strength다. 실제 비용은 `strength * (residual / speed_scale)²`이다.
 - **QP 베이스 bound:** 생성자/YAML의 베이스 참여 설정은 ON 상태의 base 3축 속도
   bound에 적용된다. `whole_body_enabled=False`는 이 설정과 무관하게 base와 lift를
   모두 고정한다.
-- **수치 경로:** weighted DLS의 `A, b`를 `least_squares_to_qp()`로 변환한 뒤
-  `bounded_quadratic_program()`과 soft-CBF QP로 푼다.
+- **수치 경로:** 이 클래스는 task 행렬·벡터와 bound를 조립한 뒤
+  `DifferentialIKSolver.solve()`를 호출한다.
+
+### 실행 중 solver 설정
+
+| 메서드 | 역할 |
+|---|---|
+| `set_solver_method(method)` | pseudoinverse, DLS, QP 선택 |
+| `set_dls_damping(value)` | DLS 감쇠 갱신 |
+| `qp_weights()` | UI 편집 가능한 QP 가중치 사전 반환 |
+| `set_qp_weight(name, value)` | task·정규화·posture·collision slack 가중치 갱신 |
+
+### QP strength의 의미
+
+| 이름 | 무차원화하는 잔차 | 값이 커질 때 |
+|---|---|---|
+| `position` | 손 선속도 오차 / 최대 task 선속도 | 위치 추종 우선 |
+| `orientation` | 손 각속도 오차 / 최대 task 각속도 | 방향 추종 우선 |
+| `rigid_grasp_position` | 양손 상대 선속도 오차 / 최대 task 선속도 | 상대 위치를 더 강하게 보존 |
+| `rigid_grasp_orientation` | 양손 상대 각속도 오차 / 최대 task 각속도 | 상대 방향을 더 강하게 보존 |
+| `damping_*` | 해당 자유도 속도 / 해당 속도 상한 | 해당 자유도가 덜 움직임 |
+| `posture_*` | nominal 복귀 속도 오차 / 해당 속도 상한 | 기준 자세로 더 강하게 복귀 |
+| `collision_slack` | collision CBF 위반 속도 / 최대 task 선속도 | 안전 위반을 더 비싸게 취급 |
+
+이 항목들은 collision의 soft slack을 포함한 소프트 목적함수다. 속도 bound,
+joint-limit CBF가 만든 bound, Whole-body OFF/FK 모드의 고정 자유도는 별도의 하드
+제약이라 slider를 낮춰도 위반하지 않는다.
 
 ## `WholeBodyCommand`
 

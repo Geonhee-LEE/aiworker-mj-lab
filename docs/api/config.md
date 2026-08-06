@@ -17,7 +17,7 @@
 
 ```python
 settings = load_settings("config/local.yaml")
-damping = settings.number("kinematics.damping", positive=True)
+damping = settings.number("whole_body_ik.solver.dls_damping", positive=True)
 ```
 
 ## `Settings`

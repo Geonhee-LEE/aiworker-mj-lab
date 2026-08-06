@@ -10,8 +10,7 @@
 |---|---|---|
 | `application` | `application/teleop.py`, `paths.py` | 모델, 창 크기, 제어 주기, 목표 변화율, 리프트·파지 입력 |
 | `arm_control` | `control/arm.py` | 팔 PD 이득 |
-| `kinematics` | `kinematics/solver.py` | DLS, 반복 횟수, 허용 오차, 다중 시작 |
-| `whole_body_ik` | `control/whole_body.py` | 작업 가중치, 속도 한계, 관절·충돌 CBF |
+| `whole_body_ik` | `control/whole_body.py`, `kinematics/solver.py` | 해법 선택, 작업 가중치, 속도 한계, 관절·충돌 CBF |
 | `base` | `control/base.py` | 키보드 속도, 스워브 형상, 조향·반전 제어 |
 | `grasp` | `control/grasp.py` | 손 시너지 각도·비율과 파지 판정 임계값 |
 | `ui` | `visualization/ui.py` | 조그 기본값과 창 배치 |
@@ -26,6 +25,66 @@ QP 반복 상한, DLS backtracking 규칙, UI slider 안전 범위와 렌더링 
 함께 검증되어야 하는 값은 YAML 파라미터로 취급하지 않는다. 자주 조절하는 로봇 동작,
 물리 기하, 목표와 화면 배치만 YAML에 남겨 설정 파일이 알고리즘 내부 상수 목록으로
 변하지 않도록 한다.
+
+## 스키마 5 마이그레이션
+
+사용하지 않던 반복형 `solve_pose` 경로와 함께 최상위 `kinematics` 설정 구역을
+삭제했다. 실행 중 선택하는 DLS damping은 계속
+`whole_body_ik.solver.dls_damping`에서 설정한다. 사용자 YAML에 `schema_version: 4`나
+옛 `kinematics` 키가 있다면 해당 항목을 제거하고 버전을 5로 올린다.
+
+## 스키마 4 마이그레이션
+
+QP의 손 위치·방향, rigid grasp, 공통 base와 collision slack까지 모든 잔차를 대응하는
+속도 상한으로 나눈 무차원 값으로 통일했다.
+
+\[
+J_k=s_k\left(\frac{r_k}{v_{scale,k}}\right)^2
+\]
+
+이제 UI에 보이는 모든 값은 단위 없는 `strength`다. `1.0`은 해당 잔차가 대표 속도에
+도달했을 때 비용 1이라는 뜻이다. 기존 raw 비용을 유지하는 변환은
+`strength = old_weight * speed_scale²`이다.
+
+| 목적함수 | 스키마 3 raw weight | 속도 scale | 스키마 4 strength |
+|---|---:|---:|---:|
+| 손 position | 10 | 1.2 m/s | 14.4 |
+| 손 orientation | 5 | 3.0 rad/s | 45 |
+| rigid grasp position | 250 | 1.2 m/s | 360 |
+| rigid grasp orientation | 250 | 3.0 rad/s | 2250 |
+| common base translation | 30 | 0.55 m/s | 9.075 |
+| common base yaw | 100 | 1.4 rad/s | 196 |
+
+단일 `rigid_grasp_weight` 키는 단위가 다른 병진·회전을 분리하기 위해
+`rigid_grasp_weights.position`과 `.orientation`으로 바뀌었다. Collision safety
+projection은 기준 명령을 각 자유도의 속도 상한으로, CBF 위반량을 최대 task 선속도로
+나눈다. `collision_slack_weight` 기본값 1000은 유지했지만 이제 무차원 slack 비용이다.
+
+## 스키마 3 마이그레이션
+
+QP의 `damping_weights`와 `posture_weights`는 raw 속도 비용에서 속도 상한 기준의
+무차원 strength로 바뀌었다.
+
+\[
+J_{regularization}
+= \sum_i s_i\left(\frac{\dot q_i}{v_{max,i}}\right)^2
+\]
+
+스키마 2의 동일한 동작을 유지하려면 `strength = old_weight * velocity_limit²`로
+변환한다. 기본 설정은 이 변환을 적용했으므로 업그레이드 전후 기본 명령은 같다.
+
+| 자유도 | 스키마 2 raw weight | 스키마 3 strength |
+|---|---:|---:|
+| base linear | 0.25 | 0.075625 |
+| base yaw | 0.20 | 0.392 |
+| lift damping | 0.12 | 0.0147 |
+| arm damping | 0.045 | 0.91125 |
+| lift posture | 0.10 | 0.01225 |
+| arm posture | 0.025 | 0.50625 |
+
+UI의 damping/posture slider는 `1e-4~1e3` 로그 범위를 사용한다. `1.0`은 해당
+자유도의 속도 상한에 도달했을 때 비용 1이라는 뜻이다. 정확히 0으로 끄려면 YAML이나
+`set_qp_weight()`를 사용한다.
 
 ## 스키마 2 마이그레이션
 
@@ -81,6 +140,10 @@ base:
     max_speed_m_s: 0.50
 
 whole_body_ik:
+  solver:
+    # pseudoinverse, dls, qp 중 시작 해법을 고른다.
+    method: dls
+    dls_damping: 0.08
   collision_safe_distance_m: 0.015
   # 베이스를 거의 고정하되 lift와 양팔은 계속 전신 QP에 참여시킨다.
   base:
@@ -107,6 +170,11 @@ whole_body_ik:
 0.0275 m/s, 0.0275 m/s, 0.07 rad/s가 된다. base를 더 비싼 QP 선택지로만 만들고
 속도 상한은 유지하려면 이 값 대신 `damping_weights.base_linear`와
 `damping_weights.base_yaw`를 높인다.
+
+앱 실행 중에는 **IK Solver** 탭에서 해법을 즉시 바꿀 수 있다. QP를 선택하면 위치,
+자세, rigid grasp 위치·방향, base/lift/arm damping, posture와 collision CBF slack의
+무차원 strength가 표시된다. 각 슬라이더 위에 마우스를 올리면 목적과 정규화 기준이
+나온다. UI 변경은 현재 프로세스에만 적용되며 다음 실행 기본값은 YAML로 관리한다.
 
 테스트나 별도 Python 프로그램에서는 설정 의존 모듈을 import하기 전에 환경 변수를
 지정한다.

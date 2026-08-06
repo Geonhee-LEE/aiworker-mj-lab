@@ -1,1067 +1,781 @@
-# DLS와 위치 우선 IK 수학
+# Differential IK 수학
 
-!!! info "핵심 알고리즘 학습 순서 2/7"
-    [기구학 학습 안내](kinematics.md)의 Tree→FK→Quaternion→Collision 순서를 본 뒤,
-    이 문서에서 \(J\)의 역문제를 목적함수부터 관절 변화량까지 유도한다. 다음은
-    [단일 팔 IK 구현](ik.md)이다.
+이 페이지는 pseudoinverse, Damped Least Squares(DLS), box-constrained QP가 같은
+velocity task에서 어떻게 유도되는지 설명한다. 특히 결과식만 적지 않고 목적함수에서
+해를 얻는 과정과 box active-set의 최적성 조건을 코드에 대응한다.
 
-이 페이지는 `src/ffw_sh5_grasp/kinematics/solver.py`의 `KinematicsSolver.solve_pose()`와
-`control/whole_body.py`의 constrained differential IK를 읽을 때 가장 헷갈리기 쉬운
-세 질문에 답한다.
+## 1. 위치 오차가 속도 task가 되는 과정
 
-1. DLS는 왜 특이점 근처에서 관절 움직임이 폭발하지 않게 하는가?
-2. 자세 보정은 어떻게 이미 맞춘 손 위치를 거의 망치지 않고 더할 수 있는가?
-3. 단일 팔 DLS 목적함수는 어떻게 전신 IK의 명시적 box-QP로 확장되는가?
+목표 pose는 위치 자체로 주어진다. 현재 관절 자세를 \(q\), 손의 현재 위치를
+\(p(q)\), 목표 위치를 \(p^*\)라 하면 위치 오차는 다음과 같다.
 
-설명은 7자유도 팔의 **한 solver iteration**을 기준으로 한다. 실제 클래스와 호출
-흐름은 [단일 팔 IK](ik.md), Jacobian 정의는 [FK와 Jacobian](forward-kinematics.md),
-자세 오차 좌표계는 [Quaternion 수학](quaternion-math.md)을 참고한다.
+\[
+e_p=p^*-p(q)
+\]
 
-!!! note "현재 텔레옵과 이 페이지의 관계"
-    현재 텔레옵은 [`src/ffw_sh5_grasp/control/whole_body.py`](whole_body_ik.md)의 bounded solver를
-    사용한다. 여기서 설명하는 반복 DLS는 단일 팔 회귀·오프라인 경로지만, FK와
-    Jacobian뿐 아니라 pose 오차도 실시간·양손 경로와 같은 `KinematicTree`와
-    `kinematics.tasks.pose_error()`를 공유한다. `src/ik.py`는 기존
-    `InverseKinematics` 이름만 제공한다.
+이 오차의 단위는 m이다. 하지만 전신 controller가 한 frame에서 직접 결정하는 값은
+다음 관절 자세 \(q_{next}\)가 아니라 base, lift, 양팔의 generalized velocity
+\(\dot q\)다. 따라서 오차를 줄일 Cartesian 목표 속도로 먼저 바꾼다.
 
-## 먼저 보는 전체 흐름
+\[
+v_p^*=\operatorname{clip}\left(K_p e_p-D_pv_p\right)
+\]
 
-세부 수식보다 아래 네 단계를 먼저 기억하면 된다.
+여기서 \(K_p\)는 위치 gain, \(D_p\)는 현재 손 선속도 \(v_p\)의 damping gain이다.
+\(\operatorname{clip}\)은 목표 선속도가 설정한 상한을 넘지 않게 한다. 자세도 최단
+회전 오차 \(e_R\)에서 같은 방식으로 목표 각속도 \(\omega^*\)를 만든다.
 
-```mermaid
-flowchart TD
-    ERROR["1. 목표-현재<br>손 오차 계산"] --> DLS["2. DLS<br>위치용 관절 변화 계산"]
-    DLS --> NULL["3. null-space<br>위치를 덜 건드리는 자세 보정"]
-    NULL --> SAFE["4. clamp + backtracking<br>실제 적용 크기 제한"]
+\[
+\omega^*=\operatorname{clip}\left(K_R e_R-D_R\omega\right)
+\]
+
+현재 자세 주변에서 Jacobian으로 선형화하면 손 twist와 generalized velocity의 관계는
+다음과 같다.
+
+\[
+\begin{bmatrix}v_p\\\omega\end{bmatrix}
+\simeq J(q)\dot q
+\]
+
+따라서 한 control frame의 IK는 \(e_p\)를 직접 없애는 \(\Delta q\)를 푸는 대신,
+그 오차를 줄이도록 만든 목표 twist를 추종하는 \(\dot q\)를 푼다.
+
+\[
+J(q)\dot q\simeq
+\begin{bmatrix}v_p^*\\\omega^*\end{bmatrix}
+\]
+
+마지막에 한 frame 시간 \(\Delta t\) 동안 적분해 다음 관절 자세를 얻는다.
+
+\[
+q_{next}=q+\dot q\Delta t
+\]
+
+즉 매 frame의 흐름은 다음과 같다.
+
+```text
+target pose - current pose
+-> pose error
+-> desired Cartesian twist
+-> Jacobian-based qdot solve
+-> q_next = q + qdot * dt
+-> next frame에서 새 pose error 계산
 ```
 
-| 기호 | 크기 | 쉬운 의미 |
-|---|---:|---|
-| \(q\) | \(7\times1\) | 현재 관절각 7개 |
-| \(\Delta q\) | \(7\times1\) | 이번 iteration에 움직일 관절량 |
-| \(p(q),\ p^\ast\) | 각각 \(3\times1\) | 현재 손 위치와 목표 손 위치 |
-| \(e_p=p^\ast-p(q)\) | \(3\times1\) | 손이 더 움직여야 할 거리와 방향 |
-| \(J_p\) | \(3\times7\) | 관절 변화가 손 위치 변화로 바뀌는 비율 |
-| \(J_R\) | \(3\times7\) | 관절 변화가 손 자세 변화로 바뀌는 비율 |
-| \(\lambda\) | 스칼라 | 큰 관절 움직임을 얼마나 강하게 억제할지 정하는 damping |
+### 1.1 위치 오차가 실제로 줄어드는 이유
 
-!!! tip "처음 읽는다면"
-    먼저 1절의 문제, 4절의 그래프, 6절의 컵 비유와 마지막 요약을 읽으면 큰 흐름을
-    잡을 수 있다. 그다음 2절부터 순서대로 읽으면 각 등식이 어디서 나왔는지 중간
-    단계를 건너뛰지 않고 확인할 수 있다.
-
-## 1. IK가 푸는 문제
-
-7개 관절각을 벡터 \(q\in\mathbb R^7\), 손의 현재 위치를
-\(p(q)\in\mathbb R^3\), 목표 위치를 \(p^\ast\)라고 하자. 위치 오차는 다음과 같다.
-
-\[
-e_p = p^\ast - p(q)
-\]
-
-관절을 작은 양 \(\Delta q\)만큼 움직였을 때 손 위치 변화는 position Jacobian
-\(J_p\in\mathbb R^{3\times7}\)으로 선형 근사한다.
-
-\[
-\Delta p \approx J_p\Delta q
-\]
-
-따라서 한 iteration의 목표는 다음 식을 가능한 한 잘 만족하는 \(\Delta q\)를 찾는
-것이다.
-
-\[
-J_p\Delta q \approx e_p
-\]
-
-```mermaid
-flowchart LR
-    DQ["관절 변화 Δq<br>7개 숫자"] --> J["position Jacobian Jp<br>현재 자세에서의 변화율"]
-    J --> DP["예측 손 이동 JpΔq<br>3개 숫자"]
-    EP["원하는 손 이동 e_p"] --> COMPARE{"두 값의 차이를<br>작게 만들기"}
-    DP --> COMPARE
-```
-
-### 왜 해가 여러 개인가
-
-\(J_p\)는 식 3개에 미지수 7개인 \(3\times7\) 행렬이다. 일반적인 자세에서
-\(\operatorname{rank}(J_p)\approx3\)이면 위치를 움직이지 않는 관절 방향이 대략
-4차원 남는다.
-
-\[
-\dim\mathcal N(J_p)
-= 7-\operatorname{rank}(J_p)
-\approx 4
-\]
-
-\(J_pz=0\)인 관절 벡터 \(z\)는 1차 근사에서 손 위치를 바꾸지 않는다. 손을 한 점에
-둔 채 팔꿈치 자세를 바꾸는 움직임이 이 **null space(영공간)**의 직관적인 예다.
-
-## 2. DLS는 무엇을 최소화하는가
-
-Damped least-squares(DLS)는 위치 오차만 줄이는 대신 관절 변화량에도 벌점을 준다.
-
-\[
-\boxed{
-\min_{\Delta q}
-\left(
-\lVert J_p\Delta q-e_p\rVert^2
-+\lambda^2\lVert\Delta q\rVert^2
-\right)
-}
-\]
-
-| 항 | 의미 |
-|---|---|
-| \(\lVert J_p\Delta q-e_p\rVert^2\) | 예측한 손 이동이 원하는 이동과 얼마나 다른가 |
-| \(\lambda^2\lVert\Delta q\rVert^2\) | 관절을 얼마나 과격하게 움직이는가 |
-
-\(\lambda\)가 커지면 작은 관절 움직임을 더 선호해 안정적이지만 느려지고,
-작아지면 목표를 적극적으로 쫓지만 특이점 근처에서 민감해진다.
-
-!!! summary "이 식을 말로 읽으면"
-    **손 오차는 줄이되, 그 대가로 관절을 너무 크게 움직여야 한다면 조금 양보한다.**
-    DLS의 핵심은 정확한 오차 0만 고집하지 않고 안정적인 관절 움직임과 절충하는 것이다.
-
-### 2.1 목적함수 완전 전개
-
-아래에서는 표기를 짧게 하기 위해 \(J_p\)를 \(J\), \(e_p\)를 \(e\)로 쓴다.
-제곱 노름의 정의부터 시작한다.
+목표 위치가 제어 주기 동안 고정이고, clipping과 damping을 잠시 빼자. 오차의 시간
+미분은 다음과 같다.
 
 \[
 \begin{aligned}
-L(\Delta q)
-&=\lVert J\Delta q-e\rVert^2
-+\lambda^2\lVert\Delta q\rVert^2 \\
-&=(J\Delta q-e)^T(J\Delta q-e)
-+\lambda^2\Delta q^T\Delta q
+e_p &= p^*-p(q),\\
+\dot e_p
+&= \frac{d}{dt}p^*-\frac{d}{dt}p(q),\\
+&= 0-\dot p,\\
+&= -\dot p.
 \end{aligned}
 \]
 
-첫 번째 곱을 네 항으로 전개한다.
+목표 선속도를 \(v_p^*=K_pe_p\)로 정하고 solver가 정확히
+\(\dot p=v_p^*\)를 만든다면 다음이 성립한다.
 
 \[
-\begin{aligned}
-(J\Delta q-e)^T(J\Delta q-e)
-&=(\Delta q^TJ^T-e^T)(J\Delta q-e) \\
-&=\Delta q^TJ^TJ\Delta q
--\Delta q^TJ^Te
--e^TJ\Delta q
-+e^Te
-\end{aligned}
+\dot e_p=-K_pe_p.
 \]
 
-\(\Delta q^TJ^Te\)는 스칼라이므로 전치해도 값이 같다.
+scalar gain \(K_p=k_p>0\)라면 해는
 
 \[
-\Delta q^TJ^Te
-=(\Delta q^TJ^Te)^T
-=e^TJ\Delta q
+e_p(t)=\exp(-k_pt)e_p(0)
 \]
 
-따라서 가운데 두 항을 합칠 수 있다.
+이다. 즉 오차 벡터의 방향은 유지한 채 크기가 지수적으로 0으로 줄어든다. 실제
+구현은 속도 상한, damping, 다른 task 및 제약 때문에 이 등식을 정확히 만족하지는
+않는다. 그래도 \(K_pe_p\)는 현재 위치 오차를 줄이는 방향의 Cartesian 속도 목표다.
+
+`pose_velocity_command()`의 실제 선속도 식은 다음과 같다.
 
 \[
-\boxed{
-L(\Delta q)
-=\Delta q^TJ^TJ\Delta q
--2e^TJ\Delta q
-+e^Te
-+\lambda^2\Delta q^T\Delta q
-}
+v_p^*=\operatorname{clip}_{v_{max}}
+\left(K_pe_p-D_pv_p\right).
 \]
 
-### 2.2 미분에서 normal equation까지
+여기서 \(D_pv_p\)는 이미 같은 방향으로 빠르게 움직일 때 목표 속도를 낮춰
+overshoot를 줄이고, \(\operatorname{clip}_{v_{max}}\)은 벡터 방향은 유지하면서
+norm을 \(v_{max}\) 이하로 제한한다. 자세 항도 같은 논리로 처리한다.
 
-필요한 미분 규칙은 세 가지다. \(A=A^T\)이고 \(b\)가 상수일 때
+### 1.2 Jacobian이 속도 관계가 되는 과정
+
+관절 위치가 \(q=[q_1,\ldots,q_n]^T\)이고 손 위치가 \(p(q)\in\mathbb R^3\)일 때,
+각 위치 성분 \(p_a\)의 chain rule은 다음과 같다.
 
 \[
-\frac{\partial}{\partial x}(x^TAx)=2Ax,
-\qquad
-\frac{\partial}{\partial x}(b^Tx)=b,
-\qquad
-\frac{\partial}{\partial x}(\text{constant})=0
+\dot p_a
+=\frac{d p_a}{dt}
+=\sum_{j=1}^{n}\frac{\partial p_a}{\partial q_j}\dot q_j,
+\qquad a\in\{1,2,3\}.
 \]
 
-여기서 \(J^TJ\)는 대칭행렬이고 \(e^Te\)는 \(\Delta q\)와 무관한 상수다.
-각 항을 하나씩 미분하면
+세 식을 행렬로 쌓으면 위치 Jacobian \(J_p\in\mathbb R^{3\times n}\)과 손
+선속도의 관계가 된다.
 
 \[
-\begin{aligned}
-\frac{\partial}{\partial\Delta q}
-(\Delta q^TJ^TJ\Delta q)
-&=2J^TJ\Delta q, \\
-\frac{\partial}{\partial\Delta q}
-(-2e^TJ\Delta q)
-&=-2J^Te, \\
-\frac{\partial}{\partial\Delta q}(e^Te)
-&=0, \\
-\frac{\partial}{\partial\Delta q}
-(\lambda^2\Delta q^T\Delta q)
-&=2\lambda^2\Delta q
-\end{aligned}
-\]
-
-이들을 더한 gradient를 0으로 둔다.
-
-\[
-\begin{aligned}
-\nabla_{\Delta q}L
-&=2J^TJ\Delta q-2J^Te+2\lambda^2\Delta q \\
-&=0
-\end{aligned}
-\]
-
-양변을 2로 나누고 \(\Delta q\)가 들어간 항을 묶으면
-
-\[
-\begin{aligned}
-J^TJ\Delta q-J^Te+\lambda^2\Delta q&=0 \\
-J^TJ\Delta q+\lambda^2\Delta q&=J^Te \\
-(J^TJ+\lambda^2I)\Delta q&=J^Te
-\end{aligned}
-\]
-
-\(\lambda>0\)이면 \(J^TJ+\lambda^2I\)는 positive definite라 역행렬이 존재한다.
-따라서 관절 공간에서 푸는 primal form은
-
-\[
-\boxed{
-\Delta q=(J^TJ+\lambda^2I)^{-1}J^Te
-}
-\]
-
-이다.
-
-### 2.3 Primal form에서 코드의 dual form까지
-
-관절이 \(n\)개이고 task가 \(m\)차원이면 primal form은 \(n\times n\) system을
-푼다. 이 프로젝트의 위치 IK는 \(n=7\), \(m=3\)이므로 \(3\times3\) system을 푸는
-dual form이 더 작다. 두 형태가 같은 이유를 등식으로 확인한다.
-
-\[
-\begin{aligned}
-(J^TJ+\lambda^2I_n)J^T
-&=J^TJJ^T+\lambda^2J^T \\
-&=J^T(JJ^T+\lambda^2I_m)
-\end{aligned}
-\]
-
-왼쪽에서 \((J^TJ+\lambda^2I_n)^{-1}\), 오른쪽에서
-\((JJ^T+\lambda^2I_m)^{-1}\)를 차례로 곱한다.
-
-\[
-\begin{aligned}
-J^T
-&=(J^TJ+\lambda^2I_n)^{-1}
-J^T(JJ^T+\lambda^2I_m), \\
-J^T(JJ^T+\lambda^2I_m)^{-1}
-&=(J^TJ+\lambda^2I_n)^{-1}J^T
-\end{aligned}
-\]
-
-두 번째 등식의 좌우를 바꾸고 primal form에 대입하면
-
-\[
-\begin{aligned}
-\Delta q
-&=(J^TJ+\lambda^2I_n)^{-1}J^Te \\
-&=J^T(JJ^T+\lambda^2I_m)^{-1}e
-\end{aligned}
-\]
-
-따라서 실제 solver가 사용하는 결과식은
-
-\[
-\boxed{
-\Delta q=J^T(JJ^T+\lambda^2I)^{-1}e
-}
-\]
-
-이다. 여기까지가 목적함수에서 코드의 DLS 식까지 생략 없는 전개다.
-
-### 2.4 DLS는 이미 무제약 convex QP다
-
-2.1절에서 전개한 DLS 비용에서 $\Delta q$와 무관한 상수 $e^Te$를 빼고,
-행렬 항을 하나로 묶으면
-
-\[
-L(\Delta q)
-=\Delta q^T(J^TJ+\lambda^2I)\Delta q
--2(J^Te)^T\Delta q+\text{constant}
-\]
-
-이다. 표준 QP 형식
-
-\[
-\min_x\;\frac12x^THx+f^Tx
-\]
-
-과 비교하면 다음 대응을 얻는다.
-
-\[
-\boxed{
-H=2(J^TJ+\lambda^2I),
-\qquad
-f=-2J^Te
-}
-\]
-
-$\lambda>0$이면 $H$가 positive definite이므로 이 문제는 유일한 최솟값을 갖는
-convex QP다. 단일 팔 구현은 bound나 부등식 제약이 없기 때문에 범용 QP solver를
-호출하지 않고 normal equation을 직접 풀어 닫힌 형태의 DLS step을 얻는다.
-
-전신 IK에서는 여러 task와 정규화 항을 세로로 쌓아
-
-\[
-A=
+J_p(q)=
 \begin{bmatrix}
-W_RJ_R\\
-W_LJ_L\\
-W_d\\
-W_h
+\dfrac{\partial p_1}{\partial q_1} & \cdots &
+\dfrac{\partial p_1}{\partial q_n}\\
+\vdots & \ddots & \vdots\\
+\dfrac{\partial p_3}{\partial q_1} & \cdots &
+\dfrac{\partial p_3}{\partial q_n}
 \end{bmatrix},
 \qquad
-b=
-\begin{bmatrix}
-W_R\dot x_R^*\\
-W_L\dot x_L^*\\
-0\\
-W_h\dot q_{posture}^*
-\end{bmatrix}
+\dot p=J_p(q)\dot q.
 \]
 
-를 만들고 다음 문제를 푼다.
+회전의 미소 변화도 angular Jacobian \(J_\omega\in\mathbb R^{3\times n}\)로
+\(\omega=J_\omega(q)\dot q\)라고 쓸 수 있다. 이 둘을 쌓은 geometric Jacobian은
 
 \[
-\boxed{
-\min_{\dot q}\lVert A\dot q-b\rVert^2
-\quad\text{subject to}\quad
-\dot q_{min}\le\dot q\le\dot q_{max}
-}
+J(q)=
+\begin{bmatrix}J_p(q)\\J_\omega(q)\end{bmatrix}
+\in\mathbb R^{6\times n},
+\qquad
+\begin{bmatrix}\dot p\\\omega\end{bmatrix}=J(q)\dot q
 \]
 
-목적함수만 보면 $H=2A^TA$, $f=-2A^Tb$인 같은 QP 구조다. 차이는 속도·관절 한계가
-box constraint로 들어가므로 DLS 역행렬 한 번으로 끝낼 수 없다는 점이다. 현재
-`control.optimization.least_squares_to_qp()`가 이 식을 명시적인 Hessian과 선형항으로
-바꾸고 `bounded_quadratic_program()`이 box active-set으로 푼다. 그 명목 해에 base
-shaping을 적용한 뒤, 충돌 safety projection QP가 다음 soft CBF 부등식을 처리한다.
+다. 현재 구현은 이 world-frame Jacobian과 world-frame pose error를 조합한다.
+
+### 1.3 Position-level \(\Delta q\)와의 정확한 연결
+
+한 frame 동안 \(\dot q\)가 일정하다고 두면 Euler 적분은
 
 \[
-G\dot q+s\ge h,\qquad s\ge0,
-\qquad \rho\lVert s\rVert^2
+q_{k+1}=q_k+\dot q_k\Delta t.
 \]
 
-따라서 전신 IK pipeline은 **DLS와 별개의 원리**가 아니라, weighted DLS 목적함수를
-속도·관절 제약이 있는 명목 QP로 확장하고 충돌 제약은 두 번째 QP로 투영한 것이라고
-이해하는 것이 정확하다.
+따라서 그 frame의 관절 변화량을 \(\Delta q_k\)라고 정의하면
 
-!!! tip "전신 IK의 생략 없는 증명"
-    이 절은 단일 팔 DLS에서 전신 QP로 넘어가는 연결만 보여준다. FK의 한 주기
-    선형화, residual 적층, Hessian의 convexity, joint-limit CBF, box-QP KKT 조건과
-    collision slack 제거까지의 전체 유도는
-    [전신 IK 수식 증명: pose 선형화에서 QP까지](whole_body_ik.md#whole-body-proof)를
-    이어서 본다. 실제 구현이 `명목 QP → base shaping → 충돌 safety projection QP`인
-    이유와 각 식의 담당 함수도 그 절에 대응시켰다.
+\[
+\Delta q_k=q_{k+1}-q_k=\dot q_k\Delta t.
+\]
 
-## 3. 수식과 코드의 대응
+Jacobian 속도식 \(J_p\dot q\simeq K_pe_p\)의 양변에 \(\Delta t\)를 곱하면
 
-`KinematicsSolver.solve_pose()`는 위 식을 다음 코드로 직접 구현한다. 별도 helper로
-감싸지 않아 수식의 각 항이 iteration 안에서 그대로 보인다.
+\[
+J_p\Delta q\simeq K_p\Delta t\,e_p.
+\]
+
+특히 \(K_p\Delta t=1\)이면 익숙한 position-level 선형화
+\(J_p\Delta q\simeq e_p\)와 같은 모양이 된다. 이 프로젝트가 velocity-level을
+선택한 이유는 속도 상한, base 가속도 제한, joint-limit CBF, collision CBF가 모두
+\(\dot q\)의 제약으로 자연스럽게 표현되기 때문이다. 실제 변환은
+`kinematics.tasks.pose_velocity_command()`가 수행한다.
+
+## 2. 문제 정의와 task 적층
+
+전신 generalized velocity를 다음과 같이 둔다.
+
+\[
+x=\dot q=[v_x,v_y,\omega_z,\dot q_{lift},\dot q_{right},\dot q_{left}]^T
+\in\mathbb R^n
+\]
+
+각 soft task \(i\)는 Jacobian \(J_i\), 목표 속도 \(v_i^*\), 무차원 strength
+\(s_i\), 대표 물리 속도 \(\sigma_i\)를 가진다.
+
+\[
+\min_x\sum_i s_i\left\|
+\frac{J_ix-v_i^*}{\sigma_i}\right\|^2
+\]
+
+한 task에서 \(\sqrt{s_i}/\sigma_i\)를 norm 안으로 넣으면 같은 비용을 다음처럼
+쓸 수 있다.
+
+\[
+s_i\left\|\frac{J_ix-v_i^*}{\sigma_i}\right\|^2
+=\left\|\frac{\sqrt{s_i}}{\sigma_i}(J_ix-v_i^*)\right\|^2.
+\]
+
+실제 구현처럼 행마다 strength 또는 속도 scale이 다를 때 이 계수들을 대각행렬
+\(W_i\)로 모은다. 그러면 \(i\)번째 task의 weighted residual은
+
+\[
+r_i(x)=W_iJ_ix-W_iv_i^*
+\]
+
+가 된다.
+
+\(W_i=\operatorname{diag}(\sqrt{s_i}/\sigma_i)\)라 두고 행을 쌓으면
+
+\[
+A=\begin{bmatrix}W_1J_1\\W_2J_2\\\vdots\end{bmatrix},
+\qquad
+b=\begin{bmatrix}W_1v_1^*\\W_2v_2^*\\\vdots\end{bmatrix}
+\]
+
+이므로 모든 soft task는 하나의 least-squares 문제가 된다.
+
+\[
+\min_x\|Ax-b\|^2
+\]
+
+`kinematics.tasks.velocity_task()`가 각 \(W_iJ_i,W_iv_i^*\)를 만들고
+`stack_velocity_tasks()`가 \(A,b\)로 결합한다. 위치 m/s와 회전 rad/s는 각각의
+대표 속도로 나뉘므로 서로 다른 residual 단위를 그대로 비교하지 않는다.
+
+## 3. Pseudoinverse 유도
+
+먼저
+
+\[
+f(x)=\frac12\|Ax-b\|^2
+\]
+
+를 먼저 원소별로 쓴다. \(A\in\mathbb R^{m\times n}\), \(b\in\mathbb R^m\)이고
+\(A\)의 \(k,j\) 원소를 \(A_{kj}\)라 하면, residual의 \(k\)번째 성분은
+
+\[
+r_k(x)=\sum_{j=1}^{n}A_{kj}x_j-b_k
+\]
+
+이다. 따라서 목적함수는
+
+\[
+f(x)=\frac12\sum_{k=1}^{m}r_k(x)^2
+=\frac12\sum_{k=1}^{m}
+\left(\sum_{j=1}^{n}A_{kj}x_j-b_k\right)^2.
+\]
+
+행렬식으로도 같은 내용을 전개할 수 있다.
+
+\[
+\begin{aligned}
+f(x)
+&=\frac12(Ax-b)^T(Ax-b)\\
+&=\frac12\left((Ax)^TAx-(Ax)^Tb-b^TAx+b^Tb\right)\\
+&=\frac12\left(x^TA^TAx-x^TA^Tb-b^TAx+b^Tb\right)\\
+&=\frac12x^TA^TAx-x^TA^Tb+\frac12b^Tb.
+\end{aligned}
+\]
+
+마지막 줄에서는 \(x^TA^Tb\)와 \(b^TAx\)가 transpose 관계인 같은 scalar라서
+두 항을 합쳤다.
+
+\(x_j\)에 대한 편미분은 chain rule로 다음과 같이 나온다.
+
+\[
+\begin{aligned}
+\frac{\partial f}{\partial x_j}
+&=\frac12\sum_{k=1}^{m}2r_k(x)
+\frac{\partial r_k(x)}{\partial x_j}\\
+&=\sum_{k=1}^{m}r_k(x)A_{kj}\\
+&=\sum_{k=1}^{m}A_{kj}
+\left(\sum_{\ell=1}^{n}A_{k\ell}x_\ell-b_k\right).
+\end{aligned}
+\]
+
+이 \(n\)개의 편미분을 세로로 쌓으면 gradient다.
+
+\[
+\nabla f(x)=A^T(Ax-b)=A^TAx-A^Tb.
+\]
+
+이고 정지 조건은 normal equation이다.
+
+\[
+A^TAx=A^Tb
+\]
+
+\(A^TA\)가 가역이면 양변 왼쪽에 \((A^TA)^{-1}\)를 곱해
+
+\[
+x=(A^TA)^{-1}A^Tb
+\]
+
+를 얻는다. 하지만 로봇 Jacobian은 redundancy나 singularity 때문에 rank가 부족할 수
+있다. 이때 SVD
+
+\[
+A=U\Sigma V^T
+\]
+
+를 사용한다. 이 식을 \(A^TA\)에 대입하면
+
+\[
+\begin{aligned}
+A^TA
+&=(U\Sigma V^T)^T(U\Sigma V^T)\\
+&=V\Sigma^TU^TU\Sigma V^T\\
+&=V\Sigma^T\Sigma V^T.
+\end{aligned}
+\]
+
+\(\Sigma^T\Sigma\)의 유효 대각 성분은 \(\sigma_j^2\)다. 따라서 normal equation을
+각 singular direction으로 보면 \(\sigma_j^2\)로 나눠야 하고, \(A^Tb\)에 들어 있던
+\(\sigma_j\) 하나와 합쳐 최종 gain \(1/\sigma_j\)가 남는다.
+
+를 사용하고, 0이 아닌 singular value만 역수로 바꾼
+
+\[
+A^+=V\Sigma^+U^T
+\]
+
+를 정의하면
+
+\[
+x^*=A^+b
+\]
+
+가 residual을 최소화하는 해 중 Euclidean norm이 가장 작은 해가 된다. 코드에서는
+`np.linalg.pinv(A, rcond=...) @ b`가 이 계산을 수행한다.
+
+!!! note "Pseudoinverse가 불안정해지는 이유"
+    작은 singular value \(\sigma_j\) 방향의 gain은 \(1/\sigma_j\)다. 따라서
+    \(\sigma_j\to0\)이면 작은 Cartesian 오차도 매우 큰 관절 속도로 증폭될 수 있다.
+
+## 4. Damped least squares { #damped-least-squares }
+
+### 4.1 목적함수에서 normal equation까지
+
+DLS는 task residual뿐 아니라 큰 해 자체에도 비용을 부여한다.
+
+\[
+f_\lambda(x)
+=\frac12\|Ax-b\|^2+\frac{\lambda^2}{2}\|x\|^2,
+\qquad \lambda>0
+\]
+
+두 항을 전개하면
+
+\[
+f_\lambda(x)
+=\frac12x^TA^TAx-x^TA^Tb+\frac12b^Tb
++\frac{\lambda^2}{2}x^Tx
+\]
+
+이다. regularization 항을 성분별로 쓰면
+
+\[
+\frac{\lambda^2}{2}\|x\|^2
+=\frac{\lambda^2}{2}\sum_{\ell=1}^{n}x_\ell^2.
+\]
+
+따라서 \(x_j\)에 대한 미분은
+
+\[
+\frac{\partial}{\partial x_j}
+\left(\frac{\lambda^2}{2}\sum_{\ell=1}^{n}x_\ell^2\right)
+=\lambda^2x_j
+\]
+
+다. 앞 절의 least-squares 미분과 합치면
+
+\[
+\frac{\partial f_\lambda}{\partial x_j}
+=\sum_{k=1}^{m}A_{kj}
+\left(\sum_{\ell=1}^{n}A_{k\ell}x_\ell-b_k\right)
++\lambda^2x_j.
+\]
+
+이 성분별 미분을 벡터로 쌓으면
+
+\[
+\nabla f_\lambda(x)
+=A^T(Ax-b)+\lambda^2x
+\]
+
+최솟값에서 gradient가 0이므로
+
+\[
+A^TAx-A^Tb+\lambda^2x=0
+\]
+
+이고 항을 정리하면
+
+\[
+(A^TA+\lambda^2I)x=A^Tb
+\]
+
+를 얻는다. 따라서 DLS 해는
+
+\[
+\boxed{x_\lambda=(A^TA+\lambda^2I)^{-1}A^Tb}
+\]
+
+다.
+
+### 4.2 이 정지점이 유일한 전역 최솟값인 이유
+
+Hessian은
+
+\[
+\nabla^2 f_\lambda=A^TA+\lambda^2I
+\]
+
+다. 임의의 0이 아닌 벡터 \(z\)에 대해
+
+\[
+z^T(A^TA+\lambda^2I)z
+=\|Az\|^2+\lambda^2\|z\|^2>0
+\]
+
+이므로 Hessian은 positive definite다. 따라서 목적함수는 strictly convex이고 위
+정지점은 유일한 전역 최솟값이다. \(A\)가 rank deficient여도 \(\lambda>0\)이면
+행렬이 가역이 되는 이유도 이 식에서 확인할 수 있다.
+
+### 4.3 SVD로 보는 singularity 억제
+
+\(A=U\Sigma V^T\)를 DLS 해에 대입하는 과정을 쓰면
+
+\[
+\begin{aligned}
+x_\lambda
+&=(A^TA+\lambda^2I)^{-1}A^Tb\\
+&=\left(V\Sigma^T\Sigma V^T+\lambda^2VV^T\right)^{-1}
+V\Sigma^TU^Tb\\
+&=V\left(\Sigma^T\Sigma+\lambda^2I\right)^{-1}\Sigma^TU^Tb.
+\end{aligned}
+\]
+
+\(j\)번째 singular direction에서 가운데 대각 성분은
+\(\sigma_j/(\sigma_j^2+\lambda^2)\)가 된다. 따라서
+
+\[
+x_\lambda
+=V\operatorname{diag}\left(
+\frac{\sigma_j}{\sigma_j^2+\lambda^2}
+\right)U^Tb
+\]
+
+가 된다. Pseudoinverse와 DLS의 singular 방향 gain을 비교하면 다음과 같다.
+
+| 방법 | singular direction gain |
+|---|---:|
+| Pseudoinverse | \(1/\sigma_j\) |
+| DLS | \(\sigma_j/(\sigma_j^2+\lambda^2)\) |
+
+\(\sigma_j\to0\)일 때 DLS gain은 0으로 가므로 특이 방향의 속도가 폭증하지 않는다.
+반대로 \(\sigma_j\gg\lambda\)이면 gain은 거의 \(1/\sigma_j\)가 되어 pseudoinverse와
+비슷하게 동작한다.
+
+### 4.4 \(\lambda\)가 만드는 절충
+
+- \(\lambda\to0\): pseudoinverse에 가까워지고 task 추종은 강하지만 singularity에 민감하다.
+- \(\lambda\) 증가: 관절 속도는 작아지지만 task residual은 커진다.
+- \(\lambda\to\infty\): \(x_\lambda\to0\)이다.
+
+현재 UI의 DLS damping은 이 단일 \(\lambda\)다. 이는 QP에서 base/lift/arm별로
+설정하는 damping task와 다르다. 또한 \(\lambda^2\|x\|^2\)는 generalized velocity
+좌표의 Euclidean norm이므로 자유도 단위나 좌표 scale을 바꾸면 같은 물리적 의미를
+보존하지 않는다. 자유도별 물리 속도 상한으로 정규화된 사용 비용이 필요하면 QP의
+damping weights가 더 명시적인 표현이다.
+
+코드 대응은 다음 두 줄이다.
 
 ```python
-damping_squared = self.damping ** 2
-position_system = (
-    position_jacobian @ position_jacobian.T
-    + damping_squared * np.eye(3)
-)
-position_delta = position_jacobian.T @ np.linalg.solve(
-    position_system, position_error
-)
+normal = matrix.T @ matrix
+normal.flat[::normal.shape[0] + 1] += dls_damping ** 2
+x = np.linalg.solve(normal, matrix.T @ vector)
 ```
 
-| 코드 | 수식 | 역할 |
+## 5. Least-squares를 QP로 바꾸는 과정
+
+표준 convex QP를
+
+\[
+\min_x\frac12x^THx+g^Tx
+\]
+
+로 쓴다. Least-squares를 전개한 식
+
+\[
+\|Ax-b\|^2=x^TA^TAx-2b^TAx+b^Tb
+\]
+
+에 \(1/2\)를 곱한 QP 목적함수를 대입해 계수를 비교하면
+
+\[
+\begin{aligned}
+\frac12x^THx+g^Tx
+&=x^TA^TAx-2b^TAx+\underbrace{b^Tb}_{\text{constant}}\\
+&=\frac12x^T\left(2A^TA\right)x
++\left(-2A^Tb\right)^Tx+b^Tb.
+\end{aligned}
+\]
+
+\(b^Tb\)는 \(x\)와 무관하므로 최적해에 영향을 주지 않는다. 따라서
+
+\[
+H=2A^TA,\qquad g=-2A^Tb
+\]
+
+로 두면 같은 최적해를 갖는다. 이것이 `least_squares_to_qp()`의 두 반환값이다.
+
+이 QP에 제약이 없다고 가정하면 gradient는
+
+\[
+\nabla\left(\frac12x^THx+g^Tx\right)=Hx+g
+\]
+
+이고, \(H=2A^TA\), \(g=-2A^Tb\)를 대입하면
+
+\[
+Hx+g=2A^T(Ax-b).
+\]
+
+따라서 QP의 정지 조건 \(Hx+g=0\)은 앞 절의 normal equation
+\(A^TAx=A^Tb\)와 정확히 같다.
+
+\(A^TA\)는 positive semidefinite이므로 목적함수는 convex다. QP damping task가
+모든 자유도에 양의 비용을 주면 positive definite가 되어 해도 유일해진다. 일부
+가중치가 0이면 해가 여러 개일 수 있지만, convex 문제이므로 KKT 조건을 만족하는
+해는 여전히 전역 최적해다.
+
+## 6. Box constraint란 무엇인가
+
+Box는 변수마다 독립적인 하한과 상한이 있는 feasible set이다.
+
+\[
+l_i\le x_i\le u_i,\qquad i=1,\ldots,n
+\]
+
+2차원에서는 직사각형, 3차원에서는 직육면체, \(n\)차원에서는 hyperrectangle이다.
+이 프로젝트에서 box는 다음을 한꺼번에 표현한다.
+
+- base, lift, arm의 물리 최대 속도
+- joint-limit CBF가 현재 위치에 따라 좁힌 접근 속도
+- Whole-body OFF 또는 FK mode 자유도의 \(l_i=u_i=0\)
+- base participation scale이 줄인 base 속도 범위
+
+단순히 unconstrained 해를 마지막에 `clip`하는 것만으로는 일반적으로 최적해가 되지
+않는다. 한 자유도가 포화되면 Jacobian의 결합 때문에 다른 자유도의 최적값도 다시
+계산해야 하기 때문이다.
+
+## 7. Box active-set이란 무엇인가 { #box-active-set }
+
+Active-set은 최적해에서 어느 bound가 실제 equality처럼 작동하는지를 추정하고
+수정하는 방법이다. 각 변수는 세 집합 중 하나에 속한다.
+
+| 집합 | 상태 | 값 |
 |---|---|---|
-| `position_jacobian @ position_jacobian.T` | \(J_pJ_p^T\) | task-space sensitivity를 모은다. |
-| `+ damping_squared * I` | \(J_pJ_p^T+\lambda^2I\) | 0에 가까운 방향의 분모를 안정화한다. |
-| `solve(position_system, position_error)` | \((J_pJ_p^T+\lambda^2I)^{-1}e_p\) | 역행렬을 만들지 않고 선형계를 푼다. |
-| `position_jacobian.T @ ...` | \(J_p^T(\cdots)\) | 결과를 관절 공간으로 돌려보낸다. |
+| lower-active \(\mathcal L\) | 하한에 붙음 | \(x_i=l_i\) |
+| upper-active \(\mathcal U\) | 상한에 붙음 | \(x_i=u_i\) |
+| free \(\mathcal F\) | bound 사이에서 움직임 | \(l_i<x_i<u_i\) |
 
-기본 감쇠는 `DEFAULT_DAMPING = 0.05`, iteration당 관절 변화 제한은
-`DEFAULT_MAX_JOINT_DELTA = 0.07 rad`다. 두 값은 역할이 다르다. damping은 해를
-계산하는 과정의 정규화이고, clamp는 계산된 해에 마지막으로 적용하는 상한이다.
+`active`는 “constraint 기능이 켜져 있다”는 뜻이 아니라, **현재 후보 해에서 해당
+bound가 equality로 붙어 있다**는 뜻이다.
 
-## 4. DLS가 특이점에서 폭발을 막는 이유
+### 7.1 Active 변수를 고정하고 free 변수 다시 풀기
 
-Jacobian을 singular value decomposition(SVD)으로 쓰면
-\(J=U\Sigma V^T\)다. 각 특이값 \(\sigma_i\)는 해당 task 방향으로 관절 움직임이
-얼마나 잘 전달되는지를 나타낸다.
-
-### 4.1 순수 pseudoinverse의 방향별 gain
-
-SVD에서 pseudoinverse는 \(J^+=V\Sigma^+U^T\)이고, \(\Sigma^+\)의 대각 원소는
-0이 아닌 각 특이값의 역수다.
+Active 변수 \(x_\mathcal A\)를 bound 값으로 고정한다. QP gradient
+\(Hx+g\)의 free 성분이 0이어야 하므로 block equation은
 
 \[
-\Sigma^+
-=\operatorname{diag}\left(
-\frac{1}{\sigma_1},\ldots,\frac{1}{\sigma_r}
-\right)
+H_{\mathcal{FF}}x_\mathcal F
++H_{\mathcal{FA}}x_\mathcal A+g_\mathcal F=0
 \]
 
-오차를 왼쪽 singular vector \(u_i\) 방향 성분으로 나눠 쓰면
+이다. 따라서 free 후보는
 
 \[
-e=\sum_{i=1}^{r}(u_i^Te)u_i+e_\perp
+x_\mathcal F
+=-H_{\mathcal{FF}}^+
+\left(g_\mathcal F+H_{\mathcal{FA}}x_\mathcal A\right)
 \]
 
-이고, pseudoinverse 해는 다음 순서로 전개된다.
+로 다시 계산한다. 코드의 `reduced_hessian`, `reduced_linear`, `np.linalg.lstsq()`가
+이 식이다. 역행렬 대신 least-squares를 쓰므로 reduced Hessian이 singular한 경우도
+처리한다.
+
+### 7.2 새 후보가 box 밖으로 나가면
+
+현재 feasible point \(x\)에서 free solution \(x_c\)로 가는 방향을
 
 \[
-\begin{aligned}
-\Delta q_{\text{pinv}}
-&=J^+e \\
-&=V\Sigma^+U^Te \\
-&=\sum_{i=1}^{r}
-\frac{1}{\sigma_i}v_i(u_i^Te)
-\end{aligned}
+p=x_c-x
 \]
 
-따라서 \(u_i\) 방향의 task error는 관절 공간에서 정확히 \(1/\sigma_i\)배 된다.
-
-### 4.2 DLS gain을 SVD에서 끝까지 전개
-
-DLS 식에 \(J=U\Sigma V^T\)를 대입한다. 먼저 \(JJ^T\)를 계산하면
+라 두고
 
 \[
-\begin{aligned}
-JJ^T
-&=(U\Sigma V^T)(U\Sigma V^T)^T \\
-&=(U\Sigma V^T)(V\Sigma^TU^T) \\
-&=U\Sigma(V^TV)\Sigma^TU^T \\
-&=U\Sigma\Sigma^TU^T
-\end{aligned}
+x(\alpha)=x+\alpha p,\qquad0\le\alpha\le1
 \]
 
-이다. \(U\)가 orthogonal이므로 \(I=UIU^T\)이고
+중 처음 bound에 닿는 가장 작은 \(\alpha\)까지만 이동한다. 예를 들어 \(p_i>0\)이면
 
 \[
-\begin{aligned}
-JJ^T+\lambda^2I
-&=U\Sigma\Sigma^TU^T+\lambda^2UIU^T \\
-&=U(\Sigma\Sigma^T+\lambda^2I)U^T
-\end{aligned}
+\alpha_i=\frac{u_i-x_i}{p_i}
 \]
 
-이다. Orthogonal similarity transform의 역은
+이고, \(p_i<0\)이면 하한까지의 비율을 사용한다. 먼저 닿은 변수를 active set에
+추가한 뒤 나머지 free 변수를 다시 푼다. 이 line search 때문에 모든 중간 해가 box
+안에 남는다.
+
+### 7.3 후보가 feasible하면 KKT 조건 검사
+
+Box-QP의 Lagrangian을
 
 \[
-[UCU^T]^{-1}=UC^{-1}U^T
+\mathcal L(x,\mu,\nu)
+=\frac12x^THx+g^Tx+\mu^T(l-x)+\nu^T(x-u)
 \]
 
-이므로 DLS operator를 전개하면
+로 둔다. \(\mu,\nu\ge0\)는 각각 하한과 상한 multiplier다. Convex QP의 KKT 조건은
 
 \[
 \begin{aligned}
-J^T(JJ^T+\lambda^2I)^{-1}
-&=V\Sigma^TU^T
-\left[U(\Sigma\Sigma^T+\lambda^2I)U^T\right]^{-1} \\
-&=V\Sigma^TU^T
-U(\Sigma\Sigma^T+\lambda^2I)^{-1}U^T \\
-&=V\Sigma^T(\Sigma\Sigma^T+\lambda^2I)^{-1}U^T
+&l\le x\le u &&\text{(primal feasibility)}\\
+&Hx+g-\mu+\nu=0 &&\text{(stationarity)}\\
+&\mu_i(l_i-x_i)=0,\quad \nu_i(x_i-u_i)=0
+&&\text{(complementarity)}
 \end{aligned}
 \]
 
-대각 원소끼리 계산하면
+이다. 이를 변수 상태별 gradient \(r=Hx+g\)로 바꾸는 과정도 직접 확인할 수 있다.
+
+free 변수는 complementarity 때문에 \(\mu_i=\nu_i=0\)이고, 따라서
 
 \[
-\Sigma^T(\Sigma\Sigma^T+\lambda^2I)^{-1}
-=\operatorname{diag}\left(
-\frac{\sigma_1}{\sigma_1^2+\lambda^2},\ldots,
-\frac{\sigma_r}{\sigma_r^2+\lambda^2}
-\right)
+r_i=0.
 \]
 
-이므로 최종 해는
+하한에 붙은 변수는 \(x_i=l_i\)라서 상한 multiplier는 \(\nu_i=0\)이다. stationarity
+\(r_i-\mu_i+\nu_i=0\)는
 
 \[
-\boxed{
-\Delta q_{\text{DLS}}
-=\sum_{i=1}^{r}
-\frac{\sigma_i}{\sigma_i^2+\lambda^2}
-v_i(u_i^Te)
-}
+r_i=\mu_i\ge0
 \]
 
-이다. 따라서 DLS의 방향별 gain은
+가 된다. 반대로 상한에 붙은 변수는 \(x_i=u_i\), \(\mu_i=0\)이므로
 
 \[
-\boxed{g(\sigma)=\frac{\sigma}{\sigma^2+\lambda^2}}
+r_i=-\nu_i\le0
 \]
 
-로 정확히 나타난다.
-
-### 4.3 DLS gain의 최대값과 극한
-
-gain을 \(\sigma\)로 미분한다. 몫의 미분법을 그대로 적용하면
-
-\[
-\begin{aligned}
-g'(\sigma)
-&=\frac{1\cdot(\sigma^2+\lambda^2)
--\sigma\cdot2\sigma}
-{(\sigma^2+\lambda^2)^2} \\
-&=\frac{\lambda^2-\sigma^2}
-{(\sigma^2+\lambda^2)^2}
-\end{aligned}
-\]
-
-\(\sigma\ge0\)에서 \(g'(\sigma)=0\)이면
-
-\[
-\lambda^2-\sigma^2=0
-\quad\Longrightarrow\quad
-\sigma=\lambda
-\]
-
-이고, 그때의 gain은
-
-\[
-g(\lambda)
-=\frac{\lambda}{\lambda^2+\lambda^2}
-=\frac{1}{2\lambda}
-\]
-
-이다. 양 끝의 극한도 직접 계산할 수 있다.
-
-\[
-\lim_{\sigma\to0}
-\frac{\sigma}{\sigma^2+\lambda^2}=0,
-\qquad
-\lim_{\sigma\to\infty}
-\frac{\sigma}{\sigma^2+\lambda^2}=0
-\]
-
-| 특이값 상태 | 뜻 | 순수 pseudoinverse | DLS |
-|---|---|---|---|
-| \(\sigma_i\)가 큼 | 손이 잘 움직이는 방향 | 평범한 크기의 명령 | 거의 같은 방향으로 움직임 |
-| \(\sigma_i\approx\lambda\) | 민감도가 낮아지기 시작 | 명령이 커짐 | gain이 최대값에 도달 |
-| \(\sigma_i\to0\) | 사실상 움직일 수 없는 방향 | \(1/\sigma_i\)가 폭발 | gain이 0으로 내려가 방향을 포기 |
-
-순수 역은 \(\sigma_i\to0\)일 때 무한대로 커지지만 DLS는 위 전개처럼 0으로
-내려간다. 즉 로봇이 거의 움직일 수 없는 방향을 억지로 만들기 위해 관절을 크게
-휘두르지 않는다.
-
-<figure markdown>
-  ![의사역행렬과 DLS의 특이값 방향별 증폭 비교](../assets/dls-singular-value-gain.svg)
-  <figcaption>빨강은 순수 pseudoinverse, 초록은 λ=0.1인 DLS 예시다. 그래프 위쪽 범위를 넘는 빨강 곡선은 σ→0에서 계속 발산한다.</figcaption>
-</figure>
-
-예를 들어 \(\sigma=0.001\), \(\lambda=0.1\)이면 다음과 같다.
-
-\[
-\frac{1}{\sigma}=1000,
-\qquad
-\frac{\sigma}{\sigma^2+\lambda^2}
-=\frac{0.001}{0.010001}
-\approx0.1
-\]
-
-같은 아주 작은 손 오차가 순수 pseudoinverse에서는 관절 공간에서 크게 증폭되지만,
-DLS에서는 해당 특이 방향이 강하게 억제된다.
-
-!!! summary "그래프의 한 줄 결론"
-    **움직일 수 없는 방향일수록 더 세게 명령하는 것이 아니라, 그 방향의 명령을
-    포기하는 것**이 DLS가 특이점에서 안전한 이유다.
-
-## 5. 왜 위치와 자세를 한 번에 풀지 않는가
-
-가장 단순한 pose IK는 위치와 자세 오차, Jacobian을 각각 세로로 쌓는다.
-
-\[
-e=
-\begin{bmatrix}e_p\\e_R\end{bmatrix},
-\qquad
-J=
-\begin{bmatrix}J_p\\J_R\end{bmatrix}
-\]
-
-하지만 하나의 least-squares 문제에서는 위치와 자세가 같은 단계에서 경쟁한다.
-가중치 \(w_p\gg w_R\)를 주어도 “위치를 절대 보존하라”가 아니라 “위치를 더 비싸게
-취급하라”는 절충일 뿐이다.
-
-이 solver는 **위치를 먼저 풀고**, 자세는 위치 task가 쓰지 않는 관절 방향으로만
-보정하는 task-priority 구조를 사용한다.
-
-!!! example "책상 위 컵으로 생각하기"
-    먼저 컵을 목표 지점으로 옮기는 동작이 위치 보정 \(\Delta q_{pos}\)다. 그다음
-    컵을 제자리에서 돌리고 싶다. 자세 보정이 컵을 옆으로 밀면 방금 맞춘 위치가
-    깨진다. Null-space projection은 자세 보정에서 **컵을 미는 성분을 빼고,
-    제자리 회전에 해당하는 성분만 남기는 필터**라고 생각할 수 있다.
-
-\[
-\Delta q=\Delta q_{pos}+\Delta q_{ori}
-\]
-
-자세 보정이 위치에 영향을 주지 않으려면 이상적으로 다음을 만족해야 한다.
-
-\[
-J_p\Delta q_{ori}=0
-\]
-
-### 5.1 그런데 전신 IK는 왜 위치와 자세를 함께 쌓는가
-
-이 절의 위치 우선 구조와 전신 IK의 weighted stacking은 서로 모순되지 않는다. 두
-solver는 같은 pose 오차를 받지만 목적과 출력이 다르다.
-
-| 구분 | 단일 팔 `solve_pose()` | 전신 `WholeBodyIK.solve()` |
-|---|---|---|
-| 실행 방식 | 한 목표에 여러 번 반복해 최종 관절각 탐색 | 매 제어 주기 한 번 풀어 관절속도 생성 |
-| 변수 | 팔 관절 변화 $\Delta q$ | base·lift·양팔 속도 $\dot q$ |
-| 가장 중요한 요구 | 손 위치 우선 보존 | 양손 추종과 물리적 실행 가능성의 동시 절충 |
-| 제한 처리 | 관절각 clamp와 backtracking | 속도 box, joint-limit CBF, collision CBF |
-| 자세 처리 | 위치 null space로 투영 | 위치·자세 task에 명시적 weight 적용 |
-
-단일 팔 오프라인 IK는 목표 위치가 자세보다 중요하므로 null-space 계층을 사용한다.
-반면 전신 제어에서 위치를 절대 우선으로 고정하면 양손 목표, 베이스·리프트 범위,
-충돌 회피가 동시에 활성화됐을 때 실행 가능한 속도가 없어질 수 있다. 그래서 전신
-경로는 각 요구를 weighted task로 만들고 box/CBF 제약 안에서 가장 작은 잔차를 선택한다.
-
-`bimanual.rigid_grasp_task()`도 별도 IK solver가 아니다. 캡처한 양손 상대 pose에서
-상대 Jacobian $J_g$와 보정 twist $\dot x_g^*$를 만들어 전신 문제에 다음 행 하나를
-추가한다.
-
-\[
-\lVert W_g(J_g\dot q-\dot x_g^*)\rVert^2
-\]
-
-세 경로에서 같아야 하는 $e_p$, $e_R$의 부호·frame과 bounded Cartesian 속도 계산은
-`kinematics/tasks.py`로 통일하고, 위치 우선 또는 constrained QP라는 정책 차이만 각
-solver에 남겨 둔 이유가 여기에 있다.
-
-## 6. Null-space projector
-
-Moore–Penrose pseudoinverse \(J_p^+\)를 사용한 정확한 projector는 다음과 같다.
-
-\[
-\boxed{N_p=I-J_p^+J_p}
-\]
-
-projector가 임의의 후보 관절 방향 \(z\)를 처리하는 순서는 다음과 같다.
-
-\[
-\boxed{
-N_pz
-=\underbrace{z}_{\text{원래 후보}}
--\underbrace{J_p^+(J_pz)}_{\text{손 위치를 움직이는 성분}}
-}
-\]
-
-1. \(J_pz\): 후보 \(z\)가 손 위치를 얼마나 움직이는지 계산한다.
-2. \(J_p^+(J_pz)\): 그 움직임을 만드는 관절 성분을 다시 구한다.
-3. 원래 후보에서 그 성분을 빼 위치 변화가 없는 쪽만 남긴다.
-
-임의의 관절 방향 \(z\)에 \(N_p\)를 곱하면 위치를 움직이는 성분이 제거된다.
-이를 projector 정의에서 직접 확인하면
-
-\[
-\begin{aligned}
-J_pN_p
-&=J_p(I-J_p^+J_p) \\
-&=J_pI-J_pJ_p^+J_p \\
-&=J_p-J_pJ_p^+J_p
-\end{aligned}
-\]
-
-이다. Moore–Penrose pseudoinverse의 정의 성질 중 하나가
-
-\[
-J_pJ_p^+J_p=J_p
-\]
-
-이므로 이를 바로 대입하면
-
-\[
-\boxed{
-J_pN_p=J_p-J_p=0
-}
-\]
-
-을 얻는다. 따라서 모든 \(z\)에 대해 \(J_p(N_pz)=(J_pN_p)z=0\)이다.
-
-자세 오차 \(e_R\in\mathbb R^3\)와 rotational Jacobian
-\(J_R\in\mathbb R^{3\times7}\)에서 자세를 개선하는 단순 관절 방향은
-\(g_R=J_R^Te_R\)다. 이 방향도 목적함수의 gradient에서 나온다. 작은 관절 변화
-\(\delta q\)에 대한 orientation 비용을
-
-\[
-F_R(\delta q)
-=\frac12\lVert e_R-J_R\delta q\rVert^2
-\]
-
-라고 하면
-
-\[
-\begin{aligned}
-\nabla_{\delta q}F_R
-&=\frac12\cdot2(-J_R)^T(e_R-J_R\delta q) \\
-&=-J_R^T(e_R-J_R\delta q)
-\end{aligned}
-\]
-
-이다. 현재점 \(\delta q=0\)에서 비용을 줄이는 negative-gradient 방향은
-
-\[
--\nabla_{\delta q}F_R\big|_{\delta q=0}
-=J_R^Te_R
-=g_R
-\]
-
-가 된다. 이를 위치 null space에 투영하면 다음과 같다.
-
-\[
-\Delta q_{ori}=\alpha N_pJ_R^Te_R
-\]
-
-일반식의 \(\alpha\)는 자세 보정 gain이다. 현재 `kinematics/solver.py`는 별도 gain을 곱하지 않아
-사실상 \(\alpha=1\)이다. `ori_weight=0.3`은 line search의 후보 비용을 비교할 때만
-사용하며 orientation gradient gain이 아니다.
-
-### 중요한 주의점: damped projector는 근사다
-
-실제 코드는 안정성을 위해 정확한 \(J_p^+\) 대신 damped pseudoinverse를 재사용한다.
-
-\[
-J_{p,\lambda}^+
-=J_p^T(J_pJ_p^T+\lambda^2I)^{-1},
-\qquad
-N_{p,\lambda}=I-J_{p,\lambda}^+J_p
-\]
-
-이 경우 \(J_pN_{p,\lambda}=0\)이 엄밀하게 성립하지 않는다. 따라서 문서와 코드를
-해석할 때는 “자세 보정이 위치를 전혀 움직이지 않는다”가 아니라
-**“자세 보정이 위치에 미치는 1차 영향을 크게 억제한다”**가 정확하다.
-
-얼마나 남는지도 생략 없이 계산할 수 있다. 정의를 대입하면
-
-\[
-\begin{aligned}
-J_pN_{p,\lambda}
-&=J_p(I-J_{p,\lambda}^+J_p) \\
-&=J_p-J_pJ_p^T
-(J_pJ_p^T+\lambda^2I)^{-1}J_p
-\end{aligned}
-\]
-
-\(A=J_pJ_p^T\)라고 놓고 \(J_p\)를 오른쪽으로 묶으면
-
-\[
-\begin{aligned}
-J_pN_{p,\lambda}
-&=\left[I-A(A+\lambda^2I)^{-1}\right]J_p \\
-&=\left[(A+\lambda^2I)(A+\lambda^2I)^{-1}
--A(A+\lambda^2I)^{-1}\right]J_p \\
-&=\left[(A+\lambda^2I-A)(A+\lambda^2I)^{-1}\right]J_p \\
-&=\lambda^2(A+\lambda^2I)^{-1}J_p
-\end{aligned}
-\]
-
-이다. 다시 \(A=J_pJ_p^T\)를 대입하면 정확한 잔차는
-
-\[
-\boxed{
-J_pN_{p,\lambda}
-=\lambda^2(J_pJ_p^T+\lambda^2I)^{-1}J_p
-}
-\]
-
-다. SVD 방향 \(i\)에서 이 잔차의 gain은
-
-\[
-\boxed{
-\frac{\lambda^2\sigma_i}{\sigma_i^2+\lambda^2}
-}
-\]
-
-이므로 \(\lambda>0\)에서는 일반적으로 0이 아니다. 이것이 damped projector가
-정확한 null-space projector가 아니라는 수학적 이유다.
-
-다음 상황에서는 작은 위치 변화가 남을 수 있다.
-
-- damping \(\lambda\)가 큰 경우
-- singularity 또는 joint limit 근처
-- 관절 변화량 clamp가 성분별로 걸린 경우
-- 한 iteration의 변화가 커서 Jacobian 선형근사가 부정확한 경우
-
-## 7. 실제 solver의 한 iteration
-
-현재 구현의 핵심 계산은 다음 식으로 요약된다.
-
-먼저 damped projector에 \(g_R\)를 대입해 orientation 보정식을 전개하면
-
-\[
-\begin{aligned}
-\Delta q_{ori}
-&=N_{p,\lambda}g_R \\
-&=(I-J_{p,\lambda}^+J_p)g_R \\
-&=g_R-J_{p,\lambda}^+(J_pg_R) \\
-&=g_R-J_p^T(J_pJ_p^T+\lambda^2I)^{-1}(J_pg_R)
-\end{aligned}
-\]
-
-이다. 반복해서 나타나는 system을 \(A=J_pJ_p^T+\lambda^2I\)로 줄여 쓰면
-
-\[
-\begin{aligned}
-A
-&=J_pJ_p^T+\lambda^2I \\
-\Delta q_{pos}
-&=J_p^TA^{-1}e_p \\
-g_R
-&=J_R^Te_R \\
-\Delta q_{ori}
-&=g_R-J_p^TA^{-1}(J_pg_R) \\
-\Delta q
-&=\operatorname{clip}(\Delta q_{pos}+\Delta q_{ori})
-\end{aligned}
-\]
-
-| 계산 조각 | 말로 읽기 |
-|---|---|
-| \(A=J_pJ_p^T+\lambda^2I\) | 위치 Jacobian에 damping을 더한 공통 system |
-| \(J_p^TA^{-1}e_p\) | 위치 오차를 안정적인 관절 변화로 변환 |
-| \(g_R=J_R^Te_R\) | 자세 오차를 줄이고 싶은 관절 방향 생성 |
-| \(g_R-J_p^TA^{-1}(J_pg_R)\) | 자세 방향에서 위치를 움직이는 성분 제거 |
-| \(\operatorname{clip}(\cdot)\) | 각 관절의 한 iteration 최대 이동량 제한 |
-
-수식의 \(A^{-1}x\)는 개념 표기다. 코드는 역행렬을 직접 만들지 않고
-`np.linalg.solve(A, x)`로 선형계를 푼다.
+다. 즉 다음 표의 부호 조건은 별도 규칙이 아니라 KKT stationarity와 multiplier의
+non-negativity에서 바로 나온다.
+
+| 변수 상태 | 최적 조건 | 이유 |
+|---|---:|---|
+| free | \(r_i=0\) | 양방향으로 움직일 수 있음 |
+| lower-active | \(r_i\ge0\) | 허용된 \(+\) 방향 이동이 비용을 낮추지 않음 |
+| upper-active | \(r_i\le0\) | 허용된 \(-\) 방향 이동이 비용을 낮추지 않음 |
+
+하한에서 \(r_i<0\)이면 \(x_i\)를 증가시킬 때 비용이 감소하므로 하한을 active로
+유지한 판단이 틀렸다. 반대로 상한에서 \(r_i>0\)이면 값을 줄일 때 비용이 감소한다.
+코드는 가장 크게 위반한 bound 하나를 active set에서 해제한 뒤 다시 푼다.
+
+```python
+gradient = hessian @ x + linear
+lower_violation = np.where(active_lower, -gradient, -np.inf)
+upper_violation = np.where(active_upper, gradient, -np.inf)
+```
+
+모든 free gradient가 0이고 active bound의 부호 조건도 맞으면 KKT 조건을 만족한다.
+목적함수가 convex이므로 이 조건은 지역 최솟값이 아니라 전역 최솟값의 충분조건이다.
+
+### 7.4 전체 반복 흐름
 
 ```mermaid
 flowchart TD
-    POS["위치 오차 e_p"] --> DLS["DLS로 Δq_pos 계산"]
-    ORI["자세 오차 e_R"] --> GRAD["J_Rᵀe_R로 자세 방향 g_R 계산"]
-    JP["position Jacobian J_p"] --> PROJECT["damped null-space projection"]
-    GRAD --> PROJECT
-    PROJECT --> DQORI["위치 영향을 억제한 Δq_ori"]
-    DLS --> SUM["Δq_pos + Δq_ori"]
-    DQORI --> SUM
-    SUM --> CLAMP["관절별 max_joint_delta clamp"]
-    CLAMP --> SEARCH["step=1, 1/2, … 후보 비용 비교"]
-    SEARCH --> UPDATE["가장 나은 후보 q로 갱신"]
+    U["unconstrained/reduced 해 계산"] --> C["초기 feasible point로 clip"]
+    C --> S["lower · upper · free 집합 구성"]
+    S --> R["active 변수 고정<br>free 변수 reduced QP 재계산"]
+    R --> O{"후보가 box 밖인가?"}
+    O -- Yes --> H["처음 닿는 bound까지만 이동<br>그 변수를 active에 추가"]
+    H --> R
+    O -- No --> K{"KKT gradient 부호 만족?"}
+    K -- No --> D["가장 잘못 묶인 bound를 해제"]
+    D --> R
+    K -- Yes --> E["box-QP 전역 최적해"]
 ```
 
-clamp 뒤에는 backtracking으로 step을 최대 6번 절반씩 줄이며 실제 forward
-kinematics 비용을 비교한다.
+## 8. 왜 단순 clip과 다른가: 2변수 예제
+
+다음 문제를 생각한다.
 
 \[
-C(q)=\lVert e_p(q)\rVert+\text{ori\_weight}\,\lVert e_R(q)\rVert
+\min_{x_1,x_2}(x_1-2)^2+(x_2-x_1)^2
 \]
-
-비용이 현재보다 낮은 후보를 찾으면 탐색을 멈춘다. 여섯 후보가 모두 개선되지
-않으면 구현은 그중 비용이 가장 작은 후보를 채택한다. 따라서 line search는 큰
-비선형 step의 위험을 줄이지만, 모든 iteration의 단조 감소를 수학적으로 보장하는
-구조는 아니다.
-
-## 8. 2관절로 보는 null space
-
-위치 task가 하나이고 Jacobian이 다음과 같다고 하자.
 
 \[
-J_p=\begin{bmatrix}1&1\end{bmatrix},
-\qquad
-\Delta x=\Delta q_1+\Delta q_2
+0\le x_1\le1,\qquad0\le x_2\le3
 \]
 
-관절을 반대 방향으로 같은 양만큼 움직이는 벡터는 null space에 있다.
+Unconstrained 해는 \((2,2)\)다. 단순 clip은 \((1,2)\)를 반환하지만, \(x_1=1\)을
+상한에 고정한 뒤 free 변수 \(x_2\)를 다시 풀면
 
 \[
-z=\begin{bmatrix}1\\-1\end{bmatrix},
-\qquad
-J_pz=
-\begin{bmatrix}1&1\end{bmatrix}
-\begin{bmatrix}1\\-1\end{bmatrix}=0
+\frac{\partial f}{\partial x_2}=2(x_2-x_1)=0
+\quad\Rightarrow\quad x_2=x_1=1
 \]
 
-이 예제의 pseudoinverse와 projector도 끝까지 계산해보자.
+이므로 active-set 해는 \((1,1)\)이다. 실제 비용도
 
 \[
-\begin{aligned}
-J_pJ_p^T
-&=\begin{bmatrix}1&1\end{bmatrix}
-\begin{bmatrix}1\\1\end{bmatrix}
-=2, \\
-J_p^+
-&=J_p^T(J_pJ_p^T)^{-1} \\
-&=\begin{bmatrix}1\\1\end{bmatrix}\frac{1}{2} \\
-&=\begin{bmatrix}\frac12\\\frac12\end{bmatrix}
-\end{aligned}
+f(1,2)=2,\qquad f(1,1)=1
 \]
 
-따라서
+로 active-set 해가 더 작다. 포화된 자유도의 task를 다른 자유도에 재분배하려면
+clip 이후의 reduced solve가 필요한 이유다.
 
-\[
-\begin{aligned}
-N_p
-&=I-J_p^+J_p \\
-&=\begin{bmatrix}1&0\\0&1\end{bmatrix}
--\begin{bmatrix}\frac12\\\frac12\end{bmatrix}
- \begin{bmatrix}1&1\end{bmatrix} \\
-&=\begin{bmatrix}1&0\\0&1\end{bmatrix}
--\begin{bmatrix}\frac12&\frac12\\\frac12&\frac12\end{bmatrix} \\
-&=\begin{bmatrix}\frac12&-\frac12\\-\frac12&\frac12\end{bmatrix}
-\end{aligned}
-\]
+## 9. Pseudoinverse/DLS의 bound 처리와 QP active-set 차이
 
-이다. 임의의 후보 \(c=[1,0]^T\)를 투영하면
+두 경로는 같은 아이디어를 쓰지만 목적함수 표현이 다르다.
 
-\[
-\begin{aligned}
-N_pc
-&=\begin{bmatrix}\frac12&-\frac12\\-\frac12&\frac12\end{bmatrix}
-\begin{bmatrix}1\\0\end{bmatrix} \\
-&=\begin{bmatrix}\frac12\\-\frac12\end{bmatrix}
-\end{aligned}
-\]
-
-이고 실제 위치 변화는
-
-\[
-J_pN_pc
-=\begin{bmatrix}1&1\end{bmatrix}
-\begin{bmatrix}\frac12\\-\frac12\end{bmatrix}
-=\frac12-\frac12
-=0
-\]
-
-이다.
-
-즉 첫 관절을 \(+1\), 둘째 관절을 \(-1\) 움직이면 이 단순 모델에서 손 위치는
-그대로다. 자세를 개선하는 관절 방향 중 이 성분만 남기는 것이 null-space
-projection이다.
-
-7자유도 팔은 위치 3자유도를 맞춘 뒤 일반적으로 약 4자유도가 남는다. 위치와 자세
-6자유도를 모두 맞추고 나면 약 1자유도의 redundancy가 남지만, 특이 자세나 관절
-한계에서는 \(\operatorname{rank}(J_RN_p)<3\)이 되어 자세를 완전히 맞추지 못할 수 있다.
-이는 버그가 아니라 위치 우선순위를 지킨 결과일 수 있다.
-
-## 9. 현재 방식과 더 엄밀한 계층형 DLS
-
-현재 구현은 계산이 단순한 **gradient projection method**다.
-
-\[
-\boxed{
-\Delta q
-=J_{p,\lambda}^+e_p
-+N_{p,\lambda}J_R^Te_R
-}
-\]
-
-| 장점 | 한계 |
-|---|---|
-| 계산량이 작고 구현 의도가 분명하다. | 자세 오차를 가장 빨리 줄이는 해는 아닐 수 있다. |
-| 위치 우선의 부가 task를 쉽게 넣을 수 있다. | damped projector라 위치 보존은 근사적이다. |
-| 특이점에서 안정적인 DLS를 재사용한다. | null space가 부족하면 자세 보정이 거의 사라질 수 있다. |
-
-### 더 엄밀한 계층형 식의 전개
-
-더 엄밀한 방법은 위치 해가 자세에 이미 미친 영향까지 뺀 뒤, 남은 자세 오차를
-위치 null space 안에서 다시 푼다. 먼저 primary 위치 해를
-
-\[
-\Delta q_p=J_p^+e_p
-\]
-
-로 둔다. 위치를 보존하는 추가 움직임은 어떤 벡터 \(y\)에 대해
-
-\[
-\Delta q_{secondary}=N_py
-\]
-
-로 쓸 수 있다. 최종 관절 변화는
-
-\[
-\Delta q=\Delta q_p+N_py
-\]
-
-다. 이를 orientation의 선형 근사 \(J_R\Delta q\approx e_R\)에 대입하면
-
-\[
-\begin{aligned}
-J_R\Delta q&\approx e_R \\
-J_R(\Delta q_p+N_py)&\approx e_R \\
-J_R\Delta q_p+J_RN_py&\approx e_R \\
-J_RN_py&\approx e_R-J_R\Delta q_p
-\end{aligned}
-\]
-
-가 된다. 마지막 식에서 \(y\)의 최소 노름 해는
-
-\[
-y=(J_RN_p)^+(e_R-J_R\Delta q_p)
-\]
-
-다. 이를 \(\Delta q=\Delta q_p+N_py\)에 다시 대입하면
-
-\[
-\begin{aligned}
-\Delta q
-&=\Delta q_p+N_py \\
-&=\Delta q_p
-+N_p(J_RN_p)^+(e_R-J_R\Delta q_p)
-\end{aligned}
-\]
-
-이므로 최종식은
-
-\[
-\boxed{
-\Delta q
-=\Delta q_p
-+N_p(J_RN_p)^+
-(e_R-J_R\Delta q_p)
-}
-\]
-
-이다. 순서는 “위치를 먼저 풂 → 그 해가 자세에 준 영향 \(J_R\Delta q_p\)를 뺌 →
-남은 자세 오차를 위치 null space 안에서 다시 풂”이다. 우선순위는 더 명확하지만
-projector와 두 번째 pseudoinverse의 damping, rank 변화, joint limit를 함께
-설계해야 하므로 구현 복잡도가 커진다.
-
-## 핵심만 다시 보기
-
-\[
-\boxed{
-\Delta q
-=\underbrace{J_{p,\lambda}^+e_p}_{\text{위치를 맞추는 움직임}}
-+\underbrace{N_{p,\lambda}J_R^Te_R}_{\text{위치 영향을 억제한 자세 보정}}
-}
-\]
-
-- DLS는 오차와 관절 변화량을 함께 최소화한다.
-- DLS 목적함수 자체가 무제약 convex QP이며, 전신 IK는 여기에 weighted task와
-  box/CBF 제약을 추가한 확장이다.
-- 특이값이 0에 가까운 방향의 gain을 유한하게 만들어 관절 폭주를 억제한다.
-- 위치를 먼저 풀고 자세 방향을 위치 null space에 투영한다.
-- damped projector의 위치 보존은 정확한 등식이 아니라 근사다.
-- clamp와 backtracking은 damping과 별개의 추가 안전층이다.
-
-## 코드와 검증 연결
-
-| 수학적 주장 | 코드 표현 | 검증 |
+| 코드 | 대상 | 반복 방식 |
 |---|---|---|
-| 모든 IK의 위치·자세 오차는 같은 world frame이다 | `kinematics.tasks.pose_error()` | shared pose-task gate |
-| \(J_pJ_p^T+\lambda^2I\)는 task-space DLS system이다 | `position_system` | Phase 3/4 무작위 IK 수렴률 |
-| weighted constrained DLS는 box-QP로 풀 수 있다 | `least_squares_to_qp()` → `bounded_quadratic_program()` | QP 비용 동등성 + exhaustive active-set 비교 |
-| 역행렬을 직접 만들 필요가 없다 | `np.linalg.solve(position_system, position_error)` | 동일 target의 잔여 위치 오차 |
-| \(N_{p,\lambda}J_R^Te_R\)는 위치 영향을 억제한 자세 방향이다 | `orientation_gradient - position_jacobian.T @ projected_gradient` | 위치·자세 동시 tolerance |
-| 한 iteration 관절 변화는 제한된다 | `np.clip(..., -max_joint_delta, max_joint_delta)` | 무작위 seed에서도 유한한 해 |
-| 실제 nonlinear 비용이 감소하는 step을 선택한다 | `step *= 0.5` backtracking | 100개 무작위 target 회귀 |
+| `DifferentialIKSolver._solve_with_bounds()` | pseudoinverse/DLS | 포화축을 고정하고 남은 \(A_\mathcal F\)로 residual 재계산 |
+| `bounded_quadratic_program()` | QP | Hessian/gradient와 KKT 부호로 bound 추가·해제 |
 
-```bash
-python3 tests/test_phase_3.py
-python3 tests/test_phase_4.py
-```
+Pseudoinverse/DLS 경로도 단순 clip하지 않고 포화축을 고정한 뒤 나머지 열로 task를
+다시 푼다. QP 경로는 명시적인 Hessian을 가지므로 KKT multiplier 부호까지 검사해
+active bound를 다시 해제할 수 있다.
 
-[← 이전: Collision distance와 gradient](collision-kinematics.md) ·
-[전체 학습 순서](index.md#algorithm-learning-order) ·
-[다음: 단일 팔 IK →](ik.md)
+## 10. Collision soft barrier의 active set
+
+Collision barrier \(Gx\ge h\)는 box처럼 완전한 hard inequality로 넣지 않고 위반량에
+quadratic slack 비용을 준다.
+
+\[
+\min_x\frac12x^THx+g^Tx
++\rho\|\min(Gx-h,0)\|^2,
+\qquad l\le x\le u
+\]
+
+현재 위반 중인 barrier 행 집합을 \(\mathcal C\)라 하면 해당 구간의 추가 비용은
+
+\[
+\rho\|G_\mathcal Cx-h_\mathcal C\|^2
+\]
+
+이고 다음과 같이 QP 항에 합쳐진다.
+
+\[
+H' = H+2\rho G_\mathcal C^TG_\mathcal C,
+\qquad
+g' = g-2\rho G_\mathcal C^Th_\mathcal C
+\]
+
+`bounded_quadratic_program_with_barriers()`는 이 augmented box-QP를 푼 뒤 위반 집합을
+다시 계산하고, 집합이 변하지 않을 때까지 반복한다. 여기서 active는 **현재 slack
+비용을 내는 충돌 barrier 행**을 뜻하며, 앞 절의 lower/upper active variable과는
+구분해야 한다.
+
+Soft barrier를 사용하는 이유는 joint velocity box와 collision 조건이 동시에 완전히
+만족될 수 없는 순간에도 infeasible로 중단하지 않고, `collision_slack_weight`에 따라
+최소 위반 해를 반환하기 위해서다.
+
+## 11. 증명이 보장하는 범위
+
+- DLS 식은 주어진 한 frame의 선형화된 task에서 유일한 전역 최솟값이다.
+- Convex box-QP에서 KKT 조건을 만족한 active-set 해는 전역 최적해다.
+- Hessian이 positive semidefinite이면 최적해가 여러 개일 수 있다.
+- 구현은 부동소수점 tolerance와 반복 상한을 사용하므로 exact arithmetic 증명과는
+  구분해야 한다. 회귀 테스트는 작은 QP를 완전탐색한 결과와 비교한다.
+- 이는 nonlinear FK 전체의 global IK 수렴이나 미래 trajectory의 무충돌을 증명하지
+  않는다. 매 frame Jacobian과 CBF를 다시 계산하는 closed-loop 제어가 필요하다.
+
+자세 오차와 실제 task 구성은 [전신 IK](whole_body_ik.md), 코드 책임 경계는
+[코드 분리 기준](code-architecture.md)을 참고한다.

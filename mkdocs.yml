@@ -92,6 +92,7 @@ nav:
         - 시스템 기초:
             - 동작 원리: concepts.md
             - 아키텍처와 데이터 흐름: overview.md
+            - 코드 분리 기준: guide/code-architecture.md
             - MuJoCo 기본 용어: guide/00-basics.md
         - 애플리케이션:
             - 앱 조립과 물리 루프: guide/teleop_app.md
@@ -108,8 +109,7 @@ nav:
                 - Quaternion과 자세 오차: guide/quaternion-math.md
                 - Collision distance와 gradient: guide/collision-kinematics.md
             - 역기구학:
-                - DLS와 위치 우선 IK 수학: guide/ik-math.md
-                - 단일 팔 IK: guide/ik.md
+                - Differential IK 수학: guide/ik-math.md
         - 제어:
             - 전신 IK와 충돌 회피: guide/whole_body_ik.md
             - 팔 토크 제어: guide/arm_control.md
@@ -131,14 +131,15 @@ nav:
             - 전체 안내: api/kinematics.md
             - 회전 수학: api/kinematics-rotations.md
             - Pose 오차와 Task: api/kinematics-tasks.md
+            - 속도 제약조건: api/kinematics-constraints.md
             - Tree와 FK: api/kinematics-tree.md
-            - 단일 팔 Solver: api/kinematics-solver.md
+            - Differential IK Solver: api/kinematics-solver.md
+            - QP 수치 구현: api/kinematics-optimization.md
             - 충돌 기구학: api/kinematics-collision.md
             - Legacy 호환: api/kinematics-legacy.md
         - 제어:
             - 전체 안내: api/control.md
             - 전신 IK: api/control-whole-body.md
-            - 최적화: api/control-optimization.md
             - 양손 상대 Pose: api/control-bimanual.md
             - 팔 토크: api/control-arm.md
             - 모바일 베이스: api/control-base.md

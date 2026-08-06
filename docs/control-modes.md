@@ -3,13 +3,14 @@
 화면에는 서로 다른 역할의 모드가 함께 있다. 가장 중요한 사실은 이들이 하나의
 거대한 mode enum이 아니라 **서로 다른 층의 독립 스위치**라는 점이다.
 
-## 네 가지 결정 층
+## 다섯 가지 결정 층
 
 | 층 | 선택지 | 결정하는 것 | 결정하지 않는 것 |
 |---|---|---|---|
 | 손 목표 controller | MoveL / Bimanual MoveL | 손 목표를 독립으로 움직일지 virtual object로 묶을지 | base/lift 참여 여부 |
 | 팔별 제어 | IK / FK | 해당 팔이 Cartesian target을 풀지 관절 slider를 따를지 | 다른 팔의 모드 |
 | 전신 참여 | Whole-body ON / OFF | IK가 base/lift까지 사용할지 팔만 사용할지 | 수동 keyboard 주행 허용 여부 |
+| IK 수치 해법 | Pseudoinverse / DLS / QP | 적층한 differential task를 어떻게 풀지 | 팔별 IK/FK와 base/lift 참여 여부 |
 | base 명령 우선순위 | keyboard / WBIK / zero | 현재 frame에 어느 body twist를 바퀴로 보낼지 | 손 목표 controller |
 
 ```mermaid

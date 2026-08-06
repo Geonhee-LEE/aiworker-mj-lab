@@ -45,7 +45,7 @@
 |---|---|---|
 | 애플리케이션 | `application/` | 실행 루프, 명령 우선순위, target·좌표계 |
 | 시각화 | `visualization/` | ImGui 입력, MuJoCo scene, gizmo와 overlay |
-| 기구학과 수학 | `kinematics/` | tree, FK/Jacobian, quaternion, collision, 단일 팔 IK |
+| 기구학과 수학 | `kinematics/` | tree, FK/Jacobian, quaternion, task, constraint, collision |
 | 제어 | `control/` | 전신 IK 조립, 수치 최적화, 팔·베이스·손 명령 |
 | 검증과 확장 | `tests/`, 향후 adapter/recorder | 회귀 기준, 변경 규칙, 데이터·실기 전환 |
 
@@ -91,9 +91,8 @@ flowchart LR
     T["1A. Tree<br>구조와 경로"] --> F["1B. FK/Jacobian<br>pose와 변화율"]
     F --> Q["1C. Quaternion<br>자세 표현과 오차"]
     Q --> C["1D. Collision<br>distance gradient"]
-    C --> M["2. DLS 수학<br>목적함수 · 유도"]
-    M --> I["3. 단일 팔 IK<br>반복 solver"]
-    I --> W["4. 전신 IK<br>bounded solve · CBF"]
+    C --> M["2. Differential IK 수학<br>pinv · DLS · QP"]
+    M --> W["3. 전신 IK<br>bounded solve · CBF"]
     W --> A["5. 팔 토크<br>q_des → torque"]
     W --> B["6. 스워브<br>BodyTwist → wheel"]
     A --> G["7. 파지<br>synergy · contact"]
@@ -106,9 +105,8 @@ flowchart LR
 | 1B | tree의 joint 변환이 pose와 Jacobian으로 어떻게 이어지는가? | \(x=f(q),\ \dot x=J(q)\dot q\) | [FK와 Jacobian](forward-kinematics.md) |
 | 1C | 회전 표현의 부호와 world-frame 자세 오차를 어떻게 정하는가? | \(q_e=q_t\otimes q_c^{-1}\) | [Quaternion과 자세 오차](quaternion-math.md) |
 | 1D | point velocity가 collision distance 변화율로 어떻게 이어지는가? | \(\nabla d=n^T(J_B-J_A)\) | [Collision distance와 gradient](collision-kinematics.md) |
-| 2 | 역문제의 안정적인 관절 변화량을 어떻게 유도하는가? | \(\min\|J\Delta q-e\|^2+\lambda^2\|\Delta q\|^2\) | [DLS와 위치 우선 IK 수학](ik-math.md) |
-| 3 | DLS 한 step을 반복 IK로 어떻게 구성하는가? | \(\Delta q=J_\lambda^+e+N_\lambda J_R^Te_R\) | [단일 팔 IK](ik.md) |
-| 4 | base·lift·양팔과 safety constraint를 어떻게 함께 푸는가? | bounded weighted least-squares + CBF | [전신 IK와 충돌 회피](whole_body_ik.md) |
+| 2 | 세 velocity-level 해법은 같은 task를 어떻게 푸는가? | \(A^+b\), DLS, bounded QP | [Differential IK 수학](ik-math.md) |
+| 3 | base·lift·양팔과 safety constraint를 어떻게 함께 푸는가? | bounded weighted least-squares + CBF | [전신 IK와 충돌 회피](whole_body_ik.md) |
 | 5 | 팔 관절 목표를 실제 torque로 어떻게 바꾸는가? | \(\tau=h+K_pe-K_d\dot q\) | [팔 토크 제어](arm_control.md) |
 | 6 | base twist를 세 wheel module 명령으로 어떻게 바꾸는가? | \(v_i=v+\omega\times r_i\) | [모바일 스워브 제어](base_teleop.md) |
 | 7 | 두 synergy와 접촉력으로 파지를 어떻게 명령·판정하는가? | \(u=b+c_g g+c_t t\) | [손 파지와 접촉 판정](grasp.md) |
@@ -137,7 +135,7 @@ flowchart LR
 | body–joint–site 관계와 조상 경로 | [Kinematic Tree](kinematic-tree.md) |
 | 회전행렬, Rodrigues 식, geometric Jacobian | [FK와 Jacobian](forward-kinematics.md) |
 | quaternion 곱·역·부호·자세 오차 | [Quaternion과 자세 오차](quaternion-math.md) |
-| least-squares, DLS, SVD, null space | [DLS와 위치 우선 IK 수학](ik-math.md) |
+| least-squares, pseudoinverse, DLS, QP | [Differential IK 수학](ik-math.md) |
 | signed distance, gradient, CBF 경계 | [Collision distance와 gradient](collision-kinematics.md), [전신 IK의 collision avoidance](whole_body_ik.md#reactive-collision-avoidance) |
 | world/base/startup-anchor 좌표계 | [목표와 좌표 변환](teleop_targets.md) |
 | actuator, bias force, contact force | [팔 토크 제어](arm_control.md), [손 파지와 접촉 판정](grasp.md) |
@@ -158,7 +156,7 @@ flowchart TB
 
     subgraph Kinematics["기구학과 수학"]
         KIN["kinematics 모듈군<br>rotation · tree · solver · collision"]
-        IK["kinematics/legacy.py<br>단일 팔 IK 호환 이름"]
+        IK["kinematics/legacy.py<br>이전 단일-site FK 이름"]
     end
 
     subgraph Control["제어"]
@@ -197,7 +195,6 @@ flowchart TB
 |---|---|---|---|
 | 이득·속도·범위 조정 | [YAML 파라미터 설정](../configuration.md) | 해당 알고리즘 문서 | Config + 해당 Phase |
 | 손 pose/Jacobian | [FK와 Jacobian](forward-kinematics.md) | [Kinematic Tree](kinematic-tree.md), [Quaternion](quaternion-math.md) | Phase 3, Whole-body |
-| 단일 팔 IK | [단일 팔 IK](ik.md) | [DLS와 위치 우선 IK 수학](ik-math.md), [기구학](kinematics.md) | Phase 3, 4 |
 | 전신 IK·관절 한계·충돌 | [전신 IK와 충돌 회피](whole_body_ik.md) | [목표와 좌표 변환](teleop_targets.md) | Whole-body, Phase 6 |
 | 팔 torque | [팔 토크 제어](arm_control.md) | [앱 조립](teleop_app.md) | Phase 3, 4 |
 | 바퀴·조향·수동 주행 | [모바일 스워브 제어](base_teleop.md) | [앱 조립](teleop_app.md) | Phase 5, Whole-body |
@@ -215,17 +212,19 @@ flowchart TB
 | `visualization/ui.py` | ImGui 입력을 target과 mode 상태로 변환 | app target/mode |
 | `visualization/render.py` | scene, camera, gizmo, collision overlay 렌더링 | render state, gizmo target |
 | `application/targets.py` | UI 값과 world pose를 왕복 변환 | target/marker state |
-| `kinematics/solver.py` | 단일 팔 IK와 기존 공개 API 진입점 | 트리·충돌 세부 구현 없음 |
+| `kinematics/solver.py` | pseudoinverse/DLS/QP와 safety projection | solver 설정과 수치 해법 |
+| `kinematics/tasks.py` | soft velocity objective와 단위 정규화 | 모델·controller 상태 없음 |
+| `kinematics/constraints.py` | joint-limit box와 collision velocity CBF | collision 기하·solver 상태 없음 |
+| `kinematics/optimization.py` | box-QP와 soft barrier 수치 계산 | IK task 정책 없음 |
 | `kinematics/tree.py` | MJCF 트리, FK와 Jacobian | live data 접근 없음 |
 | `kinematics/rotations.py` | 회전 행렬과 쿼터니언 수학 | 모델·solver 상태 없음 |
 | `kinematics/collision.py` | signed-distance gradient | target/solver 정책 없음 |
 | `control/bimanual.py` | rigid-grasp 상대 pose와 Jacobian 계산 | actuator·solver 상태 없음 |
-| `control/optimization.py` | 명시적 box-QP와 soft barrier 계산 | robot model 상태 없음 |
 | `control/whole_body.py` | WBIK task·bound·상태를 조립하고 command 계산 | 반환 command만 |
 | `control/base.py` | body twist를 steer/drive command로 변환 | controller 내부 상태 |
 | `control/arm.py` | 목표 관절각을 torque로 변환 | arm `data.ctrl` |
 | `control/grasp.py` | synergy를 finger command로 바꾸고 contact force 판정 | finger `data.ctrl` |
-| `kinematics/legacy.py` | 기존 `InverseKinematics` import를 공용 `KinematicsSolver`에 연결 | 없음 |
+| `kinematics/legacy.py` | 이전 단일-site FK 이름만 호환 | 새 solve 기능 없음 |
 | `mujoco_utils.py` | joint에서 actuator를 찾는 공용 MuJoCo helper | 없음 |
 
 표의 경로는 모두 `src/ffw_sh5_grasp/` 기준이다. `src/teleop_app.py`는 실행 launcher,
@@ -246,7 +245,7 @@ flowchart TB
 | target 좌표계 | local RPY/offset이 어떻게 world pose가 되는가? | [목표와 좌표 변환](teleop_targets.md) | 구현 범위 설명 완료 |
 | tree와 FK | MJCF 경로를 따라 site pose를 어떻게 합성하는가? | [Tree](kinematic-tree.md), [FK](forward-kinematics.md) | 구현 범위 설명 완료 |
 | 자세와 Jacobian | quaternion 오차와 6×N Jacobian의 frame은 왜 일치하는가? | [Quaternion](quaternion-math.md), [FK](forward-kinematics.md) | 구현 범위 설명 완료 |
-| 단일 팔 IK | DLS normal equation, SVD gain, null-space 항이 코드의 어느 줄이 되는가? | [DLS 수학](ik-math.md), [단일 팔 IK](ik.md) | 구현 범위 설명 완료 |
+| Differential IK | pinv, DLS, QP가 같은 task와 box를 어떻게 푸는가? | [Differential IK 수학](ik-math.md) | 구현 범위 설명 완료 |
 | 전신 IK | weighted DLS, 자유도별 비용, box-QP, CBF, rigid-grasp 항이 어떻게 한 문제에 들어가는가? | [전신 IK](whole_body_ik.md) | 구현 범위 설명 완료 |
 | 충돌 거리 | 최근접점 속도에서 \(\dot d=\nabla d\dot q\)를 어떻게 얻는가? | [Collision distance](collision-kinematics.md) | 구현 범위 설명 완료 |
 | 팔·베이스·손 | IK 출력을 torque, wheel command, finger command로 어떻게 변환하는가? | [팔](arm_control.md), [스워브](base_teleop.md), [파지](grasp.md) | 구현 범위 설명 완료 |

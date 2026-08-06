@@ -45,12 +45,13 @@ MoveL/Bimanual MoveL 상태 전이 안에서 이 패널이 맡는 위치는
 | `_draw_arm_panel(app, targets, side)` | 오른팔/왼팔 IK/FK 패널 |
 | `_draw_can_grasp_panel(app, targets)` | grasp/thumb synergy 패널 |
 | `_draw_lift_utils_panel(app, targets)` | 전신 ON/OFF, lift/reset/contact/collision/camera 패널 |
+| `_draw_ik_solver_panel(app)` | pseudoinverse·DLS·QP 선택과 QP 가중치 편집 |
 | `_draw_joint_monitor(app, data)` | 관절 위치 monitor |
 | `kinematic_tree_body_ids(app, scope, show_full)` | 오른팔/왼팔 target의 조상 body 또는 전체 body id 선택 |
 | `_draw_kinematic_tree(app)` | body 아래 joint/site를 중첩한 실시간 기구학 트리 렌더링 |
 | `_draw_window_visibility(app)` | 표시 여부와 **Detach/Return** 배치 버튼 렌더링 |
 | `_draw_tab(label, draw_contents)` | 선택된 tab 내용만 렌더링 |
-| `_draw_control_center(app, targets)` | Target·양팔·Robot/Grasp 탭 구성 |
+| `_draw_control_center(app, targets)` | Target·양팔·IK Solver·Robot/Grasp 탭 구성 |
 | `_draw_diagnostics(app, data)` | Kinematic Tree·Joint Monitor 탭 구성 |
 | `draw_panel(app)` | 두 워크스페이스의 frame entry point |
 
@@ -63,6 +64,7 @@ flowchart TD
     B --> W["Control Center<br>운영자가 자주 쓰는 조작"]
     W --> D["Target tab<br>MoveL/Bimanual marker 제어"]
     W --> E["Right / Left Arm tabs<br>팔별 IK/FK 조작"]
+    W --> S["IK Solver tab<br>해법 선택 · QP 가중치"]
     W --> F["Robot / Grasp tab<br>lift · utility · synergy"]
     B --> X["Diagnostics<br>읽기 중심 도구"]
     X --> G["Joint Monitor tab<br>현재 관절값"]
@@ -86,6 +88,7 @@ FFW-SH5 Status & Windows       항상 표시되는 상태/창 관리자
 ├── FFW-SH5 Control Center     기본 표시
 │   ├── Target                 MoveL, capture/release, jog
 │   ├── Right / Left Arm       팔별 IK pose 또는 FK joint
+│   ├── IK Solver              pseudoinverse, DLS, QP와 가중치
 │   └── Robot / Grasp          전신·lift·시각화·손가락
 └── FFW-SH5 Diagnostics        기본 표시
     ├── Kinematic Tree         world → body → joint/site
@@ -120,5 +123,8 @@ finger, 물체를 포함한 전체 모델 트리를 탐색한다.
 - 실제 반영은 `application/teleop.py`의 `_step_physics()`에서 한다.
 - **Whole-body Control** 버튼은 `toggle_whole_body_control()`을 호출하고 상태줄에는
   `ON` 또는 `OFF (arm-only)`와 실제 body command가 표시된다.
+- **IK Solver**의 모든 QP slider는 대응 속도 상한 기준의 무차원 strength다. Slider
+  hover 설명에서 추종·억제·자세 복귀·충돌 slack의 의미와 값이 커질 때의 효과를
+  확인할 수 있다.
 - `Move time`은 현재 UI 호환용 상태값이며 trajectory scheduler에는 연결되지 않는다.
   목표 응답은 `application/teleop.py`의 frame rate limit과 controller gain이 결정한다.

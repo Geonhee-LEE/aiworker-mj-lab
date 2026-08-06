@@ -63,7 +63,7 @@ mkdocs build --strict
 
 - `mj_forward`, MuJoCo site/point Jacobian API
 - `data.site_xpos`, `data.site_xmat` 직접 참조
-- `KinematicTree`/`KinematicsSolver` 내부의 `MjData` 생성
+- `KinematicTree`/`DifferentialIKSolver` 내부의 `MjData` 생성
 
 `test_phase_3.py`는 자체 FK pose를 독립 엔진 결과와 비교하고, 자체 Jacobian을
 관절별 중앙 유한차분과 비교한다. 현재 최대 Jacobian 오차는 `2.33e-10`이다.

@@ -22,12 +22,11 @@ def capture_reference(right, left):
 
 def rigid_grasp_task(reference, site_states, dt,
                      max_linear_speed, max_angular_speed):
-    """캡처 pose를 보존하는 상대 Jacobian과 보정 속도를 반환한다."""
+    """캡처한 오른손-왼손 상대 pose의 Jacobian과 복원 속도를 반환한다."""
     right, left = site_states["r"], site_states["l"]
     right_rotation = rotations.rotation_from_quaternion(right.quaternion)
     right_to_left_world = right_rotation @ reference["position_right"]
 
-    # 오른손 회전이 왼손 위치에 만드는 선속도까지 포함한 spatial transform이다.
     transform = np.eye(6)
     transform[:3, 3:] = -rotations.skew(right_to_left_world)
     grasp_jacobian = left.jacobian - transform @ right.jacobian
@@ -36,14 +35,12 @@ def rigid_grasp_task(reference, site_states, dt,
     desired_left_rotation = right_rotation @ reference["rotation_right"]
     desired_left_quaternion = rotations.quaternion_from_rotation(
         desired_left_rotation)
-
     error = pose_tasks.pose_error(
         left.position,
         left.quaternion,
         desired_left_position,
         desired_left_quaternion,
     )
-    # 1/dt 보정은 충돌 직후 지나치게 커질 수 있어 방향을 보존한 채 norm을 제한한다.
     correction_dt = max(float(dt), 1e-5)
     correction_velocity = pose_tasks.pose_velocity_command(
         error,

@@ -79,7 +79,7 @@ Whole-body ON의 world-fixed target 표현은 유지하면서 모바일 베이�
 때는 참여율 `0.0`, base와 lift를 모두 막는 arm-only가 필요할 때는 UI의
 Whole-body OFF를 사용한다.
 
-## 4. FK, 단일 팔 IK, Whole-body IK
+## 4. FK와 Whole-body differential IK
 
 | 이름 | 입력 | 출력/변수 | 런타임 역할 |
 |---|---|---|---|
@@ -87,7 +87,8 @@ Whole-body OFF를 사용한다.
 | `kinematics/legacy.py` | 한 손 world pose | 한 팔 7개 관절 위치 | Phase 3/4 독립 회귀와 단일 팔 solver |
 | `control/whole_body.py` | 양손 world pose | base/lift/양팔 differential command | 현재 teleop IK 경로 |
 | `control/bimanual.py` | 양손 pose/Jacobian | rigid-grasp 상대 task | WBIK 순수 계산 보조 |
-| `control/optimization.py` | QP Hessian/선형항과 box/barrier | constrained DLS/QP 해 | WBIK 순수 수치 solver |
+| `kinematics/solver.py` | pose/differential task와 box/barrier | 반복 IK와 pseudoinverse/DLS/QP 해 | IK 수치 solver |
+| `kinematics/optimization.py` | QP Hessian/선형항과 제약 | box/soft-barrier QP 해 | 순수 수치 구현 |
 
 여기서 FK는 forward kinematics 계산 자체와 UI의 `FK mode`라는 표현이 겹친다. UI의
 FK mode는 “관절 slider를 직접 목표로 사용한다”는 뜻이고, 수학적 FK 계산은

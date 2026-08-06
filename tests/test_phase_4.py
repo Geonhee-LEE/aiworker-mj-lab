@@ -36,6 +36,7 @@ MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
 import ik  # noqa: E402
+from offline_pose_ik import solve_offline_pose_multistart  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
 ARM_L = [f"arm_l_joint{i}" for i in range(1, 8)]
@@ -43,7 +44,7 @@ ARM_L = [f"arm_l_joint{i}" for i in range(1, 8)]
 # 관련 ffw-sh5-mujoco 저장소의 ``Controller.reset()`` 휴지 자세와 일치한다. 4번
 # 팔꿈치 관절만 -90도이고 나머지는 0도다. 이전 ``arm_hand.xml``에서 가져온 캔 접근
 # 자세와 달리 특정 캔 기하에 묶이지 않은 일반적인 IK 다중 시작 초기값이다. 실제 사전
-# 파지와 파지 자세 탐색은 이 초기값이 아니라 ``solve_pose_multistart`` 재시도가 담당한다.
+# 파지와 파지 자세 탐색은 test-only multistart 재시도가 담당한다.
 HOME_Q_R = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
 HOME_Q_L = np.array([0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0, 0.0])
 LIFT_HOME = -0.39
@@ -142,8 +143,8 @@ def run_ik_unit_test(model, solver, rng):
         target_quat = np.zeros(4)
         mujoco.mju_mat2Quat(target_quat, scratch.site_xmat[solver.site_id])
 
-        _, pos_err, ori_err, converged = solver.solve_pose_multistart(
-            HOME_Q_R, target_pos, target_quat, rng,
+        _, pos_err, ori_err, converged = solve_offline_pose_multistart(
+            solver, HOME_Q_R, target_pos, target_quat, rng,
             success_pos_tol=POS_TOL, success_ori_tol=np.radians(ORI_TOL_DEG),
             context_qpos=scratch.qpos)
         pos_errs.append(pos_err)
@@ -204,8 +205,10 @@ def run_pick_trial(model, data, solver, ctrl_r, ctrl_l, rng):
     grasp_target_pos = can_pos0 + GRASP_TARGET_OFFSET
     pregrasp_pos = grasp_target_pos + PRE_GRASP_OFFSET
     ctx = data.qpos.copy()  # lift_joint 같은 상위 관절은 ik.py의 context_qpos 설명을 따른다.
-    q_pregrasp, perr, oerr, ok1 = solver.solve_pose_multistart(HOME_Q_R, pregrasp_pos, target_quat, rng, context_qpos=ctx)
-    q_grasp, perr2, oerr2, ok2 = solver.solve_pose_multistart(q_pregrasp, grasp_target_pos, target_quat, rng, context_qpos=ctx)
+    q_pregrasp, perr, oerr, ok1 = solve_offline_pose_multistart(
+        solver, HOME_Q_R, pregrasp_pos, target_quat, rng, context_qpos=ctx)
+    q_grasp, perr2, oerr2, ok2 = solve_offline_pose_multistart(
+        solver, q_pregrasp, grasp_target_pos, target_quat, rng, context_qpos=ctx)
     if not (ok1 and ok2):
         return {"success": False, "reason": "ik_failed", "net_lift": 0.0}
 
@@ -232,7 +235,8 @@ def run_pick_trial(model, data, solver, ctrl_r, ctrl_l, rng):
     can_z_before_lift = data.qpos[can_qadr + 2]
 
     lift_target_pos = grasp_target_pos + np.array([0, 0, LIFT_HEIGHT])
-    q_lift, _, _, _ = solver.solve_pose_multistart(q_grasp, lift_target_pos, target_quat, rng, context_qpos=ctx)
+    q_lift, _, _, _ = solve_offline_pose_multistart(
+        solver, q_grasp, lift_target_pos, target_quat, rng, context_qpos=ctx)
     lift_time = LIFT_HEIGHT / LIFT_SPEED
     _move(model, data, ctrl_r, ctrl_l, q_grasp, q_lift, lift_time, dt, grasp_frac=1.0, thumb_frac=1.0)
     _hold(model, data, ctrl_r, ctrl_l, q_lift, POST_LIFT_HOLD, dt, grasp_frac=1.0, thumb_frac=1.0)

@@ -1,8 +1,8 @@
 # `src/ffw_sh5_grasp/control/whole_body.py`
 
-!!! info "핵심 알고리즘 학습 순서 4/7"
-    [단일 팔 IK](ik.md)의 \(J\Delta q\approx e\)를 base·lift·양팔과 safety
-    constraint까지 확장한다. 다음은 해의 팔 관절 목표를 실제 torque로 바꾸는
+!!! info "핵심 알고리즘 학습 순서 3/6"
+    [Differential IK 수학](ik-math.md)의 velocity task를 base·lift·양팔과 safety
+    constraint까지 조립한다. 다음은 해의 팔 관절 목표를 실제 torque로 바꾸는
     [팔 토크 제어](arm_control.md)다.
 
 손 target을 팔만으로 맞추지 않고 모바일 베이스 3축, 리프트 1축, 양팔 14축을 한
@@ -19,34 +19,35 @@
 
 | 파일 | 책임 |
 |---|---|
-| `control/whole_body.py` | robot state, task row, 속도/관절 bound와 최종 command 조립 |
-| `control/optimization.py` | 모델을 모르는 box-QP와 collision soft-barrier active-set 해법 |
+| `control/whole_body.py` | target/reference 상태, frame solve 순서와 최종 command 조립 |
+| `kinematics/tasks.py` | soft velocity task와 단위 정규화 |
+| `kinematics/constraints.py` | joint-limit box와 collision velocity CBF |
+| `kinematics/solver.py` | pseudoinverse/DLS/QP 해법·bound active set·safety projection |
+| `kinematics/optimization.py` | box-QP와 collision soft-barrier active-set 수치 구현 |
 | `control/bimanual.py` | rigid-grasp reference와 상대 pose/Jacobian 계산 |
-| `kinematics/tasks.py` | 모든 IK가 공유하는 pose 오차와 bounded Cartesian 속도 명령 |
 | `kinematics/rotations.py` | 회전 행렬·쿼터니언·각도·벡터 공용 함수 |
 | `kinematics/collision.py` | geometry signed distance와 gradient 계산 |
 
-중복된 private 호환 별칭은 두지 않는다. 수치 최적화는 `control.optimization`, 강체
+중복된 private 호환 별칭은 두지 않는다. 저수준 수치 최적화는 `kinematics.optimization`, 강체
 양손 task는 `control.bimanual`, pose 오차·속도 명령은 `kinematics.tasks`, 회전 계산은
 `kinematics.rotations`의 공개 함수를 직접 호출한다.
 
-ROS2/MoveIt 관점의 개념 비교와 legacy DLS 식의 역할은
-[DLS와 위치 우선 IK 수학](ik-math.md)과 [단일 팔 IK](ik.md)를 먼저 보면,
-같은 pose task가 18축 bounded 문제로 확장되는 차이를 확인할 수 있다.
+해법의 식은 [Differential IK 수학](ik-math.md), 파일 경계는
+[코드 분리 기준](code-architecture.md)을 먼저 보면 된다.
 
-## 단일 팔·전신·양손 해석의 관계 { #solver-comparison }
+## 해법과 양손 task의 관계 { #solver-comparison }
 
 세 경로는 FK/Jacobian, 위치 오차 부호, quaternion 최단 회전과 world frame 규칙을
 공유하지만 출력과 실행 시점이 달라 수치해법 전체를 하나로 강제하지 않는다.
 
 | 경로 | 실제 정체 | 출력 | 유지해야 하는 고유 처리 |
 |---|---|---|---|
-| `KinematicsSolver.solve_pose()` | 반복형 position-level IK | 최종 관절각 $q$ | 위치 우선 null-space DLS, backtracking, multistart |
-| `WholeBodyIK.solve()` | 실시간 velocity-level constrained IK | 다음 주기의 $\dot q$와 actuator 목표 | 속도·관절 한계, posture, base hierarchy, collision CBF |
+| `DifferentialIKSolver.solve()` | 상태를 모르는 수치 해법 | generalized velocity $\dot q$ | pinv/DLS/QP와 box active set |
+| `WholeBodyIK.solve()` | 실시간 문제 조립과 제어 정책 | 다음 주기의 $\dot q$와 actuator 목표 | task, posture, base hierarchy, collision CBF |
 | `bimanual.rigid_grasp_task()` | 전신 문제에 넣는 상대 pose task 생성기 | 상대 Jacobian과 목표 twist | 캡처한 두 손 관계와 spatial transform |
 
-즉 `bimanual.py`는 세 번째 IK solver가 아니다. 만든 행이 `WholeBodyIK`의 동일한
-constrained DLS/QP 문제에 추가된다. 세 경로에서 실제로 같아야 하는 계산만
+즉 `bimanual.py`는 별도 IK solver가 아니다. 만든 행이 `WholeBodyIK`의 동일한
+constrained velocity 문제에 추가된다. 실제로 같아야 하는 계산만
 `kinematics.tasks.pose_error()`와 `pose_velocity_command()`로 통일했다.
 
 전신 목적함수는 수학적으로 **제약 DLS를 QP 형태로 확장한 것**으로 볼 수 있다.
@@ -74,19 +75,21 @@ constrained DLS/QP 문제에 추가된다. 세 경로에서 실제로 같아야 
 \[
 \dot q^TR\dot q,
 \qquad
-R=\operatorname{diag}(r_{base_x},r_{base_y},r_{base_yaw},r_{lift},r_{arm,1:14})
+R_{ii}=\frac{s_i}{v_{max,i}^2}
 \]
 
 `config/default.yaml`의 현재 `damping_weights`는 다음과 같다.
 
-| 자유도 | 비용 weight | 의미 |
+| 자유도 | 무차원 strength | 의미 |
 |---|---:|---|
-| base x/y | 0.25 / 0.25 | 작은 공통 오차에 차체가 불필요하게 움직이는 것을 억제 |
-| base yaw | 0.20 | 작은 자세 오차로 스워브 방향이 반복 반전되는 것을 억제 |
-| lift | 0.12 | 수직 이동에 쓰되 팔보다 완만하게 참여 |
-| 각 팔 관절 | 0.045 | 빠른 국소 오차 보정을 우선 담당 |
+| base x/y | 0.075625 | 작은 공통 오차에 차체가 불필요하게 움직이는 것을 억제 |
+| base yaw | 0.392 | 작은 자세 오차로 스워브 방향이 반복 반전되는 것을 억제 |
+| lift | 0.0147 | 수직 이동에 쓰되 팔보다 완만하게 참여 |
+| 각 팔 관절 | 0.91125 | 빠른 국소 오차 보정을 우선 담당 |
 
-weight가 클수록 해당 속도는 QP에서 더 비싼 선택이 된다. 다만 양손 target이 공통으로
+strength가 클수록 허용 속도 대비 해당 움직임은 QP에서 더 비싼 선택이 된다. 서로
+단위가 다른 m/s와 rad/s를 직접 비교하지 않고 각 자유도의 속도 상한을 1로 본다.
+다만 양손 target이 공통으로
 크게 이동하면 `common_base` task가 명시적으로 base 목표를 만들어 필요한 차체 이동을
 요청한다. 이 selector task도 다른 task·비용·제약과 함께 **같은 QP 안에서** 절충한다.
 QP를 푼 뒤 base 3축만 강제로 덮어쓰지 않으므로 damping 비용, 속도 bound와 collision
@@ -216,20 +219,21 @@ Jacobian도 같은 world frame이므로 $J_i\dot q$와 $\dot x_i^*$를 직접 �
 r_i(\dot q)=W_i(J_i\dot q-\dot x_i^*)
 \]
 
-로 둔다. $W_i$의 대각 원소는 YAML task weight의 제곱근이므로
-$\lVert r_i\rVert^2$을 전개하면 설정한 위치·자세 weight가 정확히 한 번 곱해진다.
-그 밖의 항도 같은 형태로 표현할 수 있다.
+로 둔다. $W_i$는 위치 잔차를 최대 task 선속도, 방향 잔차를 최대 task 각속도로
+나눈 뒤 YAML의 무차원 strength 제곱근을 곱한다. 따라서 단위가 다른 m/s와 rad/s가
+한 비용에서 직접 비교되지 않는다. 그 밖의 항도 같은 형태로 표현할 수 있다.
 
 | 요구 | residual | 의미 |
 |---|---|---|
 | 오른손·왼손 pose | $W_i(J_i\dot q-\dot x_i^*)$ | 손의 world twist 오차 |
-| rigid grasp | $\sqrt{w_g}(J_g\dot q-\dot x_g^*)$ | 캡처한 양손 상대 pose 복원 |
+| rigid grasp | $W_g(J_g\dot q-\dot x_g^*)$ | 상대 병진·회전을 각 속도 scale로 정규화해 복원 |
 | 공통 base 이동 | $W_b(S_b\dot q-v_b^*)$ | $S_b=[I_3\;0]$로 base 3축 선택 |
 | 자유도별 damping | $R^{1/2}\dot q$ | base·lift·팔 사용 비용 |
 | nominal posture | $P^{1/2}(\dot q-\dot q_{post}^*)$ | $\dot q_{post}^*=K_h(q_{nom}-q)$ |
 
 여기서 $R=\operatorname{diag}(r_j)$와 $P=\operatorname{diag}(p_j)$다. 실제 코드는
-`WholeBodyIK.solve()`의 `rows`, `rhs`에 위 행들을 차례로 추가한다.
+`velocity_task()`가 각 항을 `VelocityTask`로 만들고 `stack_velocity_tasks()`가
+solver 입력 행렬과 벡터로 적층한다.
 
 ### 3. residual 합을 하나의 least-squares로 적층한다
 
@@ -238,11 +242,11 @@ $\lVert r_i\rVert^2$을 전개하면 설정한 위치·자세 weight가 정확�
 \[
 A=
 \begin{bmatrix}
-W_RJ_R\\ W_LJ_L\\ \sqrt{w_g}J_g\\ W_bS_b\\ R^{1/2}\\ P^{1/2}
+W_RJ_R\\ W_LJ_L\\ W_gJ_g\\ W_bS_b\\ R^{1/2}\\ P^{1/2}
 \end{bmatrix},\qquad
 b=
 \begin{bmatrix}
-W_R\dot x_R^*\\ W_L\dot x_L^*\\ \sqrt{w_g}\dot x_g^*\\
+W_R\dot x_R^*\\ W_L\dot x_L^*\\ W_g\dot x_g^*\\
 W_bv_b^*\\ 0\\ P^{1/2}\dot q_{post}^*
 \end{bmatrix}.
 \]
@@ -281,7 +285,7 @@ $b^Tb$는 $z$와 무관하므로 표준 QP
 \boxed{H=2A^TA,\qquad g=-2A^Tb}
 \]
 
-를 얻는다. 이것이 `control.optimization.least_squares_to_qp()`의 두 반환식이다.
+를 얻는다. 이것이 `kinematics.optimization.least_squares_to_qp()`의 두 반환식이다.
 또한 임의의 벡터 $y$에 대해
 
 \[
@@ -311,7 +315,7 @@ $\dot h\ge-\alpha h$를 각각 적용하면
 \dot q\le\alpha(q_{max}-m-q)
 \]
 
-를 얻는다. 이것이 `_velocity_bounds()`가 만드는 lower/upper다. 실효 gain을
+를 얻는다. 이것이 `joint_velocity_bounds()`가 만드는 lower/upper다. 실효 gain을
 $\alpha_{eff}=\min(\alpha,1/\Delta t)$로 제한하면 lower 쪽 Euler step은
 
 \[
@@ -408,7 +412,7 @@ safety projection QP`다. 이 덕분에 shaping이 CBF를 나중에 다시 깨�
 
 ```mermaid
 flowchart TD
-    TASKS["soft task rows<br>오른손 · 왼손 pose<br>base hierarchy · damping · home posture"] --> STACK["weighted DLS<br>A, b 적층"]
+    TASKS["VelocityTask 목록<br>오른손 · 왼손 pose<br>base hierarchy · damping · home posture"] --> STACK["stack_velocity_tasks<br>A, b 적층"]
     STACK --> COST["QP cost 변환<br>H=2AᵀA · g=-2Aᵀb"]
     COST --> QP["box-QP active set"]
     BOUNDS["속도 한계 · joint-limit CBF<br>FK/OFF hard pin"] --> QP
@@ -516,10 +520,11 @@ geometry(group 3)가 반투명 청색으로 표시된다. 동시에 controller�
 사용한다. `G`의 물리 contact point/force 표시는 별도 토글이므로 두 시각화를 동시에
 비교할 수도 있다.
 
-position/orientation task weight는 각각 10/5, error gain은 10/9다. task 속도는
-linear 1.2 m/s, angular 3.0 rad/s로 제한하고, base x/y·yaw, lift, arm 속도 상한은
-각각 0.55 m/s·1.4 rad/s, 0.35 m/s, 4.5 rad/s다. 각 DOF의 damping/posture weight도
-서로 다르다.
+position/orientation의 무차원 strength는 각각 14.4/45, error gain은 10/9다. task
+속도는 linear 1.2 m/s, angular 3.0 rad/s로 제한하고, base x/y·yaw, lift, arm 속도
+상한은 각각 0.55 m/s·1.4 rad/s, 0.35 m/s, 4.5 rad/s다. 손 task, rigid grasp,
+common base, 각 DOF의 damping/posture와 collision slack은 모두 각 항목에 맞는 속도
+상한으로 정규화된다.
 
 양손이 함께 움직일 때 14개 팔 자유도만으로 공통 오차를 흡수하면 물리 베이스가
 늦게 따라오고 해의 작은 부호 변화가 스워브 반전을 반복시킬 수 있다. 그래서 첫
@@ -598,12 +603,12 @@ table CBF가 활성화된 solve는 약 1.6 ms다. 회귀 gate는 5 ms 미만을 
 | 수식 단계 | 코드 표현 | 담당 모듈 |
 |---|---|---|
 | \(\dot x_i^*=K e_i-D\dot x_i\) | `pose_error()`, `pose_velocity_command()` | `kinematics/tasks.py` |
-| weighted task를 \(A\dot q\approx b\)로 적층 | `rows`, `rhs`, `matrix`, `vector` | `WholeBodyIK.solve()` |
-| $\lVert A\dot q-b\rVert^2$를 QP로 변환 | `least_squares_to_qp()` | `control/optimization.py` |
-| \(\dot q_{min}\le\dot q\le\dot q_{max}\) | `lower`, `upper`, `_velocity_bounds()` | `control/whole_body.py` |
-| box-constrained QP | `bounded_quadratic_program()` | `control/optimization.py` |
-| \(\nabla d\,\dot q\ge-\alpha(d-d_{safe})\) | `_collision_constraints()` | `control/whole_body.py` |
-| CBF soft slack penalty | `bounded_quadratic_program_with_barriers()` | `control/optimization.py` |
+| weighted task를 \(A\dot q\approx b\)로 적층 | `VelocityTask`, `stack_velocity_tasks()` | `kinematics/tasks.py` |
+| $\lVert A\dot q-b\rVert^2$를 QP로 변환 | `least_squares_to_qp()` | `kinematics/optimization.py` |
+| \(\dot q_{min}\le\dot q\le\dot q_{max}\) | `joint_velocity_bounds()` | `kinematics/constraints.py` |
+| box-constrained QP | `bounded_quadratic_program()` | `kinematics/optimization.py` |
+| \(\nabla d\,\dot q\ge-\alpha(d-d_{safe})\) | `collision_velocity_barriers()` | `kinematics/constraints.py` |
+| CBF soft slack penalty | `bounded_quadratic_program_with_barriers()` | `kinematics/optimization.py` |
 | 양손 상대 pose 보존 | `rigid_grasp_task()` | `control/bimanual.py` |
 
 각 행을 만드는 정책은 `WholeBodyIK`, robot model을 모르는 수치 최적화는
@@ -617,7 +622,7 @@ flowchart TD
     T["world-fixed hand targets"] --> E["position/orientation error"]
     D["시뮬레이션 live qpos · qvel"] --> S["WholeBodyIK.site_state"]
     S --> K["shared KinematicTree<br>양손 FK + 18-DOF Jacobian"]
-    K --> J["KinematicsSolver.forward<br>조상 경로의 열 직접 계산"]
+    K --> J["KinematicTree.forward_site<br>조상 경로의 열 직접 계산"]
     E --> V["bounded desired task velocity"]
     J --> LS["weighted DLS → explicit box-QP"]
     T --> H["dual-hand centroid/yaw<br>explicit base hierarchy"]
@@ -671,6 +676,6 @@ vertical 0.008, yaw 0.164다. yaw 25° 명령의 2초 결과는 base yaw 22.2°,
 원래 위치로 돌아간다. 테스트는 수정 전 -0.320 m/s였던 복귀 twist가 0인지, 실제
 물리 release의 역방향 이동이 5 mm 미만인지, 이후 새 target에 다시 반응하는지 본다.
 
-[← 이전: 단일 팔 IK](ik.md) ·
+[← 이전: Differential IK 수학](ik-math.md) ·
 [전체 학습 순서](index.md#algorithm-learning-order) ·
 [다음: 팔 토크 제어 →](arm_control.md)

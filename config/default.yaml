@@ -1,6 +1,6 @@
 # FFW-SH5 실행 및 알고리즘 조절값의 기본 설정이다.
 # 단위는 키 이름 또는 각 항목의 주석에 표시한다.
-schema_version: 2
+schema_version: 5
 
 application:
   # 실행할 MJCF 모델과 초기 키프레임이다. 상대 경로는 저장소 루트를 기준으로 한다.
@@ -36,37 +36,32 @@ arm_control:
   proportional_gain: 600.0
   derivative_gain: 40.0
 
-kinematics:
-  # 단일 사이트 위치 우선 DLS IK의 감쇠와 반복 설정이다.
-  damping: 0.05
-  max_joint_delta_rad: 0.07
-  max_iterations: 70
-  position_tolerance_m: 0.0001
-  orientation_tolerance_rad: 0.001
-  orientation_cost_weight: 0.3
-  multistart:
-    restarts: 8
-    max_iterations: 250
-    success_position_tolerance_m: 0.005
-    success_orientation_tolerance_deg: 5.0
-
 whole_body_ik:
-  # 말단 위치·방향 작업의 가중치와 오차 피드백 이득이다.
-  position_weight: 10.0
-  orientation_weight: 5.0
+  # 실행 중 UI에서도 바꿀 수 있는 differential IK 해법과 수치 파라미터다.
+  solver:
+    method: qp
+    pseudoinverse_rcond: 0.000001
+    dls_damping: 0.05
+  # 아래 task weight는 모두 속도 상한으로 정규화한 무차원 strength다.
+  # 위치는 m/s, 방향은 rad/s 잔차를 각각의 task 속도 상한으로 나눈 뒤 적용한다.
+  position_weight: 14.4
+  orientation_weight: 45.0
   position_gain: 10.0
   orientation_gain: 9.0
   posture_gain: 1.0
   # 관절 한계 CBF 설정이다.
   joint_limit_margin_rad: 0.02
   joint_limit_gain: 5.0
-  # 양손 상대 자세를 유지하는 작업의 가중치다.
-  rigid_grasp_weight: 250.0
+  # 양손 상대 자세를 유지하는 위치·방향 task의 무차원 strength다.
+  rigid_grasp_weights:
+    position: 360.0
+    orientation: 2250.0
   # 충돌 거리 CBF 설정이다. buffer는 safe_distance보다 커야 한다.
   collision_avoidance: true
   collision_buffer_m: 0.03
   collision_safe_distance_m: 0.01
   collision_barrier_gain: 50.0
+  # CBF 위반 속도를 최대 task 선속도로 나눈 무차원 slack의 비용이다.
   collision_slack_weight: 1000.0
   # 말단과 베이스 명령의 속도·가속도 상한이다.
   max_task_linear_speed_m_s: 1.2
@@ -85,25 +80,26 @@ whole_body_ik:
     base_yaw: 1.4
     lift: 0.35
     arm: 4.5
-  # 같은 종류의 자유도끼리 공유하는 QP 정규화 비용이다.
-  # 값이 클수록 같은 task 오차를 줄일 때 해당 자유도의 움직임을 더 비싸게 취급한다.
+  # 속도 상한으로 정규화한 무차원 QP 정규화 강도다.
+  # 실제 비용은 strength * (속도 / 속도 상한)^2이며 값이 클수록 움직임이 비싸다.
   damping_weights:
-    base_linear: 0.25
-    base_yaw: 0.20
-    lift: 0.12
-    arm: 0.045
-  # base에는 기준 자세가 없으므로 lift와 팔의 자세 유지 비용만 설정한다.
+    base_linear: 0.075625
+    base_yaw: 0.392
+    lift: 0.0147
+    arm: 0.91125
+  # 자세 복귀 속도도 속도 상한으로 정규화하며 base에는 기준 자세를 두지 않는다.
   posture_weights:
-    lift: 0.10
-    arm: 0.025
+    lift: 0.01225
+    arm: 0.50625
   # 양손 공통 이동을 베이스 명령으로 바꾸는 서보 설정이다.
   common_base:
     position_gain: 5.0
     yaw_gain: 3.5
     yaw_deadband_rad: 0.05
+    # base x/y/yaw 속도를 각 축의 속도 상한으로 나눈 무차원 task strength다.
     task_weights:
-      translation: 30.0
-      yaw: 100.0
+      translation: 9.075
+      yaw: 196.0
 
 base:
   teleop:

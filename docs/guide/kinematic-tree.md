@@ -19,7 +19,7 @@ IK는 한 번의 물리 상태만 평가하지 않는다. 현재 관절값 `q`�
 
 - solver가 시뮬레이션 상태를 임시 후보값으로 덮어쓸 수 있다.
 - 접촉·센서·렌더링이 어느 후보 상태를 기준으로 갱신됐는지 불명확해진다.
-- 단일 팔 IK와 전신 IK가 서로 다른 pose/Jacobian 경로를 사용할 수 있다.
+- 전신 IK와 collision이 서로 다른 pose/Jacobian 경로를 사용할 수 있다.
 - UI의 Kinematic Tree와 solver가 별도 XML 해석 결과를 표시할 수 있다.
 
 그래서 이 프로젝트는 **모델 구조**와 **시간에 따라 변하는 물리 상태**를 분리한다.
@@ -147,37 +147,33 @@ body를 계산하지 않고 `body_paths[site.body_id]`에 있는 조상만 순�
 
 ## 6. Tree에서 FK로 이어지는 정확한 경계
 
-tree 생성과 FK 실행 사이에는 `KinematicsSolver`가 있다.
+실시간 경로에서는 `WholeBodyIK.site_state()`가 qpos 복사본을 만든 뒤 tree를 직접 호출한다.
 
 ```mermaid
 sequenceDiagram
     participant Caller
-    participant Solver as KinematicsSolver
+    participant Controller as WholeBodyIK
     participant Tree as KinematicTree
 
-    Caller->>Solver: forward(q, context_qpos)
-    Solver->>Solver: _configuration()<br>qpos0/context 복사
-    Solver->>Solver: controlled q를 qpos_adr에 기록
-    Solver->>Tree: forward_site(qpos, site_id, joint_ids)
+    Caller->>Controller: site_state(data, side, current_q)
+    Controller->>Controller: live qpos 복사
+    Controller->>Controller: controlled q를 qpos_adr에 기록
+    Controller->>Tree: forward_site(qpos, site_id, joint_ids)
     Tree->>Tree: body_paths[site.body_id] 순회
     Tree->>Tree: _forward_body()<br>body pose + joint world frame
     Tree->>Tree: site 고정 변환 합성
     Tree->>Tree: Jacobian 열 구성
-    Tree-->>Solver: SiteKinematics
-    Solver-->>Caller: position, quaternion, jacobian
+    Tree-->>Controller: SiteKinematics
+    Controller-->>Caller: position, quaternion, jacobian
 ```
 
 중요한 연결은 다음 한 줄이다.
 
 ```python
-return self.tree.forward_site(
-    self._configuration(q, context_qpos),
-    self.site_id,
-    self.joint_ids,
-)
+return self.kinematic_tree.forward_site(qpos, self.site_ids[side], self.joint_ids)
 ```
 
-- `_configuration()`은 **어떤 관절 상태를 평가할지** 결정한다.
+- `qpos` 복사본은 **어떤 관절 상태를 평가할지** 결정한다.
 - `site_id`는 **어느 좌표계까지 갈지** 결정한다.
 - `joint_ids`는 **Jacobian의 열 순서**를 결정한다.
 - `forward_site()`는 tree topology를 따라 **pose와 Jacobian을 함께** 계산한다.
@@ -187,18 +183,11 @@ return self.tree.forward_site(
 
 ## 7. 왜 tree를 한 번 만들고 공유하는가
 
-`WholeBodyIK`는 오른손과 왼손에 각각 `KinematicsSolver`를 만들지만
-`KinematicTree`는 하나만 만든다.
+`WholeBodyIK`는 오른손과 왼손의 `site_id`만 따로 저장하고 `KinematicTree`는 하나만 만든다.
 
 ```python
 self.kinematic_tree = KinematicTree(model)
-self.kinematics_solvers = {
-    side: KinematicsSolver(
-        model, site_names[side], self.joint_names,
-        tree=self.kinematic_tree,
-    )
-    for side in self.site_ids
-}
+self.site_ids = {side: mujoco.mj_name2id(...) for side in site_names}
 ```
 
 이렇게 하면 양손이 같은 body 고정 변환, 같은 `qpos0`, 같은 joint 주소 체계를
@@ -209,7 +198,7 @@ self.kinematics_solvers = {
 | 설계 주장 | 코드 | 검증 |
 |---|---|---|
 | 컴파일된 모델을 원본으로 사용 | `_copy_body/joint/site()` | Phase 3 engine pose 비교 |
-| candidate state는 live data와 분리 | `KinematicsSolver._configuration()` | read-only gate |
+| candidate state는 live data와 분리 | `WholeBodyIK.site_state()`의 qpos 복사 | read-only gate |
 | target 조상만 순회 | `body_paths`, `_forward_body()` | tree architecture gate |
 | 두 손이 같은 topology 공유 | `WholeBodyIK.kinematic_tree` | Whole-body solver gate |
 | UI와 solver가 같은 계층 사용 | `children_by_body`, `sites_by_body` | Phase 6 tree UI gate |

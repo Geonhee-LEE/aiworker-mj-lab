@@ -21,7 +21,7 @@ MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 import teleop_app  # noqa: E402
 from ffw_sh5_grasp.application import targets as teleop_targets  # noqa: E402
 from ffw_sh5_grasp.control import base  # noqa: E402
-from ffw_sh5_grasp.kinematics import legacy, rotations  # noqa: E402
+from ffw_sh5_grasp.kinematics import rotations, tasks as pose_tasks  # noqa: E402
 from ffw_sh5_grasp.visualization import render as teleop_render  # noqa: E402
 from ffw_sh5_grasp.visualization import ui as teleop_ui  # noqa: E402
 
@@ -431,44 +431,40 @@ def run_collision_visualization_gate():
     return ok
 
 
-def run_manual_xyz_rpy_ik_gate(model):
-    """수동 XYZ/RPY 목표에서 양손 IK가 위치·자세 허용 오차로 수렴하는지 검사한다."""
-    data = mujoco.MjData(model)
-    key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
-    mujoco.mj_resetDataKeyframe(model, data, key_id)
-    mujoco.mj_forward(model, data)
-    solver_r = legacy.InverseKinematics(model, "grasp_target_r", ARM_R)
-    solver_l = legacy.InverseKinematics(model, "grasp_target_l", ARM_L)
-    site_r = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "grasp_target_r")
-    site_l = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "grasp_target_l")
+def run_manual_xyz_rpy_ik_gate():
+    """수동 XYZ/RPY 목표에서 arm-only differential IK 수렴을 검사한다."""
     cases = (
-        ("r", solver_r, site_r, HOME_Q_R, np.array([-0.035, -0.015, 0.025]), np.array([8.0, -4.0, 6.0])),
-        ("l", solver_l, site_l, HOME_Q_L, np.array([-0.035, 0.015, 0.025]), np.array([-8.0, -4.0, -6.0])),
+        ("r", np.array([-0.035, -0.015, 0.025]), np.array([8.0, -4.0, 6.0])),
+        ("l", np.array([-0.035, 0.015, 0.025]), np.array([-8.0, -4.0, -6.0])),
     )
     ok = True
     reports = []
-    for side, solver, site_id, q_seed, pos_delta, rpy_delta in cases:
-        target_pos = data.site_xpos[site_id].copy() + pos_delta
-        home_quat = np.zeros(4)
+    for side, pos_delta, rpy_delta in cases:
+        app = _make_sim_only_app()
+        solver, data = app.whole_body_solver, app.data
+        initial = solver.site_state(data, side)
+        target_pos = initial.position + pos_delta
         target_quat = np.zeros(4)
-        mujoco.mju_mat2Quat(home_quat, data.site_xmat[site_id])
         mujoco.mju_mulQuat(
-            target_quat, home_quat, rotations.rpy_deg_to_quat(rpy_delta)
+            target_quat, initial.quaternion, rotations.rpy_deg_to_quat(rpy_delta)
         )
-        q_sol, pos_err, ori_err, converged = solver.solve_pose_multistart(
-            q_seed, target_pos, target_quat, np.random.default_rng(100 + (side == "l")),
-            context_qpos=data.qpos, success_pos_tol=0.005, success_ori_tol=np.radians(5.0))
-        scratch = mujoco.MjData(model)
-        scratch.qpos[:] = data.qpos
-        for qadr, val in zip(solver.qpos_adrs, q_sol):
-            scratch.qpos[qadr] = val
-        mujoco.mj_forward(model, scratch)
-        reached_delta = scratch.site_xpos[site_id] - data.site_xpos[site_id]
+        for _ in range(80):
+            command = solver.solve(
+                data, {side: (target_pos, target_quat)}, 0.04,
+                active_sides=(side,), whole_body_enabled=False)
+            data.qpos[solver.qpos_adrs[solver.side_indices[side]]] = (
+                command.arm_positions[side])
+            mujoco.mj_forward(app.model, data)
+        final = solver.site_state(data, side)
+        error = pose_tasks.pose_error(
+            final.position, final.quaternion, target_pos, target_quat)
+        pos_err, ori_err = error.position_norm, error.orientation_norm
+        reached_delta = final.position - initial.position
         pos_delta_ok = np.linalg.norm(reached_delta - pos_delta) < 0.006
-        case_ok = converged and pos_delta_ok and pos_err < 0.005 and ori_err < np.radians(5.0)
+        case_ok = pos_delta_ok and pos_err < 0.005 and ori_err < np.radians(5.0)
         ok = ok and case_ok
         reports.append(
-            f"{side}: converged={converged} pos_err={pos_err*1000:.2f}mm "
+            f"{side}: pos_err={pos_err*1000:.2f}mm "
             f"ori_err={np.degrees(ori_err):.2f}deg delta_ok={pos_delta_ok}")
     print(f"Manual XYZ/RPY IK gate: {'; '.join(reports)}: {'OK' if ok else 'FAIL'}")
     return ok
@@ -491,8 +487,8 @@ def run_split_ui_and_tree_gate():
     left = teleop_ui.kinematic_tree_body_ids(app, "l", False)
     both = teleop_ui.kinematic_tree_body_ids(app, "both", False)
     full = teleop_ui.kinematic_tree_body_ids(app, "both", True)
-    right_site = app.whole_body_solver.kinematics_solvers["r"].site_id
-    left_site = app.whole_body_solver.kinematics_solvers["l"].site_id
+    right_site = app.whole_body_solver.site_ids["r"]
+    left_site = app.whole_body_solver.site_ids["l"]
     tree_ok = (
         both == right | left
         and right != left
@@ -525,7 +521,7 @@ def main():
           and run_numeric_target_marker_sync_gate()
           and run_whole_body_toggle_gate()
           and run_collision_visualization_gate()
-          and run_manual_xyz_rpy_ik_gate(model))
+          and run_manual_xyz_rpy_ik_gate())
     print("PASS" if ok else "FAIL")
     sys.exit(0 if ok else 1)
 

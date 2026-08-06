@@ -7,7 +7,7 @@ Part 1은 정기구학으로 도달 가능한 자세 100개를 무작위 생성�
 영 자세가 아니라 테이블 근처 준비 자세인 ``HOME_Q``에서 시작해 각 관절을 최대
 ``IK_TEST_SPREAD`` rad만큼 움직인다. 여기서 도달 가능 작업 공간은 전체 관절 범위의
 비현실적인 자세가 아니라 실제 테이블 물체에 접근할 때 사용하는 영역을 뜻한다.
-각 목표는 ``solve_pose_multistart``로 풀며 홈 초기값이 수렴하지 않으면 몇 개의 무작위
+각 목표는 test-only ``solve_offline_pose_multistart``로 풀며 홈 초기값이 수렴하지 않으면 몇 개의 무작위
 초기값으로 재시도한다. 목표의 95% 이상이 위치 오차 5 mm, 자세 오차 5도 미만으로
 수렴해야 한다.
 
@@ -32,6 +32,7 @@ from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
 import ik  # noqa: E402
 import kinematics  # noqa: E402
+from offline_pose_ik import solve_offline_pose_multistart  # noqa: E402
 
 ARM_JOINTS = [f"arm_r_joint{i}" for i in range(1, 8)]
 
@@ -128,8 +129,8 @@ def run_ik_unit_test(model, solver, rng):
         target_quat = np.zeros(4)
         mujoco.mju_mat2Quat(target_quat, scratch.site_xmat[solver.site_id])
 
-        _, pos_err, ori_err, converged = solver.solve_pose_multistart(
-            HOME_Q, target_pos, target_quat, rng,
+        _, pos_err, ori_err, converged = solve_offline_pose_multistart(
+            solver, HOME_Q, target_pos, target_quat, rng,
             success_pos_tol=POS_TOL, success_ori_tol=np.radians(ORI_TOL_DEG))
         pos_errs.append(pos_err)
         ori_errs.append(np.degrees(ori_err))
@@ -195,8 +196,10 @@ def run_pick_trial(model, data, solver, controller, rng):
     # 잡음과 들기 측정에 쓰는 can_pos0 자체는 바꾸지 않는다.
     grasp_target_pos = can_pos0 + GRASP_TARGET_OFFSET
     pregrasp_pos = grasp_target_pos + PRE_GRASP_OFFSET
-    q_pregrasp, perr, oerr, ok1 = solver.solve_pose_multistart(HOME_Q, pregrasp_pos, target_quat, rng)
-    q_grasp, perr2, oerr2, ok2 = solver.solve_pose_multistart(q_pregrasp, grasp_target_pos, target_quat, rng)
+    q_pregrasp, perr, oerr, ok1 = solve_offline_pose_multistart(
+        solver, HOME_Q, pregrasp_pos, target_quat, rng)
+    q_grasp, perr2, oerr2, ok2 = solve_offline_pose_multistart(
+        solver, q_pregrasp, grasp_target_pos, target_quat, rng)
     if not (ok1 and ok2):
         return {"success": False, "reason": "ik_failed", "net_lift": 0.0}
 
@@ -229,7 +232,8 @@ def run_pick_trial(model, data, solver, controller, rng):
 
     # 4) IK 목표 자체를 LIFT_HEIGHT만큼 올려 다시 풀고 새 자세로 서보 제어한다.
     lift_target_pos = grasp_target_pos + np.array([0, 0, LIFT_HEIGHT])
-    q_lift, _, _, _ = solver.solve_pose_multistart(q_grasp, lift_target_pos, target_quat, rng)
+    q_lift, _, _, _ = solve_offline_pose_multistart(
+        solver, q_grasp, lift_target_pos, target_quat, rng)
     lift_time = LIFT_HEIGHT / LIFT_SPEED
     _move(model, data, controller, q_grasp, q_lift, lift_time, dt, grasp_frac=1.0, thumb_frac=1.0)
     _hold(model, data, controller, q_lift, POST_LIFT_HOLD, dt, grasp_frac=1.0, thumb_frac=1.0)

@@ -13,8 +13,8 @@
 |---|---|---|---|
 | 설정 | `ffw_sh5_grasp.config` | 기본·사용자 YAML 병합과 형식 검증 | 실행 전 파라미터 선택 |
 | 애플리케이션 | `ffw_sh5_grasp.application` | 앱 생명주기, 모드 전환, target 좌표 변환 | 텔레옵 실행·UI 목표 처리 |
-| 기구학 | `ffw_sh5_grasp.kinematics` | 회전 수학, Tree, FK/Jacobian, 단일 팔 IK, 충돌 거리 | pose·Jacobian·IK 계산 |
-| 제어 | `ffw_sh5_grasp.control` | 전신 QP IK, 팔 토크, 스워브, 파지 | 물리 actuator 명령 생성 |
+| 기구학 | `ffw_sh5_grasp.kinematics` | 회전, Tree, task/constraint, differential IK, 충돌 거리 | pose·Jacobian·IK 계산 |
+| 제어 | `ffw_sh5_grasp.control` | 전신 task/제약 조립, 팔 토크, 스워브, 파지 | 물리 actuator 명령 생성 |
 | 시각화 | `ffw_sh5_grasp.visualization` | ImGui UI, MuJoCo 장면, 카메라, Gizmo | 조작 화면과 진단 도구 |
 
 ```text
@@ -26,12 +26,13 @@ ffw_sh5_grasp
 ├── kinematics
 │   ├── rotations           Quaternion·회전행렬 공용 수학
 │   ├── tasks               공통 pose 오차·Cartesian 속도 명령
+│   ├── constraints         joint-limit box·collision CBF
 │   ├── tree                MJCF Tree·FK·Jacobian
-│   ├── solver              단일 팔 DLS IK
+│   ├── solver              전신 pseudoinverse·DLS·QP
+│   ├── optimization        Box-QP와 soft barrier 수치 구현
 │   └── collision           거리와 gradient
 ├── control
 │   ├── whole_body          18-DOF 명령 조립
-│   ├── optimization        Box-QP와 collision soft barrier
 │   ├── bimanual            양손 rigid-grasp task
 │   ├── arm                 팔 토크 제어
 │   ├── base                스워브 제어
@@ -55,9 +56,8 @@ ffw_sh5_grasp
 
 ### 기구학
 
-[기구학 API](kinematics.md)는 회전 유틸리티, `KinematicTree`,
-`KinematicsSolver`, 충돌 거리 자료형과 함수를 다룬다. 물리 상태를 수정하지 않는
-pose·Jacobian·IK 계산이 필요할 때 사용한다.
+[기구학 API](kinematics.md)는 회전 유틸리티, `KinematicTree`, soft task, hard
+constraint, `DifferentialIKSolver`와 충돌 거리 함수를 다룬다.
 
 ### 제어
 

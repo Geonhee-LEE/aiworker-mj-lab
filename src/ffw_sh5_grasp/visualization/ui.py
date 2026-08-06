@@ -13,7 +13,9 @@ import math
 import time
 
 from imgui_bundle import imgui
+import numpy as np
 
+from ..application import targets
 from ..config import SETTINGS
 
 JOG_POS_STEP_DEFAULT = SETTINGS.number("ui.jog_position_step_m", positive=True)
@@ -26,6 +28,10 @@ VIRTUAL_POS_RANGE = (-0.2, 1.2)
 MOVE_TIME_RANGE = (0.2, 8.0)
 JOG_POS_STEP_RANGE = (0.001, 0.050)
 JOG_RPY_STEP_RANGE = (0.5, 15.0)
+PSEUDOINVERSE_RCOND_RANGE = (1e-8, 1e-3)
+DLS_DAMPING_RANGE = (0.001, 0.5)
+POSE_GRAPH_HISTORY_SECONDS = 10.0
+POSE_GRAPH_SERIES_HEIGHT = 55.0
 POS_AXES = ("X", "Y", "Z")
 RPY_AXES = ("Roll", "Pitch", "Yaw")
 UI_WINDOW_SPECS = SETTINGS.get("ui.windows")
@@ -114,12 +120,23 @@ def _clamp(value, lo, hi):
     return min(hi, max(lo, value))
 
 
-def _slider_float_clamped(label, value, lo, hi, fmt):
+def _slider_float_clamped(label, value, lo, hi, fmt, flags=0):
     """실수 슬라이더를 그리고 변경값을 범위 안으로 재확인해 ``(변경, 값)``으로 반환한다."""
-    changed, value = imgui.slider_float(label, value, lo, hi, fmt)
+    changed, value = imgui.slider_float(label, value, lo, hi, fmt, flags)
     if changed:
         value = _clamp(value, lo, hi)
     return changed, value
+
+
+def _item_tooltip(message):
+    """방금 그린 위젯 위에 마우스를 올리면 폭을 제한한 설명을 표시한다."""
+    if not imgui.is_item_hovered():
+        return
+    imgui.begin_tooltip()
+    imgui.push_text_wrap_pos(imgui.get_font_size() * 32.0)
+    imgui.text_wrapped(message)
+    imgui.pop_text_wrap_pos()
+    imgui.end_tooltip()
 
 
 def _draw_vector_sliders(prefix, values, axes, lo, hi, fmt, on_change=None):
@@ -296,7 +313,9 @@ def _draw_status_panel(app, data):
     imgui.text(f"CAN  |  {app.cyclo_controller}  |  marker: {_selected_marker_label(app)}")
     imgui.text(f"sim {data.time:6.1f}s  wall {time.perf_counter()-app.wall_start:6.1f}s  "
                f"{app.freq_ema:4.1f} Hz")
-    imgui.text(f"IK err  L: {_ik_err_text(app, 'l')}   R: {_ik_err_text(app, 'r')}")
+    method = app.whole_body_solver.solver_method
+    imgui.text(
+        f"IK [{method}]  L: {_ik_err_text(app, 'l')}   R: {_ik_err_text(app, 'r')}")
     imgui.text(f"Base x={data.qpos[app.base_x_qadr]:+.2f}m y={data.qpos[app.base_y_qadr]:+.2f}m "
                f"yaw={math.degrees(data.qpos[app.base_yaw_qadr]):+.1f}deg")
     body_cmd = getattr(app, "commanded_base_twist", None)
@@ -395,6 +414,228 @@ def _draw_lift_utils_panel(app, targets):
         app.cycle_camera()
 
 
+def _draw_ik_solver_panel(app):
+    """Differential IK 해법과 실행 중 조절 가능한 QP 가중치를 그린다."""
+    solver = app.whole_body_solver
+    imgui.text("Nominal differential IK method")
+    choices = (
+        ("pseudoinverse", "Pseudoinverse"),
+        ("dls", "DLS"),
+        ("qp", "QP"),
+    )
+    for index, (method, label) in enumerate(choices):
+        if index:
+            imgui.same_line()
+        if imgui.radio_button(
+                f"{label}##ik_method_{method}", solver.solver_method == method):
+            solver.set_solver_method(method)
+
+    if solver.solver_method == "pseudoinverse":
+        changed, value = _slider_float_clamped(
+            "SVD rcond", solver.differential_solver.pseudoinverse_rcond,
+            *PSEUDOINVERSE_RCOND_RANGE, "%.1e")
+        if changed:
+            solver.differential_solver.pseudoinverse_rcond = value
+        imgui.text("Box/CBF safety constraints are projected after the minimum-norm solve.")
+        return
+
+    if solver.solver_method == "dls":
+        changed, value = _slider_float_clamped(
+            "DLS damping", solver.differential_solver.dls_damping,
+            *DLS_DAMPING_RANGE, "%.3f")
+        if changed:
+            solver.set_dls_damping(value)
+        imgui.text("Box/CBF safety constraints are projected after the damped solve.")
+        return
+
+    imgui.text("QP dimensionless strengths")
+    imgui.text_wrapped(
+        "Cost = strength * (residual / matching speed limit)^2. "
+        "Hover a slider for its meaning.")
+    imgui.text_wrapped(
+        "Hard constraints: velocity bounds, joint-limit CBF, fixed mode DOFs. "
+        "All sliders below tune soft costs; collision uses a penalized CBF slack.")
+    logarithmic = imgui.SliderFlags_.logarithmic
+    weight_specs = (
+        ("position", "Position", 1e-3, 1e4, "%.4g", logarithmic,
+         "Tracks commanded hand linear velocity. Residual is divided by the "
+         "maximum task linear speed (m/s). Higher means smaller position error."),
+        ("orientation", "Orientation", 1e-3, 1e4, "%.4g", logarithmic,
+         "Tracks commanded hand angular velocity. Residual is divided by the "
+         "maximum task angular speed (rad/s). Higher means smaller rotation error."),
+        ("rigid_grasp_position", "Rigid grasp position", 1e-3, 1e4,
+         "%.4g", logarithmic,
+         "Preserves the captured relative translation between both hands. "
+         "Its residual is divided by the maximum linear speed (m/s)."),
+        ("rigid_grasp_orientation", "Rigid grasp orientation", 1e-3, 1e4,
+         "%.4g", logarithmic,
+         "Preserves the captured relative rotation between both hands. "
+         "Its residual is divided by the maximum angular speed (rad/s)."),
+        ("damping_base_linear", "Damping base XY", 1e-4, 1e3,
+         "%.4g", logarithmic,
+         "Penalizes base X/Y speed divided by its velocity limit. Higher values "
+         "make translation participate less."),
+        ("damping_base_yaw", "Damping base yaw", 1e-4, 1e3,
+         "%.4g", logarithmic,
+         "Penalizes base yaw speed divided by its velocity limit. Higher values "
+         "make base rotation participate less."),
+        ("damping_lift", "Damping lift", 1e-4, 1e3, "%.4g", logarithmic,
+         "Penalizes lift speed divided by its velocity limit. Higher values make "
+         "the lift participate less."),
+        ("damping_arm", "Damping arms", 1e-4, 1e3, "%.4g", logarithmic,
+         "Penalizes each arm joint speed divided by its velocity limit. Higher "
+         "values make both arms participate less."),
+        ("posture_lift", "Posture lift", 1e-4, 1e3, "%.4g", logarithmic,
+         "Tracks the lift's nominal recovery velocity after normalization. Higher "
+         "values pull the lift toward its nominal position more strongly."),
+        ("posture_arm", "Posture arms", 1e-4, 1e3, "%.4g", logarithmic,
+         "Tracks each arm's nominal recovery velocity after normalization. Higher "
+         "values pull the arms toward their nominal posture more strongly."),
+        ("collision_slack", "Collision CBF slack", 1e-2, 1e5,
+         "%.4g", logarithmic,
+         "Penalizes violation of the collision distance-rate CBF after dividing "
+         "it by the maximum task linear speed. Higher is safer but can be stiffer."),
+    )
+    weights = solver.qp_weights()
+    for name, label, lower, upper, fmt, flags, help_text in weight_specs:
+        changed, value = _slider_float_clamped(
+            f"{label}##qp_weight_{name}", weights[name], lower, upper, fmt, flags)
+        _item_tooltip(help_text)
+        if changed:
+            solver.set_qp_weight(name, value)
+
+
+def _ensure_pose_graph_state(app):
+    """포즈 그래프 탭이 사용하는 per-side 시계열 버퍼를 지연 초기화한다."""
+    if hasattr(app, "pose_graph_state"):
+        return
+    app.pose_graph_side = "r"
+    app.pose_graph_state = {
+        side: {
+            "target_pos": [[], [], []],
+            "current_pos": [[], [], []],
+            "target_rpy": [[], [], []],
+            "current_rpy": [[], [], []],
+            "position_error_mm": [],
+            "orientation_error_deg": [],
+        }
+        for side in ("r", "l")
+    }
+
+
+def _trim_series(series, max_samples):
+    """리스트 기반 시계열을 지정 길이 이하로 유지한다."""
+    overflow = len(series) - max_samples
+    if overflow > 0:
+        del series[:overflow]
+
+
+def _append_pose_graph_sample(app, side):
+    """선택된 손의 현재/목표 포즈를 같은 좌표계(home-relative)로 기록한다."""
+    graph = app.pose_graph_state[side]
+    target_pos = np.asarray(app.targets[f"pos_{side}"], dtype=float)
+    target_rpy = np.asarray(app.targets[f"rpy_{side}"], dtype=float)
+
+    state = app.whole_body_solver.site_state(app.data, side)
+    current_pos = np.asarray(
+        targets.world_to_target_pos(app, side, state.position), dtype=float)
+    current_rpy = np.asarray(
+        targets.world_quat_to_target_rpy(app, side, state.quaternion), dtype=float)
+
+    rate_hz = 1.0 / max(float(getattr(app, "frame_dt", 1.0 / 60.0)), 1e-6)
+    max_samples = max(32, int(rate_hz * POSE_GRAPH_HISTORY_SECONDS))
+
+    for axis in range(3):
+        graph["target_pos"][axis].append(float(target_pos[axis]))
+        graph["current_pos"][axis].append(float(current_pos[axis]))
+        graph["target_rpy"][axis].append(float(target_rpy[axis]))
+        graph["current_rpy"][axis].append(float(current_rpy[axis]))
+        _trim_series(graph["target_pos"][axis], max_samples)
+        _trim_series(graph["current_pos"][axis], max_samples)
+        _trim_series(graph["target_rpy"][axis], max_samples)
+        _trim_series(graph["current_rpy"][axis], max_samples)
+
+    pos_error_mm = float(np.linalg.norm(target_pos - current_pos) * 1000.0)
+    ori_error_deg = float(np.linalg.norm(target_rpy - current_rpy))
+    graph["position_error_mm"].append(pos_error_mm)
+    graph["orientation_error_deg"].append(ori_error_deg)
+    _trim_series(graph["position_error_mm"], max_samples)
+    _trim_series(graph["orientation_error_deg"], max_samples)
+
+
+def _plot_series_or_wait(label, values, unit):
+    """샘플 수가 충분하면 선 그래프를, 아니면 대기 메시지를 그린다."""
+    if len(values) < 2:
+        imgui.text(f"{label}: collecting {unit} samples...")
+        return
+    imgui.plot_lines(
+        label, np.asarray(values, dtype=np.float32),
+        graph_size=imgui.ImVec2(0.0, POSE_GRAPH_SERIES_HEIGHT))
+
+
+def _draw_pose_axis_group(title, axis_names, target_series, current_series,
+                          value_fmt, unit, error_scale=1.0):
+    """축별 target/current 시계열과 최신 오차를 묶어서 그린다."""
+    imgui.separator_text(title)
+    for axis, axis_name in enumerate(axis_names):
+        if target_series[axis]:
+            current_value = current_series[axis][-1]
+            target_value = target_series[axis][-1]
+            axis_error = (target_value - current_value) * error_scale
+            imgui.text(
+                f"{axis_name}: cur {value_fmt.format(current_value)}{unit}  "
+                f"tgt {value_fmt.format(target_value)}{unit}  "
+                f"err {value_fmt.format(axis_error)}"
+                f"{' mm' if error_scale == 1000.0 else ' deg'}")
+        _plot_series_or_wait(
+            f"target##{title}_target_{axis_name}", target_series[axis], unit)
+        _plot_series_or_wait(
+            f"current##{title}_current_{axis_name}", current_series[axis], unit)
+
+
+def _draw_pose_graph_panel(app):
+    """타겟 포즈와 현재 포즈의 시계열 비교 그래프를 그린다."""
+    _ensure_pose_graph_state(app)
+    imgui.text("Pose graph (home-relative target frame)")
+    if imgui.radio_button("Right##pose_graph_side_r", app.pose_graph_side == "r"):
+        app.pose_graph_side = "r"
+    imgui.same_line()
+    if imgui.radio_button("Left##pose_graph_side_l", app.pose_graph_side == "l"):
+        app.pose_graph_side = "l"
+    imgui.same_line()
+    if imgui.button("Clear history##pose_graph_clear"):
+        app.pose_graph_state[app.pose_graph_side] = {
+            "target_pos": [[], [], []],
+            "current_pos": [[], [], []],
+            "target_rpy": [[], [], []],
+            "current_rpy": [[], [], []],
+            "position_error_mm": [],
+            "orientation_error_deg": [],
+        }
+
+    side = app.pose_graph_side
+    _append_pose_graph_sample(app, side)
+    graph = app.pose_graph_state[side]
+
+    _draw_pose_axis_group(
+        "Position (m)", POS_AXES,
+        graph["target_pos"], graph["current_pos"],
+        value_fmt="{:+.3f}", unit=" m", error_scale=1000.0)
+    _draw_pose_axis_group(
+        "Orientation (deg)", RPY_AXES,
+        graph["target_rpy"], graph["current_rpy"],
+        value_fmt="{:+.1f}", unit=" deg", error_scale=1.0)
+
+    imgui.separator_text("Pose error norm")
+    if graph["position_error_mm"]:
+        imgui.text(
+            f"Position error: {graph['position_error_mm'][-1]:.1f} mm   "
+            f"Orientation error: {graph['orientation_error_deg'][-1]:.2f} deg")
+    _plot_series_or_wait("position error##pose_graph_pos_norm", graph["position_error_mm"], "mm")
+    _plot_series_or_wait(
+        "orientation error##pose_graph_ori_norm", graph["orientation_error_deg"], "deg")
+
+
 def _draw_joint_monitor(app, data):
     """감시 대상 관절의 현재 위치를 제한 범위 대비 진행 막대로 표시한다."""
     imgui.begin_child("joint_monitor", (0, 0), True)
@@ -421,7 +662,7 @@ def kinematic_tree_body_ids(app, scope=None, show_full=None):
     visible = {0}
     sides = ("r", "l") if scope == "both" else (scope,)
     for side in sides:
-        site_id = app.whole_body_solver.kinematics_solvers[side].site_id
+        site_id = app.whole_body_solver.site_ids[side]
         visible.update(tree.site_paths[site_id])
     return frozenset(visible)
 
@@ -486,9 +727,7 @@ def _draw_kinematic_tree(app):
 
     visible = kinematic_tree_body_ids(app)
     controlled_joint_ids = set(map(int, app.whole_body_solver.joint_ids))
-    target_site_ids = {
-        solver.site_id for solver in app.whole_body_solver.kinematics_solvers.values()
-    }
+    target_site_ids = set(app.whole_body_solver.site_ids.values())
     imgui.text(
         f"Showing {len(visible)}/{len(tree.bodies)} bodies  |  "
         f"{len(controlled_joint_ids)} controlled joints")
@@ -572,6 +811,8 @@ def _draw_control_center(app, targets):
     _draw_tab(
         f"Left Arm ({app.arm_mode['l'].upper()})###left_arm_tab",
         lambda: _draw_arm_panel(app, targets, "l"))
+    _draw_tab("Pose Graph", lambda: _draw_pose_graph_panel(app))
+    _draw_tab("IK Solver", lambda: _draw_ik_solver_panel(app))
 
     def draw_robot_controls():
         """리프트·유틸리티와 캔 파지 제어를 Robot/Grasp 탭에 묶어 그린다."""

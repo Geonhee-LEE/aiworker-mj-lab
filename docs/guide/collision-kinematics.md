@@ -3,7 +3,7 @@
 !!! info "기구학 학습 순서 4/4"
     이 문서는 FK의 point Jacobian을 geometry signed-distance 변화율로 연결한다.
     다음은 이 pose/Jacobian을 역문제로 푸는
-    [DLS와 위치 우선 IK 수학](ik-math.md)이다.
+    [Differential IK 수학](ik-math.md)이다.
 
 ## 1. 문제와 경계
 
@@ -16,7 +16,7 @@
 | `gradient` | controlled velocity에 대한 \(\nabla_q d\) |
 
 이 모듈은 “어떤 속도를 선택할지” 결정하지 않는다. `WholeBodyIK`가 gradient를
-collision CBF로 바꾸고, `control/optimization.py`가 안전한 속도를 푼다.
+collision CBF로 바꾸고, `kinematics/solver.py`가 안전한 속도를 푼다.
 
 일반 tree FK와 달리 geometry의 현재 world pose와 contact normal이 필요하므로
 기구학 모듈 중 이 파일만 live `MjData`를 읽는다. 그래도 `data.qpos`나 `data.ctrl`을
@@ -217,7 +217,7 @@ pair 수를 늘리는 것이 항상 안전한 것은 아니다. 필요한 접촉
 \dot d=\nabla d\,\dot q
 \]
 
-까지다. 다음 inequality는 `WholeBodyIK._collision_constraints()`가 만든다.
+까지다. 다음 inequality는 `kinematics.constraints.collision_velocity_barriers()`가 만든다.
 
 \[
 \nabla d\,\dot q
@@ -231,7 +231,7 @@ pair 수를 늘리는 것이 항상 안전한 것은 아니다. 필요한 접촉
 | \(d,p_A,p_B\) query | `kinematics/collision.py` |
 | \(J_A,J_B,\nabla d\) | `KinematicTree` + `kinematics/collision.py` |
 | CBF lower bound | `control/whole_body.py` |
-| soft constrained solve | `control/optimization.py` |
+| soft constrained solve | `kinematics/solver.py`, `kinematics/optimization.py` |
 | 선과 색상 표시 | `visualization/render.py` |
 
 렌더링과 controller가 같은 `CollisionConstraint`를 사용하므로 화면의 선과 safety
@@ -264,4 +264,4 @@ python3 tests/test_whole_body.py
 ```
 
 [← 이전: Quaternion과 Orientation Error](quaternion-math.md) ·
-[다음: DLS와 위치 우선 IK 수학 →](ik-math.md)
+[다음: Differential IK 수학 →](ik-math.md)
