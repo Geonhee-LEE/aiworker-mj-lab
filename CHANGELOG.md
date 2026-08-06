@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.0 — 2026-08-07
+
+- 18-DOF whole-body differential IK를 명시적 box-QP active-set 해법으로 확장하고,
+  자유도별 damping·base 참여율·joint-limit CBF를 같은 제약 문제에 통합
+- geometry 최근접점 기반 self/table collision distance gradient와 soft-barrier CBF
+  safety projection, collision 진단 시각화 추가
+- 양손 rigid-grasp, world-fixed target, 수동 주행 handover와 실제 swerve 물리 추종을
+  안정화하고 관련 회귀를 보강
+- Control Center에 target/current 손 pose 및 오차 시계열을 비교하는 Pose Graph 탭 추가
+- Whole-body IK 수식 증명, 코드 아키텍처/API 지도, Forward Kinematics 발표용 인포그래픽을
+  포함해 사용자·개발자 문서를 전면 갱신
+
 ## 1.4.0 — 2026-08-03
 
 - 회전·쿼터니언 변환을 `kinematics.rotations`의 단일 구현으로 통합
