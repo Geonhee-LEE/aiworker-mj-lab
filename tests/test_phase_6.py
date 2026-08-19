@@ -470,6 +470,65 @@ def run_manual_xyz_rpy_ik_gate():
     return ok
 
 
+def run_task_space_input_gate():
+    """world XYZ/RPY 입력이 UI 변환·평활화·IK를 거쳐 손을 움직이는지 검사한다."""
+    app = _make_sim_only_app()
+    app.arm_mode = {"r": "ik", "l": "ik"}
+    side = "r"
+    initial = app.whole_body_solver.site_state(app.data, side)
+    desired_position = initial.position + np.array([-0.035, -0.018, 0.028])
+    desired_quaternion = rotations.multiply_quaternions(
+        initial.quaternion, rotations.rpy_deg_to_quat([7.0, -4.0, 6.0]))
+    desired_rpy = rotations.quat_to_rpy_deg(desired_quaternion)
+
+    teleop_ui._ensure_task_space_state(app)
+    applied, message = teleop_ui._apply_task_space_target(
+        app, side, desired_position, desired_rpy)
+    converted_position, converted_quaternion = teleop_targets.target_world_pose(
+        app, side)
+    conversion_ok = (
+        applied
+        and "tracking" in message
+        and np.allclose(converted_position, desired_position, atol=1e-10)
+        and abs(float(np.dot(converted_quaternion, desired_quaternion)))
+        > 1.0 - 1e-10
+    )
+
+    solver = app.whole_body_solver
+    for _ in range(80):
+        app._smooth_hand_targets()
+        target_pose = app._smoothed_target_poses()[side]
+        command = solver.solve(
+            app.data, {side: target_pose}, 0.04,
+            active_sides=(side,), whole_body_enabled=False)
+        app.data.qpos[solver.qpos_adrs[solver.side_indices[side]]] = (
+            command.arm_positions[side])
+        mujoco.mj_forward(app.model, app.data)
+    final = solver.site_state(app.data, side)
+    error = pose_tasks.pose_error(
+        final.position, final.quaternion, desired_position, desired_quaternion)
+    moved = np.linalg.norm(final.position - initial.position) > 0.02
+    converged = error.position_norm < 0.005 and error.orientation_norm < np.radians(5.0)
+
+    previous_target = np.asarray(app.targets["pos_r"], dtype=float).copy()
+    finite_ok, _ = teleop_ui._apply_task_space_target(
+        app, side, [np.nan, 0.0, 0.0], [0.0, 0.0, 0.0])
+    side_ok, _ = teleop_ui._apply_task_space_target(
+        app, "invalid", initial.position, desired_rpy)
+    rejects_invalid = (
+        not finite_ok and not side_ok
+        and np.allclose(app.targets["pos_r"], previous_target))
+
+    ok = conversion_ok and moved and converged and rejects_invalid
+    print(
+        "Task-space input gate: "
+        f"conversion={conversion_ok} moved={moved} "
+        f"pos_err={error.position_norm*1000:.2f}mm "
+        f"ori_err={np.degrees(error.orientation_norm):.2f}deg "
+        f"rejects_invalid={rejects_invalid}: {'OK' if ok else 'FAIL'}")
+    return ok
+
+
 def run_split_ui_and_tree_gate():
     """탭 작업 공간이 간결하고 트리 필터가 손의 체인을 따르는지 검사한다."""
     app = _make_sim_only_app()
@@ -521,6 +580,7 @@ def main():
           and run_numeric_target_marker_sync_gate()
           and run_whole_body_toggle_gate()
           and run_collision_visualization_gate()
+          and run_task_space_input_gate()
           and run_manual_xyz_rpy_ik_gate())
     print("PASS" if ok else "FAIL")
     sys.exit(0 if ok else 1)

@@ -127,5 +127,5 @@ python3 src/teleop_app.py
 
 - 모드 조합이 헷갈리면 [모드 선택](control-modes.md)
 - 모든 버튼과 키를 보려면 [화면과 조작](run.md)
-- 왜 이런 구조인지 이해하려면 [동작 원리](concepts.md)
+- 왜 이런 구조인지 이해하려면 [시스템 구조](overview.md)
 - 이상 동작을 진단하려면 [문제 해결](troubleshooting.md)

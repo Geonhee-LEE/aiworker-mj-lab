@@ -1,5 +1,31 @@
 # 릴리스 기록
 
+## 2.0.0 — Explicit Whole-body QP & Safety Projection
+
+2026-08-07 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/v2.0.0)
+
+### 제어와 수치 해법
+
+- 18-DOF 전신 differential IK에 명시적 box-QP active-set 해법 추가
+- 자유도별 damping, base 참여율과 joint-limit CBF를 velocity bound 문제에 통합
+- geometry 최근접점 기반 self/table collision gradient와 별도 soft-barrier safety
+  projection 적용
+- Bimanual rigid-grasp, world-fixed target, 수동 주행 handover와 실제 스워브 추종 안정화
+
+### 화면과 문서
+
+- target/current 손 pose와 오차 시계열을 비교하는 Pose Graph 탭 추가
+- Pseudoinverse, DLS, QP의 공통 task와 서로 다른 수치 경로 문서화
+- Whole-body 명목 solve, base shaping, collision projection의 실제 호출 순서 반영
+
+### 검증
+
+- 작은 box-QP의 완전탐색 optimum 비교
+- joint-limit/collision CBF, arm-only/base participation hard gate 검증
+- Phase 0–6, Whole-body 통합과 `mkdocs build --strict` 통과
+
+전체 diff: [1.4.0...v2.0.0](https://github.com/ggh-png/ffw-sh5-grasp/compare/1.4.0...v2.0.0)
+
 ## 1.4.0 — Lean Runtime & Faster IK Defaults
 
 2026-08-03 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.4.0)

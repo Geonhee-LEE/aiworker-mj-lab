@@ -1,130 +1,104 @@
-# `src/ffw_sh5_grasp/visualization/ui.py`
+# UI와 시각화
 
-ImGui 기반 텔레옵 UI를 그린다. 자주 쓰는 조작은 `Control Center`, 읽기 중심 도구는
-`Diagnostics` 탭으로 묶는다. 두 워크스페이스만 **네이티브 OS 창**으로 분리되므로
-메인 MuJoCo 창 밖으로 이동할 수 있으면서 작업 표시줄과 화면은 복잡해지지 않는다.
+`visualization/ui.py`는 ImGui widget을 그리고 target·mode·표시 상태를 바꾼다.
+`visualization/render.py`는 GLFW, MuJoCo scene, camera, 3D Gizmo와 collision overlay를
+담당한다.
 
-MoveL/Bimanual MoveL 상태 전이 안에서 이 패널이 맡는 위치는
-[목표와 좌표 변환](teleop_targets.md)과 [렌더링과 Gizmo](teleop_render.md)에서 확인한다.
+## 모듈별 역할
 
-조그 간격, 슬라이더 범위와 창 초기 배치는 `config/default.yaml`의 `ui` 구역에서
-조절한다. 사용자 설정 방법은 [YAML 파라미터 설정](../configuration.md)을 참고한다.
+| 파일 | 읽기 | 쓰기 |
+|---|---|---|
+| `ui.py` | app 상태, `data` 진단값 | `app.targets`, mode, UI 상태 |
+| `render.py` | model/data, target, collision 진단값 | camera·target 상태, framebuffer/window 출력 |
 
-## 역할
+두 모듈 모두 IK를 풀거나 actuator command를 기록하거나 `mj_step()`을 호출하지 않는다.
 
-| 항목 | 내용 |
-|---|---|
-| 입력 | `app` 객체의 현재 상태 |
-| 출력 | `app.targets`, mode, marker 선택, 버튼 상태 변경 |
-| 직접 물리 계산 | 없음 |
-| 렌더링 | ImGui widget만 담당 |
-| 창 상태 | `app.ui_windows`에 두 워크스페이스 표시 여부 저장 |
+## UI 구성
+
+```text
+FFW-SH5 Status & Windows
+├── Control Center
+│   ├── Target                 MoveL, capture/release, marker jog
+│   ├── Task Space             world XYZ/RPY 숫자 입력
+│   ├── Right / Left Arm       IK pose 또는 FK joint
+│   ├── Pose Graph             target/current pose와 오차
+│   ├── IK Solver              Pseudoinverse, DLS, QP 설정
+│   └── Robot / Grasp          lift, 표시, 손가락 명령
+└── Diagnostics
+    ├── Kinematic Tree
+    └── Joint Monitor
+```
+
+`draw_panel()`이 두 workspace를 구성한다. Control Center와 Diagnostics는 ImGui
+multi-viewport로 메인 MuJoCo 창 밖의 OS 창으로 분리하거나 다시 주 창으로 가져올 수
+있다. 표시 상태는 `app.ui_windows`에 저장된다.
+
+### Task Space 입력
+
+Task Space 탭은 오른손 또는 왼손의 MuJoCo world-frame 절대 XYZ(m)와 RPY(deg)를
+입력받는다. `_apply_task_space_target()`은 다음만 수행한다.
+
+1. 3개씩의 유한한 숫자인지 검사한다.
+2. 캡처된 양손 모드라면 해제하고 선택한 팔을 IK 모드로 바꾼다.
+3. `application.targets`의 역변환으로 내부 target 값을 갱신한다.
+4. marker를 동기화한다.
+
+이후 target smoothing, IK와 actuator 적용은 기존 `_step_physics()` 경로가 담당한다.
+도달 불가능한 pose는 관절·속도·collision 제약 안에서 가능한 만큼 추종한다.
+
+## 렌더링 흐름 { #render-flow }
+
+```mermaid
+flowchart TD
+    RUN["application/teleop.py<br>TeleopApp.run()"] --> BEGIN["visualization/render.py<br>begin_frame()"]
+    BEGIN --> CAM["handle_camera_mouse()"]
+    CAM --> UI["visualization/ui.py<br>draw_panel()"]
+    UI --> PHYS["application/teleop.py<br>_step_physics()"]
+    PHYS --> SCENE["visualization/render.py<br>render_scene()"]
+    SCENE --> SYNC["application/targets.py<br>sync_ik_mocaps_from_targets()"]
+    SYNC --> UPDATE["mujoco.mjv_updateScene()"]
+    UPDATE --> OVERLAY["_append_collision_overlay()"]
+    OVERLAY --> DRAW["mujoco.mjr_render()"]
+    DRAW --> GIZMO["draw_transform_gizmo()"]
+    GIZMO --> SET["application/targets.py<br>set_gizmo_target_world_pose()"]
+    GIZMO --> IMGUI["imgui.render() · platform windows"]
+    IMGUI --> END["end_frame()"]
+```
+
+collision 표시가 꺼져 있으면 `_append_collision_overlay()` 단계는 생략된다.
+`collision_visualization_data()`는 WBIK가 계산한 동일한 `CollisionConstraint`만 읽으며
+거리나 gradient를 다시 계산하지 않는다.
+
+## Gizmo 좌표
+
+`pose_to_imguizmo_matrix()`와 `imguizmo_matrix_to_pose()`가 world pose와 4×4 Gizmo
+행렬을 변환한다. MuJoCo scene은 framebuffer 좌표를 사용하지만 multi-viewport ImGui는
+desktop 좌표를 사용하므로, Gizmo의 draw rect는 `imgui.get_main_viewport()`의 위치와
+크기를 사용한다. camera projection의 aspect ratio만 framebuffer 크기를 따른다.
+
+Gizmo drag 결과는 `set_gizmo_target_world_pose()`를 통해 내부 target frame으로
+역변환된다. target 좌표의 의미는 [애플리케이션](teleop_app.md#target-frames)을
+참고한다.
 
 ## 주요 함수
 
 | 함수 | 역할 |
 |---|---|
-| `_begin_expanded(title, flags=0)` | ImGui `begin()` 반환값 차이를 정규화 |
-| `_ensure_window_state(app)` | 창 표시 상태·트리 filter와 최초 외부 분리 요청 준비 |
-| `_begin_tool_window(app, key)` | 외부/메인 배치 요청을 적용하고 독립 도구 창 시작 |
-| `_ik_err_text(app, side)` | IK/FK 모드에 맞는 오차 표시 문자열 생성 |
-| `_clamp(value, lo, hi)` | 값 clamp |
-| `_slider_float_clamped(label, value, lo, hi, fmt)` | slider 값 clamp 처리 |
-| `_draw_vector_sliders(prefix, values, axes, lo, hi, fmt, on_change)` | XYZ/RPY 반복 slider 렌더링 |
-| `_ensure_jog_state(app)` | marker jog 관련 기본 상태 생성 |
-| `_clamp_pose_targets(targets, side)` | 손 target 범위 제한 |
-| `_apply_cartesian_jog(app, side, pos_delta, rpy_delta)` | 선택된 marker target을 step 단위로 이동/회전 |
-| `_repeat_button(label)` | 누르고 있는 동안 반복되는 버튼 처리 |
-| `_draw_jog_row(app, title, axis_labels, step, is_rotation)` | XYZ/RPY +/- jog 버튼 행 |
-| `_active_marker_choices(app)` | 현재 controller 상태에서 선택 가능한 marker 목록 반환 |
-| `_selected_marker_label(app)` | 선택 marker label 반환 |
-| `_draw_cyclo_control_panel(app)` | MoveL/Bimanual MoveL, capture/release, marker jog UI |
-| `_draw_status_panel(app, data)` | 상태 요약 표시 |
-| `_draw_ik_pose_controls(app, targets, side)` | 손별 XYZ/RPY target slider |
-| `_draw_fk_joint_controls(app, side)` | 손별 FK joint slider |
-| `_draw_arm_panel(app, targets, side)` | 오른팔/왼팔 IK/FK 패널 |
-| `_draw_can_grasp_panel(app, targets)` | grasp/thumb synergy 패널 |
-| `_draw_lift_utils_panel(app, targets)` | 전신 ON/OFF, lift/reset/contact/collision/camera 패널 |
-| `_draw_ik_solver_panel(app)` | pseudoinverse·DLS·QP 선택과 QP 가중치 편집 |
-| `_draw_joint_monitor(app, data)` | 관절 위치 monitor |
-| `kinematic_tree_body_ids(app, scope, show_full)` | 오른팔/왼팔 target의 조상 body 또는 전체 body id 선택 |
-| `_draw_kinematic_tree(app)` | body 아래 joint/site를 중첩한 실시간 기구학 트리 렌더링 |
-| `_draw_window_visibility(app)` | 표시 여부와 **Detach/Return** 배치 버튼 렌더링 |
-| `_draw_tab(label, draw_contents)` | 선택된 tab 내용만 렌더링 |
-| `_draw_control_center(app, targets)` | Target·양팔·IK Solver·Robot/Grasp 탭 구성 |
-| `_draw_diagnostics(app, data)` | Kinematic Tree·Joint Monitor 탭 구성 |
-| `draw_panel(app)` | 두 워크스페이스의 frame entry point |
+| `ui.draw_panel(app)` | UI 프레임 진입점 |
+| `ui.kinematic_tree_body_ids(...)` | 진단 트리에 표시할 body 범위 선택 |
+| `render.setup_render(...)` / `shutdown(...)` | GLFW·ImGui·MuJoCo render 자원 생명주기 |
+| `render.begin_frame(...)` / `end_frame(...)` | event 처리와 프레임 시간 조절 |
+| `render.handle_camera_mouse(...)` | UI가 사용하지 않는 mouse 입력으로 camera 이동 |
+| `render.render_scene(...)` | marker, scene, overlay, Gizmo와 ImGui 렌더 |
+| `render.draw_transform_gizmo(...)` | 활성 target의 world pose 조작 |
 
-## 함수 흐름
+## 검증
 
-```mermaid
-flowchart TD
-    A["teleop_app.run<br>프레임에서 UI 렌더링 진입"] --> B["draw_panel(app)<br>두 workspace 구성"]
-    B --> C["Status & Windows<br>FPS/solver 상태 + 창 표시 관리"]
-    B --> W["Control Center<br>운영자가 자주 쓰는 조작"]
-    W --> D["Target tab<br>MoveL/Bimanual marker 제어"]
-    W --> E["Right / Left Arm tabs<br>팔별 IK/FK 조작"]
-    W --> S["IK Solver tab<br>해법 선택 · QP 가중치"]
-    W --> F["Robot / Grasp tab<br>lift · utility · synergy"]
-    B --> X["Diagnostics<br>읽기 중심 도구"]
-    X --> G["Joint Monitor tab<br>현재 관절값"]
-    X --> H["Kinematic Tree tab<br>body → joint/site 계층"]
-
-    D --> I["_apply_cartesian_jog()<br>버튼 jog를 위치/RPY target 변화로 적용"]
-    I --> J["app.targets update<br>UI 입력을 target 상태에 저장"]
-    D --> K["capture_grasp() / release_grasp()<br>양팔 강체 제어 모드 전환"]
-    E --> L["_draw_ik_pose_controls()<br>손 위치/RPY slider 표시 및 갱신"]
-    E --> M["_draw_fk_joint_controls()<br>관절각 slider 표시 및 갱신"]
-    L --> J
-    M --> N["app.fk_q_deg update<br>FK 목표 관절각 저장"]
-    F --> O["grasp/thumb target update<br>손가락 synergy 목표 저장"]
-    F --> P["lift/reset/contact/camera state update<br>유틸 명령과 표시 상태 갱신"]
+```bash
+python3 tests/test_phase_6.py
 ```
 
-## 창 구조
+Phase 6는 UI jog clamp, Task Space 입력, window 상태, kinematic tree 범위, Gizmo 행렬
+왕복, target/marker 동기화와 collision overlay를 검사한다.
 
-```text
-FFW-SH5 Status & Windows       항상 표시되는 상태/창 관리자
-├── FFW-SH5 Control Center     기본 표시
-│   ├── Target                 MoveL, capture/release, jog
-│   ├── Right / Left Arm       팔별 IK pose 또는 FK joint
-│   ├── IK Solver              pseudoinverse, DLS, QP와 가중치
-│   └── Robot / Grasp          전신·lift·시각화·손가락
-└── FFW-SH5 Diagnostics        기본 표시
-    ├── Kinematic Tree         world → body → joint/site
-    └── Joint Monitor          현재 관절값
-```
-
-첫 프레임에는 상태 창만 MuJoCo 주 창 안에 남고 두 워크스페이스는 주 창 오른쪽
-바깥에 생성된다. 각 창을 다른 모니터로 옮길 수 있다. **Detach tools
-outside**는 현재 배치 파일과 관계없이 다시 외부로 내보내고, **Return tools to main**은
-두 워크스페이스를 주 창 안 기본 위치로 되돌린다.
-
-각 워크스페이스 오른쪽 위 `×`로 닫아도 상태 창의 **Workspaces** 체크박스로 다시 열
-수 있다. **Show all**, **Control only**, **Hide all**은 표시 상태를 일괄 변경하며 창의
-위치와 크기는 ImGui 설정에 저장된다. 실제 OS 창 생성과 context 전환은
-[`visualization/render.py`](teleop_render.md)가 담당한다.
-
-## 기구학 트리 창
-
-기본 **Both arms** 범위에서는 양쪽 `grasp_target`까지 필요한 조상 body만 보여준다.
-`Right`/`Left`로 한 체인만 고를 수 있고, **Show full MJCF tree**를 켜면 wheel, head,
-finger, 물체를 포함한 전체 모델 트리를 탐색한다.
-
-- `[controlled]`: Whole-Body IK의 Jacobian 열로 쓰는 joint
-- `[IK target]`: FK/Jacobian을 계산하는 손끝 site
-- hinge: 현재 각도를 degree로 표시
-- slide: 현재 변위를 meter로 표시
-
-## 데이터 변경 원칙
-
-- UI는 `app.targets`와 app 상태만 바꾼다.
-- `mj_step`, IK solve, actuator command는 수행하지 않는다.
-- 실제 반영은 `application/teleop.py`의 `_step_physics()`에서 한다.
-- **Whole-body Control** 버튼은 `toggle_whole_body_control()`을 호출하고 상태줄에는
-  `ON` 또는 `OFF (arm-only)`와 실제 body command가 표시된다.
-- **IK Solver**의 모든 QP slider는 대응 속도 상한 기준의 무차원 strength다. Slider
-  hover 설명에서 추종·억제·자세 복귀·충돌 slack의 의미와 값이 커질 때의 효과를
-  확인할 수 있다.
-- `Move time`은 현재 UI 호환용 상태값이며 trajectory scheduler에는 연결되지 않는다.
-  목표 응답은 `application/teleop.py`의 frame rate limit과 controller gain이 결정한다.
+[← 애플리케이션](teleop_app.md) · [시스템 구조](../overview.md)

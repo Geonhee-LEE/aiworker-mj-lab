@@ -17,6 +17,7 @@ import numpy as np
 
 from ..application import targets
 from ..config import SETTINGS
+from ..kinematics import rotations
 
 JOG_POS_STEP_DEFAULT = SETTINGS.number("ui.jog_position_step_m", positive=True)
 JOG_RPY_STEP_DEFAULT = SETTINGS.number("ui.jog_rotation_step_deg", positive=True)
@@ -34,6 +35,7 @@ POSE_GRAPH_HISTORY_SECONDS = 10.0
 POSE_GRAPH_SERIES_HEIGHT = 55.0
 POS_AXES = ("X", "Y", "Z")
 RPY_AXES = ("Roll", "Pitch", "Yaw")
+TASK_SPACE_SIDES = (("r", "Right hand"), ("l", "Left hand"))
 UI_WINDOW_SPECS = SETTINGS.get("ui.windows")
 for _spec in UI_WINDOW_SPECS.values():
     _spec["position"] = tuple(_spec["position"])
@@ -306,6 +308,135 @@ def _draw_cyclo_control_panel(app):
         _draw_vector_sliders(
             "virtual_object_rpy", rpy, RPY_AXES, *HAND_RPY_RANGE,
             "%.1f deg", apply_virtual_edit)
+
+
+def _load_task_space_pose(app, side, source="target"):
+    """손의 world pose를 task-space 숫자 입력 버퍼에 복사한다.
+
+    ``source="target"``은 현재 명령 마커를, ``source="current"``는 실제 손끝
+    site를 읽는다. 입력 중인 숫자가 매 프레임 목표값으로 덮이지 않도록 명시적인
+    Load 동작에서만 버퍼를 갱신한다.
+    """
+    if source == "target":
+        position, quaternion = targets.target_world_pose(app, side)
+    elif source == "current":
+        state = app.whole_body_solver.site_state(app.data, side)
+        position, quaternion = state.position, state.quaternion
+    else:
+        raise ValueError(f"Unknown task-space pose source: {source!r}")
+    app.task_space_position[side] = np.asarray(position, dtype=float).tolist()
+    app.task_space_rpy[side] = rotations.quat_to_rpy_deg(quaternion)
+
+
+def _ensure_task_space_state(app):
+    """world XYZ/RPY 입력 패널의 손별 편집 버퍼와 상태 문구를 지연 초기화한다."""
+    if not hasattr(app, "task_space_position"):
+        app.task_space_position = {}
+        app.task_space_rpy = {}
+        for side, _label in TASK_SPACE_SIDES:
+            _load_task_space_pose(app, side)
+    if not hasattr(app, "task_space_side") or app.task_space_side not in dict(TASK_SPACE_SIDES):
+        app.task_space_side = "r"
+    if not hasattr(app, "task_space_status"):
+        app.task_space_status = "Load or edit a world pose, then press Apply Target."
+
+
+def _apply_task_space_target(app, side, world_position, world_rpy):
+    """world XYZ/RPY 숫자를 손 목표로 변환해 기존 IK 명령 경로에 연결한다.
+
+    성공하면 ``app.targets``만 바꾸고, 실제 이동 속도 제한과 IK/actuator 적용은
+    메인 물리 루프가 그대로 담당한다. ``(성공 여부, 사용자 메시지)``를 반환한다.
+    """
+    position = np.asarray(world_position, dtype=float)
+    rpy = np.asarray(world_rpy, dtype=float)
+    if position.shape != (3,) or rpy.shape != (3,) or not np.all(
+            np.isfinite(np.concatenate((position, rpy)))):
+        return False, "Rejected: XYZ and RPY must contain three finite numbers."
+    if side not in dict(TASK_SPACE_SIDES):
+        return False, f"Rejected: unknown hand {side!r}."
+
+    target_position = np.asarray(
+        targets.world_to_target_pos(app, side, position), dtype=float)
+
+    # 캡처된 가상 물체가 다음 프레임에 양손 목표를 다시 덮어쓰지 않게 독립 MoveL로
+    # 전환한다. FK 팔은 현재 pose에서 IK로 전환한 다음 새 목표를 기록해 점프를 막는다.
+    if getattr(app, "cyclo_grasp_captured", False):
+        app.release_grasp()
+        app.cyclo_controller = "movel"
+    if app.arm_mode[side] != "ik":
+        app.set_arm_mode(side, "ik")
+
+    quaternion = rotations.rpy_deg_to_quat(rpy)
+    app.targets[f"pos_{side}"] = target_position.tolist()
+    target_rpy = np.asarray(
+        targets.world_quat_to_target_rpy(app, side, quaternion), dtype=float)
+    # 같은 회전을 나타내는 ±360도 표현 중 현재 평활화 상태에 가장 가까운 값을 골라
+    # +179도에서 -179도로 입력할 때 불필요하게 358도를 회전하는 경로를 피한다.
+    smoothed_rpy = np.asarray(app.smoothed_rpy[side], dtype=float)
+    target_rpy += 360.0 * np.round((smoothed_rpy - target_rpy) / 360.0)
+    app.targets[f"rpy_{side}"] = target_rpy.tolist()
+    targets.sync_ik_mocaps_from_targets(app)
+    return True, f"Applied {dict(TASK_SPACE_SIDES)[side]} world pose; IK is tracking it."
+
+
+def _draw_task_space_panel(app):
+    """절대 world-frame 손 pose를 숫자로 입력해 IK 목표로 적용하는 UI를 그린다."""
+    _ensure_task_space_state(app)
+    imgui.text_wrapped(
+        "Enter an absolute end-effector pose in the MuJoCo world frame. "
+        "Apply Target sends it through target smoothing, whole-body IK, and actuators.")
+
+    imgui.text("End effector")
+    for index, (side, label) in enumerate(TASK_SPACE_SIDES):
+        if index:
+            imgui.same_line()
+        if imgui.radio_button(
+                f"{label}##task_space_{side}", app.task_space_side == side):
+            app.task_space_side = side
+
+    side = app.task_space_side
+    position = app.task_space_position[side]
+    rpy = app.task_space_rpy[side]
+    imgui.separator_text("World position (m)")
+    for index, axis in enumerate(POS_AXES):
+        changed, value = imgui.input_float(
+            f"{axis}##task_space_pos_{side}_{axis}", position[index],
+            0.001, 0.010, "%.4f")
+        if changed:
+            position[index] = value
+
+    imgui.separator_text("World orientation RPY (deg)")
+    for index, axis in enumerate(RPY_AXES):
+        changed, value = imgui.input_float(
+            f"{axis}##task_space_rpy_{side}_{axis}", rpy[index],
+            1.0, 10.0, "%.2f")
+        if changed:
+            rpy[index] = value
+
+    if imgui.button("Load Current Pose##task_space_current"):
+        _load_task_space_pose(app, side, "current")
+        app.task_space_status = "Loaded the measured end-effector pose."
+    imgui.same_line()
+    if imgui.button("Load Target Pose##task_space_target"):
+        _load_task_space_pose(app, side, "target")
+        app.task_space_status = "Loaded the active IK target pose."
+
+    if imgui.button("Apply Target##task_space_apply"):
+        _ok, app.task_space_status = _apply_task_space_target(
+            app, side, position, rpy)
+    _item_tooltip(
+        "Applies this hand independently. If a bimanual grasp is captured, it is released first.")
+    imgui.text_wrapped(app.task_space_status)
+
+    state = app.whole_body_solver.site_state(app.data, side)
+    current_rpy = rotations.quat_to_rpy_deg(state.quaternion)
+    imgui.separator_text("Measured end-effector pose")
+    imgui.text(
+        f"XYZ  {state.position[0]:+.4f}  {state.position[1]:+.4f}  "
+        f"{state.position[2]:+.4f} m")
+    imgui.text(
+        f"RPY  {current_rpy[0]:+.2f}  {current_rpy[1]:+.2f}  "
+        f"{current_rpy[2]:+.2f} deg")
 
 
 def _draw_status_panel(app, data):
@@ -805,6 +936,7 @@ def _draw_control_center(app, targets):
     if not imgui.begin_tab_bar("control_center_tabs"):
         return
     _draw_tab("Target", lambda: _draw_cyclo_control_panel(app))
+    _draw_tab("Task Space", lambda: _draw_task_space_panel(app))
     _draw_tab(
         f"Right Arm ({app.arm_mode['r'].upper()})###right_arm_tab",
         lambda: _draw_arm_panel(app, targets, "r"))

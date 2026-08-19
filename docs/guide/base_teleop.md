@@ -1,188 +1,223 @@
-# `src/ffw_sh5_grasp/control/base.py`
+# 모바일 베이스와 스워브 제어
 
-!!! info "핵심 알고리즘 학습 순서 6/7"
-    [전신 IK](whole_body_ik.md)가 반환한 `BodyTwist`를 실제 세 wheel module 명령으로
-    바꾸는 단계다. 다음은 손 actuator와 접촉 판정을 다루는
-    [손 파지와 접촉 판정](grasp.md)이다.
+!!! info "핵심 알고리즘 학습 순서 5/6"
 
-body-frame 속도 명령을 ROBOTIS AI Worker식 스워브 바퀴 명령으로 변환한다. 키보드는
-가능한 입력원 중 하나일 뿐이며 whole-body IK도 같은 `BodyTwist` 경로를 사용한다.
+    [전신 IK](whole_body_ik.md)가 반환한 `BodyTwist`를 세 wheel module의 조향각과
+    구동 속도로 바꾸는 단계다. 다음은 [손 파지와 접촉 판정](grasp.md)이다.
 
-주행 속도, 스워브 형상, 조향·반전 제어값은 `config/default.yaml`의 `base` 구역에
-있다. 바꾼 뒤 필요한 물리 회귀는 [YAML 파라미터 설정](../configuration.md)을 따른다.
+구현은 `src/ffw_sh5_grasp/control/base.py`에 있다. 키보드와 전신 IK는 모두
+body-frame `BodyTwist(vx, vy, wz)`를 만들며, 이후 같은 스워브 제어 경로를 사용한다.
+설정값은 `config/default.yaml`의 `base` 구역에 있다.
 
-## 역할
+## 구성별 역할
 
-| 단계 | 내용 |
+| 구성 | 역할 |
 |---|---|
-| 입력 smoothing | 전진/후진/strafe/yaw 키를 부드러운 body-frame 속도로 변환 |
-| swerve 역기구학 | body velocity를 3개 wheel module의 조향각/바퀴 속도로 변환 |
-| swerve 정기구학 | 실제 조향각/바퀴 속도 feedback에서 body twist를 최소제곱으로 복원 |
-| 제한 조향 | 런타임 ±2π 범위에서 `angle + k*pi` 동치 상태를 비교해 가장 가까운 상태 선택 |
-| 반전 처리 | 움직이는 바퀴는 감속-조향-가속, 이미 멈춘 바퀴는 즉시 방향 전환 |
-| 안전 처리 | command-trajectory steering rate limit, 전체 module alignment gating, 비율 보존 전역 wheel saturation |
+| `BaseTeleop` | 키 입력을 평활화된 body-frame 속도로 변환 |
+| `SwerveKinematics` | body twist와 wheel state 사이의 순수 기구학 |
+| `SwerveDrive` | 조향 제한, 반전 FSM, 정렬 gate와 drive rate limit |
+
+`BaseTeleop`은 바퀴를 모르고, `SwerveKinematics`는 키보드·MuJoCo·actuator를 모른다.
+`SwerveDrive`만 wheel feedback과 이전 명령 상태를 사용한다.
 
 ## 기호와 좌표계
 
-| 기호 | 단위·frame | 코드 표현 |
+| 기호 | 의미 | 단위·frame |
 |---|---|---|
-| \((v_x,v_y,\omega)\) | m/s, m/s, rad/s · robot body frame | `BodyTwist(vx, vy, wz)` |
-| \((x_i,y_i)\) | m · base 중심에서 wheel module까지 | `WHEEL_POS[name]` |
-| \((v_{i,x},v_{i,y})\) | m/s · module 위치의 body-frame 속도 | `wheel_vx`, `wheel_vy` |
-| \(\theta_i\) | rad · steering joint 목표 | `steer` |
-| \(\dot\phi_i\) | rad/s · wheel drive 목표 | `wheel_speed` |
-| \(r\) | m · wheel 반지름 | `WHEEL_RADIUS` |
+| \((v_x,v_y,\omega)\) | 차체 속도 | m/s, m/s, rad/s · body frame |
+| \((x_i,y_i)\) | 차체 중심에서 module \(i\)까지의 위치 | m · body frame |
+| \((v_{i,x},v_{i,y})\) | module 위치의 평면 속도 | m/s · body frame |
+| \(\beta_i\) | body frame에서 본 wheel 진행 방향 | rad |
+| \(\delta_i\) | module joint angle offset | rad |
+| \(\theta_i\) | steering joint 목표 | rad |
+| \(\dot\phi_i\) | wheel drive 목표 | rad/s |
+| \(r\) | wheel 반지름 | m |
 
-## 수식
+## 스워브 역기구학
 
-강체가 각속도 \(\omega\)로 돌면서 동시에 \((v_x,v_y)\)로 평행이동할 때, 중심에서
-\((x_i,y_i)\)만큼 떨어진 점의 속도는 \(v_{point}=v_{center}+\omega\times r\)이고,
-2D에서 \(\omega \times (x_i,y_i) = \omega(-y_i, x_i)\)다(회전 접선속도가 반지름
-벡터에 수직). 바퀴 모듈 위치 \((x_i, y_i)\)(베이스 중심 기준), 몸체 속도
-\(v_x, v_y, \omega\)에서 그 모듈이 실제로 내야 하는 평면 속도(강체 운동학):
+차체가 병진하면서 회전하면 module \(i\)의 속도는 중심 속도와 회전 접선속도의
+합이다.
 
 \[
-\begin{pmatrix} v_{i,x} \\ v_{i,y} \end{pmatrix}
+\begin{bmatrix}v_{i,x}\\v_{i,y}\end{bmatrix}
 =
-\begin{pmatrix} v_x - \omega\, y_i \\ v_y + \omega\, x_i \end{pmatrix}
+\begin{bmatrix}v_x-\omega y_i\\v_y+\omega x_i\end{bmatrix}
 \]
 
-이 벡터의 극좌표 변환이 그 모듈의 목표 조향각/목표 속력이고, 바퀴 반지름 \(r\)로
-나누면 목표 구동 각속도가 된다:
+이 벡터의 방향과 크기를 구하면 wheel 진행 방향과 구동 속도가 된다.
 
 \[
-\theta_i = \operatorname{atan2}(v_{i,y}, v_{i,x}), \quad
-s_i = \sqrt{v_{i,x}^2+v_{i,y}^2}, \quad
-\dot\phi_i = s_i / r
+\beta_i=\operatorname{atan2}(v_{i,y},v_{i,x}),\qquad
+s_i=\sqrt{v_{i,x}^2+v_{i,y}^2},\qquad
+\dot\phi_i=\frac{s_i}{r}
 \]
 
 <figure markdown>
   ![차체 병진 속도와 회전 접선 속도를 합쳐 스워브 모듈 속도를 만드는 기하](../assets/swerve-velocity.svg)
-  <figcaption>빨강은 모든 모듈에 같은 병진 속도, 주황은 모듈 위치에 따른 회전 접선 속도, 초록은 두 벡터를 더한 최종 모듈 속도다.</figcaption>
+  <figcaption>빨강은 차체 병진 속도, 주황은 module 위치의 회전 접선속도, 초록은 둘을 더한 최종 module 속도다.</figcaption>
 </figure>
 
-그림에서 초록 벡터의 방향이 조향각이고 길이가 바퀴의 선속도다. 같은 차체 회전
-명령이라도 중심에서의 위치 \(r_i\)가 다르므로 모듈마다 주황 벡터가 달라진다.
+조향 joint에는 module offset을 제거한 각도를 사용한다.
 
-이 극좌표 변환이 필요한 이유는 스워브 모듈이 "방향(조향각) + 그 방향으로의
-속력(구동)"이라는 두 액추에이터로만 이 속도 벡터를 낼 수 있기 때문이다 —
-180도 반전 최적화, 정렬 게이팅, 반전 시퀀스(FSM)의 물리적 근거까지 포함한 전체
-수식과 구현의 대응은 아래 [수식에서 코드까지](#equation-to-code)에서 이어진다.
+\[
+\theta_i^{raw}=\operatorname{normalize}(\beta_i-\delta_i)
+\]
 
-런타임 조향 범위는 공식 AI Worker 설정과 같은 약 ±2π다. 그래도 알고리즘은 좁은
-범위에도 동작하도록 후보를 먼저 범위로 거른다. `test_whole_body.py`는 별도의 ±1.58
-rad kinematics를 주입해 100° 요청이 -80° 조향 + 역구동으로 표현되는지도 확인한다.
+### 동치 조향 상태
 
-## 수식에서 코드까지 { #equation-to-code }
+같은 wheel 속도 벡터는 다음 두 상태로 표현할 수 있다.
 
-| 수식 단계 | 코드 표현 | 위치 |
-|---|---|---|
-| \(v_{i,x}=v_x-\omega y_i\) | `wheel_vx = twist.vx - twist.wz * module_y` | `SwerveKinematics.inverse()` |
-| \(v_{i,y}=v_y+\omega x_i\) | `wheel_vy = twist.vy + twist.wz * module_x` | `SwerveKinematics.inverse()` |
-| \(\theta_i=\operatorname{atan2}(v_{i,y},v_{i,x})\) | `math.atan2(wheel_vy, wheel_vx)` | `inverse()` |
-| \(\dot\phi_i=\|v_i\|/r\) | `linear_speed / self.wheel_radius` | `inverse()` |
-| \(A[v_x,v_y,\omega]^T=b\) | `np.linalg.lstsq(..., rcond=1e-6)` | `SwerveKinematics.forward()` |
-| \(\theta_i+k\pi\), drive 부호 반전 | `_nearest_feasible_state()` | feasible steering 선택 |
+\[
+(\theta_i,\dot\phi_i)
+\equiv(\theta_i+\pi,-\dot\phi_i)
+\]
 
-위 기하식은 wheel 위치와 반지름에서 직접 나온다. 반면 acceleration limit, alignment
-threshold, reversal hysteresis는 actuator 지연과 접촉 안정성을 위한 제어 parameter이며
-기하식에서 증명되는 값이 아니다.
+`_nearest_feasible_state()`는 `angle + k*pi` 후보 중 조향 범위 안에 있고 현재 각도에서
+이동 비용이 가장 작은 상태를 선택한다. 기본 범위는 약 ±2π지만, 좁은 범위를 주입한
+테스트에서도 같은 규칙을 사용한다.
 
-## 응답성과 안정성
+모듈 하나라도 drive 속도 상한을 넘으면 모든 wheel 속도에 같은 배율을 곱한다.
 
-키보드 translation과 yaw를 독립적으로 shaping하므로 전진하면서 회전할 수 있다.
-현재 translation 목표는 0.62 m/s, yaw 목표는 1.6 rad/s이고, 입력 follow rate는 각각
-5.0/s다. 키를 놓으면 translation 8.0/s, yaw 8.0/s로 더 빠르게 감쇠한다. 테스트에서
-전진은 0.6초에 0.589 m/s, 전진+yaw는 1초에 0.616 m/s와 1.589 rad/s에 도달하고,
-release 뒤 약 0.92초 안에 zero deadband로 들어온다.
+\[
+\gamma=\min\left(1,
+\frac{\dot\phi_{max}}{\max_i|\dot\phi_i|}\right)
+\]
 
-조향 rate limiter는 실제 조향 피드백이 아니라 이전 **명령 궤적**에서 다음 명령을
-만든다. 피드백을 기준으로 제한하면 타이어 정지마찰로 실제 각도가 지연될 때 servo
-오차와 토크가 일정 값에 갇혀 조향이 약 20°에서 멈출 수 있다. 피드백은 정렬 여부와
-반전 FSM 판정에는 계속 사용한다.
+이 전역 saturation은 병진과 회전의 비율을 보존한다.
 
-키를 놓으면 zero body command가 세 drive velocity target을 즉시 0으로 만든다.
-이전 구현의 `coast()`는 차체 반동을 피하려고 실제 wheel speed를 목표로 계속
-복사했기 때문에 차체가 멈춘 뒤에도 바퀴가 무한히 도는 문제가 있었다. 반대로 기존
-저관성 rotor를 즉시 제동하면 고마찰 접촉을 통해 차체가 크게 튕겼다. wheel joint에
-기어드 모터의 reflected rotor inertia를 나타내는 `armature=0.8`을 반영해 두 문제를
-함께 해결했다. 앱은 키 해제 즉시 이 zero command를 선택하고 차체 피드백이 정지를
-확인할 때까지 WBIK 주행 명령을 넘기지 않는다. 1초 후진 release 회귀에서 차체
-속도는 0.20초, 모든 바퀴는 0.32초 안에 정지하고, 차체의 역방향 복귀는 3.73 mm다.
-독립 `BaseTeleop` shaping 회귀의 zero deadband 0.92초는 앱의 키 해제 주차 경로와
-구분되는 호환 API 측정값이다.
+## 스워브 정기구학
 
-세 모듈이 평행하면 바퀴 축에 수직인 속도는 wheel odometry만으로 관측할 수 없다.
-정기구학은 truncated SVD(`rcond=1e-6`)로 이 특이방향을 제거해 미세 조향 잡음이
-수 m/s의 가짜 횡속도로 증폭되는 것을 막는다.
+wheel \(i\)는 진행 방향 성분만 관측한다. \(\beta_i=\theta_i+\delta_i\)라 하면 각
+module이 만드는 한 행은 다음과 같다.
 
-## 클래스와 함수
+\[
+\begin{bmatrix}
+\cos\beta_i & \sin\beta_i &
+-y_i\cos\beta_i+x_i\sin\beta_i
+\end{bmatrix}
+\begin{bmatrix}v_x\\v_y\\\omega\end{bmatrix}
+=r\dot\phi_i
+\]
 
-| 이름 | 역할 |
+`SwerveKinematics.forward()`는 세 행을 쌓고 `np.linalg.lstsq(..., rcond=1e-6)`로
+`BodyTwist`를 복원한다. 평행한 wheel에서 관측할 수 없는 방향은 truncated SVD가
+최소-norm 값으로 처리한다.
+
+## 제어 순서
+
+`SwerveDrive.update_twist()`는 기구학 결과를 actuator 명령으로 바로 보내지 않고 다음
+순서로 제한한다.
+
+| 순서 | 구현 동작 |
+|---:|---|
+| 1 | deadband 적용; zero twist면 현재 조향각을 유지하고 drive를 즉시 0으로 설정 |
+| 2 | `SwerveKinematics.inverse()`로 실행 가능한 wheel state 계산 |
+| 3 | module별 reversal FSM과 steering rate limit 적용 |
+| 4 | 실제 steering feedback으로 세 module의 정렬 여부 확인 |
+| 5 | 하나라도 미정렬이면 모든 drive 명령을 0으로 gate |
+| 6 | 모두 정렬되면 drive 가속·제동 변화율 제한 후 반환 |
+
+### 방향 반전 FSM
+
+움직이는 wheel의 drive 부호가 바뀌면 다음 상태를 거친다.
+
+```text
+DECELERATING → STEERING → ACCELERATING → NORMAL
+```
+
+이미 정지한 wheel은 감속할 회전 에너지가 없으므로 방향을 즉시 바꾼다. 조향 변화율은
+지연된 feedback이 아니라 이전 **명령 궤적**을 기준으로 제한하고, feedback은 정렬과
+FSM 전이 판정에만 사용한다.
+
+## 명령 중재
+
+`application/teleop.py::_step_physics()`는 manual command와 전신 IK command를 다음
+우선순위로 선택한다.
+
+| 상태 | `commanded_base_twist` |
 |---|---|
-| `BodyTwist` | body-frame `vx`, `vy`, `wz` 값 객체 |
-| `BaseTeleop` | 키 입력을 smoothed body velocity command로 변환 |
-| `BaseTeleop.update_body(keys, dt)` | `BodyTwist` 반환 |
-| `BaseTeleop.update(keys, dt, yaw=0.0)` | 기존 테스트 호환용 world `vx, vy, wz` 반환 |
-| `SwerveKinematics.inverse(twist, steering_positions)` | body twist → feasible wheel states + 공통 saturation scale |
-| `SwerveKinematics.forward(steering_positions, wheel_velocities)` | wheel feedback → body twist 최소제곱 복원 |
-| `ReversalPhase` | wheel 방향 반전 상태 enum |
-| `SwerveDrive` | feedback-dependent 3-wheel swerve controller |
-| `SwerveDrive.update_twist(twist, dt, steering_positions, wheel_velocities)` | 임의 body twist를 wheel별 `(steer_angle, drive_angvel)`로 변환 |
-| `SwerveDrive.update(keys, ...)` | 키보드 호환 wrapper |
-| `SwerveDrive._hold_zero(steering_positions)` | 정지 명령일 때 반전 상태 리셋 + 현재 조향각 유지 |
-| `SwerveDrive._control_module(...)` | 바퀴 하나의 reversal FSM, rate limit, alignment 계산 |
-| `_limit_steering_rate(previous_command, target, dt, steer_range)` | 주입된 조향 범위 안에서 명령 궤적의 프레임별 변화량 제한 |
-| `_normalize_angle(angle)` | 각도를 `[-pi, pi)`로 정규화 |
-| `_clamp(value, lo, hi)` | 값 clamp |
+| 주행 키 입력 중 | `BaseTeleop.update_body()` 출력 |
+| 키 해제 후 차체가 아직 움직임 | zero twist |
+| 정지 확인 후 Whole-body ON | `WholeBodyIK.solve()`의 base twist |
+| 그 외 | zero twist |
 
-## 함수 흐름
+키 해제 직후 WBIK 명령으로 전환하지 않는 이유는 물리 제동 중인 차체에 반대 명령이
+겹치는 것을 막기 위해서다. 정지 확인 뒤 `BaseTeleop.reset_motion()`으로 남은 smoothing
+상태를 지운다.
+
+## 코드 대응 { #equation-to-code }
+
+| 단계 | 함수 | 파일 |
+|---|---|---|
+| 키 입력 평활화 | `BaseTeleop.update_body()` | `control/base.py` |
+| body twist → wheel state | `SwerveKinematics.inverse()` | `control/base.py` |
+| wheel feedback → body twist | `SwerveKinematics.forward()` | `control/base.py` |
+| 동치 조향 상태 선택 | `_nearest_feasible_state()` | `control/base.py` |
+| reversal·조향·정렬 처리 | `_control_module()` | `control/base.py` |
+| drive 변화율 제한 | `_rate_limit_drive_commands()` | `control/base.py` |
+| manual/WBIK 중재 | `TeleopApp._step_physics()` | `application/teleop.py` |
+| actuator 기록 | `TeleopApp._step_actuators()` | `application/teleop.py` |
+
+## 함수 흐름 { #base-function-flow }
 
 ```mermaid
 flowchart TD
-    A["keyboard"] --> B["BaseTeleop.update_body<br>smoothed BodyTwist"]
-    W["whole_body_ik base output"] --> C["command arbitration<br>keyboard priority"]
-    B --> C
-    C --> F["SwerveKinematics.inverse<br>module velocity vectors"]
-    F --> G["feasible angle search<br>angle + k*pi, drive sign"]
-    G --> GS["global saturation scaling<br>wheel speed ratio 보존"]
-    GS --> H["reversal FSM<br>DECELERATING → STEERING → ACCELERATING"]
-    H --> I["_limit_steering_rate()<br>조향 모터 회전 속도 제한"]
-    I --> J["alignment gating<br>조향 정렬 전 과한 구동 억제"]
-    J --> L["{wheel: steer_angle, drive_angvel}<br>바퀴별 최종 명령 반환"]
-    L --> M["teleop_app._step_actuators<br>반환 명령을 data.ctrl에 기록"]
+    APP["application/teleop.py<br>TeleopApp._step_physics()"]
+    FB["_read_base_feedback()<br>steering · wheel velocity · body twist"]
+    KEY["control/base.py<br>BaseTeleop.update_body()"]
+    IK["control/whole_body.py<br>WholeBodyIK.solve() · base_twist"]
+    ARB{"manual / stopping / WBIK"}
+    DRIVE["control/base.py<br>SwerveDrive.update_twist()"]
+    ZERO{"zero twist?"}
+    HOLD["_hold_zero()<br>steering 유지 · drive 0"]
+    INV["SwerveKinematics.inverse()<br>동치각 선택 · 전역 saturation"]
+    MOD["_control_module()<br>reversal FSM · steering limit"]
+    ALIGN{"모든 module 정렬?"}
+    GATE["모든 drive 0"]
+    RATE["_rate_limit_drive_commands()"]
+    ACT["application/teleop.py<br>_step_actuators() · data.ctrl"]
+
+    APP --> FB
+    APP --> KEY
+    APP --> IK
+    FB --> ARB
+    FB --> DRIVE
+    KEY --> ARB
+    IK --> ARB
+    ARB --> DRIVE --> ZERO
+    ZERO -- Yes --> HOLD --> ACT
+    ZERO -- No --> INV --> MOD --> ALIGN
+    ALIGN -- No --> GATE --> ACT
+    ALIGN -- Yes --> RATE --> ACT
 ```
 
-## 출력 형식
+## 출력과 주요 API
 
-```python
-{
-    "left_wheel": (steer_angle_rad, drive_angvel_rad_s),
-    "right_wheel": (steer_angle_rad, drive_angvel_rad_s),
-    "rear_wheel": (steer_angle_rad, drive_angvel_rad_s),
-}
-```
+`update_twist()`는 module 이름을 `(steer_angle_rad, drive_angvel_rad_s)`에 대응시키는
+사전을 반환한다.
 
-## 사용 위치
-
-`application/teleop.py`가 매 render frame마다 키보드 명령과 whole-body IK 명령을 중재한 뒤
-`update_twist()`를 호출한다. 반환 wheel command는 물리 substep마다 `data.ctrl`에
-반복 적용된다. ROS message, node, controller manager는 사용하지 않는다.
-
-모델은 `base_link`와 세 `wheel_drive` body 사이 접촉을 제외한다. 90° 조향에서 실제
-바퀴 원통과 베이스의 보이지 않는 box가 약 25 mm 겹쳐 차체 회전을 막던 모델 내부
-접촉이었기 때문이다. `test_phase_5.py`가 이 각도에서 내부 접촉 0건을 먼저 검사한 뒤
-strafe, pure yaw, translation+yaw, 전후 반전을 실제 wheel-floor contact로 반복한다.
+| API | 반환·역할 |
+|---|---|
+| `BodyTwist(vx, vy, wz)` | body-frame 속도 값 |
+| `BaseTeleop.update_body(keys, dt, measured_twist=None)` | 평활화된 `BodyTwist`; `measured_twist`는 호환 인자 |
+| `BaseTeleop.reset_motion()` | 병진·yaw smoothing 상태 초기화 |
+| `SwerveKinematics.inverse(...)` | wheel state 사전과 saturation scale |
+| `SwerveKinematics.forward(...)` | feedback으로 추정한 `BodyTwist` |
+| `SwerveDrive.update_twist(...)` | 최종 wheel actuator 명령 사전 |
 
 ## 검증
 
+`tests/test_phase_5.py`는 실제 wheel-floor contact에서 정지 유지, 전후·횡·회전·결합
+주행, 반전, release 제동과 base-wheel 내부 접촉 제외를 검사한다.
+`tests/test_whole_body.py`는 inverse↔forward 왕복, 좁은 조향 범위의 동치각, 전역
+saturation과 manual/WBIK handover를 검사한다.
+
 ```bash
+# 스워브 단위·물리 회귀
 python3 tests/test_phase_5.py
+# 전신 IK와 베이스 연결 회귀
 python3 tests/test_whole_body.py
 ```
-
-Phase 5는 실제 wheel-ground contact 동작을, Whole-body 회귀는 inverse↔forward 무작위
-왕복, 좁은 steering range의 동치각, 전역 saturation과 수동/WBIK handover를 검사한다.
 
 [← 이전: 팔 토크 제어](arm_control.md) ·
 [전체 학습 순서](index.md#algorithm-learning-order) ·

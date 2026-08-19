@@ -1,152 +1,157 @@
-# `src/ffw_sh5_grasp/application/teleop.py`
+# 애플리케이션과 목표 좌표
 
-앱의 조립 지점이다. MuJoCo model/data를 만들고, UI/렌더/target/IK/control 모듈을
-연결한 뒤 메인 루프를 실행한다.
+`application/teleop.py`는 model/data와 controller를 만들고 프레임 반복 실행을 담당한다.
+`application/targets.py`는 UI 값, world pose와 marker pose 사이의 변환만 담당한다.
 
-사용자는 기존과 같이 `python3 src/teleop_app.py`로 실행한다. 루트 파일은 새
-`ffw_sh5_grasp.application.teleop` 모듈의 `main()`을 호출하는 얇은 실행기다.
-`python3 src/teleop_app.py --config config/local.yaml`로 사용자 YAML을 선택할 수 있다.
-앱 주기·창·목표 변화율은 `application` 구역에서 조절한다.
-
-렌더 프레임과 물리 서브스텝의 정확한 호출 순서는
-[아키텍처와 데이터 흐름](../overview.md#frame-call-flow)에서 해설한다.
-
-## 책임
-
-| 구분 | 내용 |
-|---|---|
-| 초기화 | model/data, whole-body IK, arm/swerve controller, actuator/site/joint id 준비 |
-| 입력 | 키보드 edge 입력, 주행/리프트 continuous 입력 |
-| 상태 | `app.targets`, arm mode, grab state, Cyclo state |
-| 물리 step | target smoothing, IK solve, actuator command, `mj_step` |
-| 연결 | `ui`, `render`, `targets` 모듈의 공개 함수를 호출 |
-
-## 메인 루프
-
-```python
-while not glfw.window_should_close(self.window):
-    io = render.begin_frame(self)
-    render.handle_camera_mouse(self, io)
-    self._handle_edge_keys(io)
-    drive_keys = self._read_drive_and_lift_keys(io)
-    ui.draw_panel(self)
-    self._step_physics(drive_keys)
-    render.render_scene(self)
-    render.end_frame(self, t0)
+```bash
+python3 src/teleop_app.py
+python3 src/teleop_app.py --config config/local.yaml
 ```
 
-## 함수와 메서드
+## 모듈별 역할
 
-### 모듈 함수
+| 파일 | 역할 | 하지 않는 일 |
+|---|---|---|
+| `application/teleop.py` | 초기화, 입력, 모드 전환, 명령 중재, physics step | FK·IK 수식 중복 구현 |
+| `application/targets.py` | target frame 변환, 양손 capture, marker 동기화 | IK solve, actuator 기록 |
 
-| 이름 | 역할 |
-|---|---|
-| `_named_id(model, object_type, name)` | 필수 MuJoCo object id 조회, 누락 시 명확한 오류 반환 |
-| `_joint_address(model, name, addresses)` | joint의 qpos 또는 DOF 주소 조회 |
-| `_reset_can_random(model, data, rng)` | 캔 free joint를 home 근처에 랜덤 리셋 |
-| `_parse_args(argv)` | CLI 인자 파싱 |
-| `main(argv=None)` | `TeleopApp().run()` 실행 |
+루트의 `src/teleop_app.py`는 설정 경로를 적용한 뒤
+`ffw_sh5_grasp.application.teleop.main()`을 호출하는 실행기다.
 
-### `KeyEdge`
-
-| 메서드 | 역할 |
-|---|---|
-| `pressed(window, key)` | 눌림 edge를 한 번만 true로 반환 |
-
-### `TeleopApp`
-
-| 메서드 | 역할 |
-|---|---|
-| `__init__()` | sim, render, loop state 초기화 |
-| `_setup_sim()` | model/data 로드, solver/controller/id/target 상태 생성 |
-| `_setup_loop_state()` | q_des, FK slider, timing, input 상태 생성 |
-| `reset_can()` | 캔 free-joint qpos/qvel만 리셋; 파생 물리 상태는 다음 `mj_step()`에서 갱신 |
-| `reset_active_object()` | 캔/grab/Cyclo 상태 리셋 |
-| `_disable_legacy_box_asset()` | XML에 남은 box asset 비활성화 |
-| `cycle_camera()` | 카메라 preset 전환 |
-| `set_arm_mode(side, mode)` | 손별 IK/FK 전환; FK→IK는 자체 `site_state()` pose로 target 동기화 |
-| `set_whole_body_enabled(enabled)` | world target을 보존하며 whole-body/arm-only 전환 |
-| `toggle_whole_body_control()` | UI 버튼용 전신 제어 토글 |
-| `_handle_edge_keys(io)` | `R/G/V/C` edge key 처리 |
-| `_read_drive_and_lift_keys(io)` | 주행/리프트 continuous key 처리 |
-| `_read_base_feedback()` | wheel 상태, body twist, base pose를 한 번에 읽기 |
-| `_update_grasp_targets()` | Grab/Release 상태를 grasp/thumb 값으로 rate-limit |
-| `_smooth_hand_targets()` | raw XYZ/RPY를 frame 이동 한계 안으로 보간 |
-| `_smoothed_target_poses()` | 보간된 UI 값을 양손 world pose로 변환 |
-| `_step_actuators(wheel_commands)` | 물리 substep마다 모든 actuator command와 `mj_step` 적용 |
-| `_step_physics(drive_keys)` | 위 단계의 순서와 수동/WBIK 명령 우선순위 조율 |
-| `run()` | 전체 frame loop 실행 |
-
-## 함수 흐름
+## 실행 흐름
 
 ```mermaid
 flowchart TD
-    A["main()<br>CLI entry point"] --> B["TeleopApp()<br>시뮬레이터와 UI 앱 객체 생성"]
-    B --> C["_setup_sim()<br>MuJoCo model/data와 controller 초기화"]
-    B --> D["render.setup_render()<br>GLFW, MuJoCo renderer, ImGui 초기화"]
-    B --> E["_setup_loop_state()<br>target, mode, smoothing 상태 초기화"]
-    B --> F["run()<br>종료 전까지 frame loop 실행"]
-    F --> G["render.begin_frame()<br>입력 이벤트와 ImGui frame 시작"]
-    G --> H["render.handle_camera_mouse()<br>카메라 마우스 조작 처리"]
-    H --> I["_handle_edge_keys()<br>R/G/V/C 같은 edge key 처리"]
-    I --> J["_read_drive_and_lift_keys()<br>주행/리프트 continuous key 읽기"]
-    J --> L["ui.draw_panel()<br>상태·제어·트리 창을 그리고 target 갱신"]
-    L --> M["_step_physics()<br>frame 제어 순서 조율"]
-    M --> N["_read_base_feedback()<br>wheel · body · base 상태"]
-    N --> O["target carry · grasp ramp · smoothing"]
-    O --> P["_smoothed_target_poses()<br>양손 world pose"]
-    P --> Q["whole_body.solve()<br>base · lift · arm command"]
-    Q --> R["SwerveDrive.update_twist()<br>wheel command"]
-    R --> S["_step_actuators()<br>arm · lift · wheel · finger ctrl"]
-    S --> V["mujoco.mj_step()<br>물리 진행"]
-    V --> T["render.render_scene()<br>MuJoCo scene, gizmo, UI 렌더링"]
-    T --> U["render.end_frame()<br>frame timing 정리"]
-    U --> F
+    MAIN["src/teleop_app.py<br>main()"] --> APP["application/teleop.py<br>TeleopApp.__init__()"]
+    APP --> SETUP["_setup_sim() · _setup_loop_state()"]
+    SETUP --> RUN["TeleopApp.run()"]
+    RUN --> BEGIN["visualization/render.py<br>begin_frame()"]
+    BEGIN --> INPUT["_handle_edge_keys()<br>_read_drive_and_lift_keys()"]
+    INPUT --> UI["visualization/ui.py<br>draw_panel()"]
+    UI --> STEP["TeleopApp._step_physics()"]
+    STEP --> FEEDBACK["_read_base_feedback()"]
+    FEEDBACK --> TARGET["application/targets.py<br>target 변환"]
+    TARGET --> IK["control/whole_body.py<br>WholeBodyIK.solve()"]
+    IK --> BASE["control/base.py<br>SwerveDrive.update_twist()"]
+    BASE --> ACT["_step_actuators()<br>data.ctrl · mj_step()"]
+    ACT --> RENDER["visualization/render.py<br>render_scene() · end_frame()"]
+    RENDER --> RUN
 ```
 
-### `application.targets`와의 연결
+### `_step_physics()` 순서
 
-좌표 변환과 marker 동기화는 `targets.target_world_pose(app, side)`처럼 전용 모듈의
-공개 함수를 직접 호출한다. `TeleopApp`에 같은 인자의 전달용 메서드를 반복하지 않으므로
-구현 위치와 호출 위치가 한 번에 드러난다. 앱에는 UI 명령의 의미가 있는 아래 세
-메서드만 남는다.
+1. steering, wheel velocity, body twist와 base pose를 읽는다.
+2. 수동 주행 중이면 측정된 base SE(2) 이동만큼 target 기준을 운반한다.
+3. grasp target과 손 target 변화율을 제한한다.
+4. 양손 target을 world pose로 변환하고 `WholeBodyIK.solve()`를 호출한다.
+5. manual, 제동용 zero, WBIK 중 하나의 `BodyTwist`를 선택한다.
+6. wheel·arm·lift·finger command를 각 physics substep에 기록하고 `mj_step()`을 실행한다.
 
-| 앱 메서드 | 실제 역할 |
+base 명령 중재와 wheel 제어는 [모바일 스워브 제어](base_teleop.md#base-function-flow)에
+정리되어 있다.
+
+## 목표 좌표계 { #target-frames }
+
+| 저장값 | Whole-body ON | Whole-body OFF |
+|---|---|---|
+| 손 `pos/rpy` | startup 또는 수동 주행으로 운반된 anchor 기준 | 현재 live base 기준 |
+| virtual object | anchor의 절대 local pose | live base의 절대 local pose |
+| solver 입력 | world pose | world pose |
+
+ON에서는 target이 world에 고정되어야 base가 움직여 task error를 줄일 수 있다. 손 위치
+목표는 시작 손 위치와 anchor 방향을 사용한다.
+
+\[
+p_{target}^{w}=p_{home}^{w}+R_z(\theta_{anchor})\,\Delta p_{ui}
+\]
+
+virtual object 위치는 손 offset과 달리 anchor-local 절대 위치이므로 anchor 원점도
+더한다.
+
+\[
+p_{object}^{w}=
+\begin{bmatrix}x_{anchor}\\y_{anchor}\\0\end{bmatrix}
++R_z(\theta_{anchor})p_{object}^{anchor}
+\]
+
+<figure markdown>
+  ![World, startup anchor, 이동한 live base와 world-fixed 손 target의 관계](../assets/target-frames.svg)
+  <figcaption>Whole-body ON의 손 target은 live base가 아니라 anchor를 기준으로 world에 고정된다.</figcaption>
+</figure>
+
+자세도 같은 구분을 사용한다.
+
+\[
+q_{world}^{ON}=q_{home\_world}\otimes q_{rpy},\qquad
+q_{world}^{OFF}=q_{base\_world}\otimes q_{home\_base}\otimes q_{rpy}
+\]
+
+`set_whole_body_enabled()`는 전환 전에 손과 virtual object의 world pose를 저장하고,
+전환 후 새 좌표계의 값으로 역변환한다. 따라서 UI 숫자는 달라질 수 있지만 marker의
+world pose는 유지된다. FK→IK도 현재 site pose를 새 target으로 사용해 전환 점프를
+막는다.
+
+## 양손 capture
+
+`capture_grasp()`는 virtual object에서 본 두 손의 상대 transform을 저장한다.
+
+\[
+p_{offset}=R_{obj}^{T}(p_{hand}-p_{obj}),\qquad
+R_{offset}=R_{obj}^{T}R_{hand}
+\]
+
+이후 `apply_virtual_object_target()`은 반대 변환으로 두 손 target을 갱신한다.
+
+\[
+p_{hand}=p_{obj}+R_{obj}p_{offset},\qquad
+R_{hand}=R_{obj}R_{offset}
+\]
+
+`release_grasp()`는 저장된 상대 transform과 solver의 rigid-grasp 기준을 함께 해제한다.
+
+## Target 변환 흐름
+
+```mermaid
+flowchart LR
+    EDIT["UI 숫자 · slider · jog"] --> STATE["app.targets"]
+    GIZMO["visualization/render.py<br>draw_transform_gizmo()"] --> SET["application/targets.py<br>set_gizmo_target_world_pose()"]
+    SET --> STATE
+    STATE --> POSE["target_world_pose()"]
+    POSE --> SOLVE["control/whole_body.py<br>WholeBodyIK.solve()"]
+    STATE --> MOCAP["sync_ik_mocaps_from_targets()"]
+    MOCAP --> VIEW["MuJoCo target marker"]
+
+    CAP["capture_grasp()"] --> OFFSET["object 기준 손 offset"]
+    OFFSET --> APPLY["apply_virtual_object_target()"]
+    APPLY --> STATE
+```
+
+수동 주행은 `carry_world_targets_with_base()`로 anchor와 손 home reference를 측정된 base
+이동만큼 옮긴다. 이 과정은 UI offset을 직접 수정하지 않는다.
+
+## 주요 함수
+
+| 함수 | 역할 |
 |---|---|
-| `capture_grasp()` | Bimanual MoveL 캡처 후 solver의 rigid-grasp 기준도 갱신 |
-| `release_grasp()` | Bimanual MoveL 캡처와 solver 기준 해제 |
-| `apply_virtual_object_target()` | virtual object pose로 양손 target 갱신 |
+| `TeleopApp.run()` | 입력 → UI → 물리 → 렌더링 프레임 반복 |
+| `TeleopApp.set_arm_mode()` | IK/FK 전환과 현재 상태 동기화 |
+| `TeleopApp.set_whole_body_enabled()` | world pose를 보존하며 ON/OFF 전환 |
+| `TeleopApp._step_physics()` | target, solver, 명령 중재와 physics 순서 조율 |
+| `target_world_pose()` | 손 target을 최종 world pose로 변환 |
+| `world_to_target_pos()` | world 위치를 현재 target frame으로 역변환 |
+| `capture_grasp()` / `apply_virtual_object_target()` | virtual object 기준 양손 target 저장·복원 |
+| `sync_ik_mocaps_from_targets()` | target pose를 표시용 mocap에 복사 |
 
-순수 회전 계산은 `kinematics.rotations`, target 좌표 변환은
-`application.targets`, Gizmo 행렬 변환은 `visualization.render`가 각각 한 번만
-구현한다.
+`_step_actuators()`만 robot actuator의 `data.ctrl`을 기록한다. `reset_can()`과 legacy
+box 비활성화는 자유물체 초기화를 위해 해당 object의 state/model 속성을 수정한다.
 
-## `_step_physics()` 내부 순서
+## 검증
 
-1. `_read_base_feedback()`으로 steer 위치, wheel 속도, chassis body twist와 base pose를 읽는다.
-2. 키보드 주행 입력과 실제 정지 여부를 판정한다.
-3. 수동 주행 또는 제동 중이면 target frame을 측정된 base SE(2) 이동만큼 운반한다.
-4. Bimanual capture 상태의 virtual object와 Grab/Release 상태를 raw target에 반영한다.
-5. `_smooth_hand_targets()`로 XYZ/RPY target을 frame 이동 한계 안에서 rate-limit한다.
-6. `_smoothed_target_poses()`가 현재 mode에 맞는 양손 world pose를 만든다.
-7. `whole_body.solve()`가 ON이면 base x/y/yaw, lift, IK 모드 양팔을 한 문제로
-   풀고, OFF면 base/lift 속도를 0으로 고정해 팔만 푼다.
-8. FK 모드인 손은 FK slider 값을 사용하고 whole-body arm 변수는 0속도로 고정한다.
-9. 키보드 base 명령이 있으면 우선한다. 키가 없을 때 ON은 whole-body twist, OFF는
-   zero twist를 선택한다.
-10. `SwerveDrive.update_twist()`로 wheel command를 계산한다.
-11. `_step_actuators()`가 각 물리 substep에 arm, lift, wheel, finger command를 쓰고
-    `mujoco.mj_step()`을 호출한다.
+```bash
+python3 tests/test_phase_6.py
+```
 
-## 직접 쓰는 `data`
+Phase 6는 초기 target 일치, world↔target 변환, Whole-body 전환 pose 보존, 양손 capture,
+marker 동기화와 Task Space 입력을 검사한다.
 
-| 쓰기 위치 | 목적 |
-|---|---|
-| `_reset_can_random()` | 자유물체 캔 리셋 |
-| `_disable_legacy_box_asset()` | legacy box asset 비활성화 |
-| `_step_actuators()` | actuator command 기록과 `mj_step` |
-
-로봇 관절 위치를 live `data.qpos`로 직접 덮어쓰지 않는다.
-
-ROS/MoveIt/Pinocchio/OSQP를 import하지 않는다. 공식 AIWorker/Cyclo에서 참고한 것은
-body-twist 스워브 제어와 weighted differential IK 알고리즘 구조뿐이다.
+[← 시스템 구조](../overview.md) · [시각화 →](teleop_ui.md)

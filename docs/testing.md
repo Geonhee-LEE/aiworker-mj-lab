@@ -52,10 +52,10 @@ mkdocs build --strict
 | Phase 3 | 오른팔 FK/Jacobian/IK/pick | IK 100개 ≥95%, pick ≥7/10 |
 | Phase 4 | 전신 hold/양팔 IK/pick | hold drift 제한, IK/pick 회귀 |
 | Phase 5 | keyboard, swerve FSM, 실제 물리 주행 | idle/전후/strafe/yaw/반전/충돌 통과 |
-| Phase 6 | marker, gizmo, Bimanual, mode toggle | pose round-trip과 ON/OFF 불변성 |
+| Phase 6 | marker, gizmo, 숫자 task-space 입력, Bimanual, mode toggle | pose round-trip·IK 추종과 ON/OFF 불변성 |
 | Whole-body | 명시적 box-QP, DLS 비용 변환, joint/collision CBF, rigid grasp, mobile WBIK | 수치/물리/latency 통합 gate |
 
-## 1.4.0 핵심 회귀가 증명하는 것
+## 2.0.0 핵심 회귀가 증명하는 것
 
 ### Custom kinematics hard gate
 
@@ -84,7 +84,7 @@ MuJoCo 주 viewport 하나와 외부 플랫폼 viewport 두 개가 생성되고,
 - solver가 live qpos를 변경하지 않음
 - 한 step 뒤 손 pose error가 감소
 
-최근 검증에서는 combined error가 `89.4 mm → 63.0 mm`로 감소했다.
+최근 검증에서는 combined error가 `89.4 mm → 56.4 mm`로 감소했다.
 
 ### Base participation gate
 

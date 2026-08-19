@@ -1,6 +1,6 @@
 # `src/ffw_sh5_grasp/control/grasp.py`
 
-!!! info "핵심 알고리즘 학습 순서 7/7"
+!!! info "핵심 알고리즘 학습 순서 6/6"
     팔과 base가 목표 pose를 추종한 뒤 손가락 actuator 명령과 실제 contact force로
     파지를 완성하는 마지막 단계다. 전체 순서는
     [핵심 알고리즘 학습 순서](index.md#algorithm-learning-order)에서 다시 볼 수 있다.
@@ -113,7 +113,7 @@ F_k=\sum_{c\in k}|f_{n,c}|
 | 함수 | 역할 |
 |---|---|
 | `_validate_side(side)` | 손 방향을 `l`/`r`로 제한하고 잘못된 입력을 명확히 거부 |
-| `_resolve_joint_actuator(model, joint_name)` | joint id와 actuator id를 찾고 캐싱 (actuator 탐색 자체는 `mj_util.find_actuator_for_joint` 공용 함수 사용) |
+| `_resolve_joint_actuator(model, joint_name)` | joint id와 actuator id를 찾고 캐싱 (actuator 탐색 자체는 `mujoco_utils.find_actuator_for_joint()` 사용) |
 | `_command_coefficients(model, side)` | actuator id와 affine coefficient를 model·side별로 계산·캐싱 |
 | `apply_grasp(model, data, grasp, thumb, side="r")` | 두 synergy를 clamp하고 벡터 affine 식으로 actuator target 기록 |
 | `get_finger_can_contacts(model, data, side="r")` | 캔과 닿은 finger group별 normal force 합산 |

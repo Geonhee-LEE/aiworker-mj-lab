@@ -90,21 +90,15 @@ nav:
     - 시스템 이해와 개발:
         - 전체 안내: guide/index.md
         - 시스템 기초:
-            - 동작 원리: concepts.md
-            - 아키텍처와 데이터 흐름: overview.md
-            - 코드 분리 기준: guide/code-architecture.md
-            - MuJoCo 기본 용어: guide/00-basics.md
+            - 시스템 구조와 데이터 흐름: overview.md
         - 애플리케이션:
-            - 앱 조립과 물리 루프: guide/teleop_app.md
-            - 목표와 좌표 변환: guide/teleop_targets.md
+            - 앱 실행과 목표 좌표: guide/teleop_app.md
         - 시각화:
-            - UI 패널: guide/teleop_ui.md
-            - 렌더링과 Gizmo: guide/teleop_render.md
+            - UI와 렌더링: guide/teleop_ui.md
         - 기구학과 수학:
             - 전체 안내: guide/kinematics.md
             - 구조와 정기구학:
-                - Kinematic Tree: guide/kinematic-tree.md
-                - FK와 Jacobian: guide/forward-kinematics.md
+                - Tree, FK와 Jacobian: guide/forward-kinematics.md
             - 회전과 충돌:
                 - Quaternion과 자세 오차: guide/quaternion-math.md
                 - Collision distance와 gradient: guide/collision-kinematics.md
@@ -121,32 +115,9 @@ nav:
             - 모방학습 데이터와 실기 전환: guide/imitation-sim2real.md
     - API 레퍼런스:
         - 전체 안내: api/index.md
-        - 빠른 API 찾기: api/quick-reference.md
         - 설정: api/config.md
-        - 애플리케이션:
-            - 전체 안내: api/application.md
-            - 텔레옵 앱: api/application-teleop.md
-            - 목표 좌표: api/application-targets.md
-        - 기구학:
-            - 전체 안내: api/kinematics.md
-            - 회전 수학: api/kinematics-rotations.md
-            - Pose 오차와 Task: api/kinematics-tasks.md
-            - 속도 제약조건: api/kinematics-constraints.md
-            - Tree와 FK: api/kinematics-tree.md
-            - Differential IK Solver: api/kinematics-solver.md
-            - QP 수치 구현: api/kinematics-optimization.md
-            - 충돌 기구학: api/kinematics-collision.md
-            - Legacy 호환: api/kinematics-legacy.md
-        - 제어:
-            - 전체 안내: api/control.md
-            - 전신 IK: api/control-whole-body.md
-            - 양손 상대 Pose: api/control-bimanual.md
-            - 팔 토크: api/control-arm.md
-            - 모바일 베이스: api/control-base.md
-            - 손 파지: api/control-grasp.md
-        - 시각화:
-            - 전체 안내: api/visualization.md
-            - 렌더링: api/visualization-render.md
-            - UI: api/visualization-ui.md
-        - 공통 MuJoCo 유틸: api/mujoco-utils.md
+        - 애플리케이션: api/application.md
+        - 기구학: api/kinematics.md
+        - 제어: api/control.md
+        - 시각화: api/visualization.md
     - 릴리스 기록: releases.md

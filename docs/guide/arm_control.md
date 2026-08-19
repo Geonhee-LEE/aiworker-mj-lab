@@ -1,6 +1,6 @@
 # `src/ffw_sh5_grasp/control/arm.py`
 
-!!! info "핵심 알고리즘 학습 순서 5/7"
+!!! info "핵심 알고리즘 학습 순서 4/6"
     [전신 IK](whole_body_ik.md)가 반환한 팔 목표각을 실제 actuator torque로 바꾸는
     단계다. 다음은 같은 전신 해의 base twist를 wheel 명령으로 바꾸는
     [모바일 스워브 제어](base_teleop.md)다.
@@ -54,7 +54,7 @@ clamp한 뒤 `data.ctrl`에 쓴다.
 조건의 양변에서 그 항이 상쇄돼 \(K_p(q_{des}-q)=0\), 즉 유한한 \(K_p\)에서도
 actuator 포화·모델 오차·외란이 없는 이상 조건에서 오차가 0인 평형점으로 바뀐다. 유도 과정은
 각 항의 코드 입력·출력은
-[팔 제어 API의 `ArmTorqueController`](../api/control-arm.md)를
+[제어 API의 `ArmTorqueController`](../api/control.md#arm)를
 참고한다.
 
 ## 수식에서 코드까지
@@ -75,7 +75,7 @@ actuator 포화·모델 오차·외란이 없는 이상 조건에서 오차가 0
 | 메서드 | 역할 |
 |---|---|
 | `__init__(model, joint_names, kp=600.0, kd=40.0)` | 관절 id, qpos address, dof id, actuator id를 캐싱한다. |
-| `apply(data, q_des, kp_scale=1.0)` | 현재 상태를 읽어 토크를 계산하고 actuator `ctrlrange`로 clamp한 뒤 `data.ctrl`에 쓴다. |
+| `apply(data, q_des, kp_scale=1.0)` | 현재 상태를 읽어 토크를 계산하고 actuator `ctrlrange`로 clamp해 `data.ctrl`에 쓴 뒤, 진단용으로 clamp 전 `tau`를 반환한다. |
 
 ## 함수 흐름
 

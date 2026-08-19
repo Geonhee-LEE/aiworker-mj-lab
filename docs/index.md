@@ -1,126 +1,120 @@
 # ffw-sh5-grasp
 
-FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 ROS-free 텔레오퍼레이션
-프로젝트다. 손의 목표 자세를 지정하면 팔, 리프트, 스워브 베이스가 함께 움직이며,
-실제 actuator·마찰·접촉을 거쳐 목표를 추종한다.
+FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 텔레오퍼레이션 프로젝트다.
+손 목표를 지정하면 전신 IK가 팔·리프트·스워브 베이스 명령을 계산하고, 실제 actuator와
+접촉 물리가 로봇을 움직인다. ROS는 사용하지 않는다.
+
+[빠른 시작](getting-started.md){ .md-button .md-button--primary }
+[화면과 조작](run.md){ .md-button }
+[시스템 구조](overview.md){ .md-button }
 
 <figure class="hero-figure" markdown>
-  ![full_scene.xml 렌더](assets/hero.jpg)
-  <figcaption>양팔 14축, 양손, 리프트, 3모듈 스워브 베이스와 캔을 포함한 전체 장면.</figcaption>
+  ![양팔, 리프트, 스워브 베이스와 캔이 포함된 MuJoCo 전체 장면](assets/hero.jpg)
+  <figcaption>`full_scene.xml`의 로봇과 작업 공간.</figcaption>
 </figure>
 
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-black?logo=github)](https://github.com/ggh-png/ffw-sh5-grasp)
-[![Release](https://img.shields.io/badge/release-1.4.0-indigo)](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.4.0)
+## 어디서 시작할까
 
-## 처음이라면 이 순서로 읽기
+<div class="grid cards" markdown>
 
-설명서를 처음부터 끝까지 읽을 필요는 없다.
+-   :material-rocket-launch: **로봇을 실행하고 싶다**
 
-1. [빠른 시작](getting-started.md)에서 설치하고 앱을 실행한다.
-2. [화면과 조작](run.md)에서 키와 패널의 역할을 확인한다.
-3. [모드 선택](control-modes.md)에서 MoveL, IK/FK, Whole-body 조합을 고른다.
+    설치, headless 검사와 첫 조작을 순서대로 진행한다.
 
-문제가 생기면 증상별 [문제 해결](troubleshooting.md)로 바로 이동한다.
+    [빠른 시작](getting-started.md)
 
-## 목적에 맞는 읽기 경로
+-   :material-gamepad-variant: **조작법을 찾고 싶다**
 
-=== "로봇을 조작하고 싶다"
+    키보드, Task Space 입력, IK/FK와 Whole-body 모드를 확인한다.
 
-    **빠른 시작 → 화면과 조작 → 모드 선택** 순서만 읽으면 된다.
+    [화면과 조작](run.md) · [모드 선택](control-modes.md)
 
-    - [빠른 시작](getting-started.md)
-    - [화면과 조작](run.md)
-    - [모드 선택](control-modes.md)
+-   :material-source-branch: **구현을 이해하고 싶다**
 
-=== "구조와 코드를 이해하고 싶다"
+    애플리케이션부터 기구학과 제어까지 코드 흐름을 따라간다.
 
-    시스템 개념부터 모듈 책임과 수정 경로까지 하나의 안내에서 시작한다.
+    [시스템 이해와 개발](guide/index.md)
 
-    - [시스템 이해와 개발 가이드](guide/index.md)
+-   :material-code-braces: **함수를 찾고 싶다**
 
-=== "함수 사용법을 찾고 싶다"
+    공개 함수의 입력, 반환값과 데이터 변경 여부를 패키지별로 찾는다.
 
-    입력·반환값·부작용과 호출 시점을 패키지별로 찾는다.
+    [API 레퍼런스](api/index.md)
 
-    - [API 레퍼런스](api/index.md)
+</div>
 
-=== "ROS2 경험으로 이해하고 싶다"
+문제가 발생했다면 [증상별 문제 해결](troubleshooting.md)에서 바로 찾을 수 있다.
 
-    별도 중복 가이드 대신 한 장의 대응표로 용어를 바꾼 뒤 같은 모듈 문서를 읽는다.
-
-    - [아키텍처와 데이터 흐름](overview.md)
-    - [ROS2 용어 대응표](overview.md#ros2-concept-map)
-
-## 한눈에 보는 동작 흐름
+## 동작 흐름
 
 ```mermaid
 flowchart LR
-    U["키보드 · 슬라이더 · 3D gizmo"] --> T["손 또는 virtual-object target"]
-    T --> IK["Whole-body / arm-only IK"]
-    IK --> C["팔 · 리프트 · base 명령"]
-    C --> S["swerve와 actuator 제어"]
-    S --> P["MuJoCo physics"]
-    P --> F["실제 pose · contact · 화면"]
-    F --> IK
+    INPUT["키보드 · UI · 3D Gizmo"] --> TARGET["손·가상 물체 목표"]
+    TARGET --> IK["전신 또는 팔 전용 IK"]
+    IK --> CTRL["팔 · 리프트 · 스워브 · 손 명령"]
+    CTRL --> MJ["MuJoCo 물리"]
+    MJ --> STATE["실제 pose · 속도 · 접촉"]
+    STATE --> IK
 ```
 
-여기서 가장 중요한 구분은 다음 세 가지다.
+UI는 로봇 관절을 순간 이동시키지 않는다. 목표값을 바꾸면 solver와 controller가
+명령을 계산하고, `mujoco.mj_step()`이 다음 실제 상태를 만든다.
 
-| 구분 | 의미 | 예 |
-|---|---|---|
-| Target | 사용자가 원하는 상태 | 손 XYZ/RPY, virtual object pose |
-| Command | 제어기가 계산한 입력 | 팔 목표각, lift 위치, base twist |
-| State | 물리가 만든 실제 상태 | `qpos`, `qvel`, contact, 실제 손 pose |
+## 주요 기능
 
-UI는 로봇 상태를 순간 이동시키지 않는다. target을 바꾸면 solver와 controller가
-command를 계산하고, MuJoCo physics가 다음 state를 만든다.
+<div class="grid cards" markdown>
 
-## 무엇을 할 수 있나
+-   **전신과 팔 전용 IK**
 
-| 기능 | 요약 |
-|---|---|
-| 손 목표 | 양손 home-relative XYZ/RPY, jog, slider, 3D gizmo |
-| 전신 제어 | base x/y/yaw + lift + 양팔 14축 bounded differential IK |
-| Arm-only | Whole-body OFF에서 base/lift 자동 참여를 hard gate |
-| 양팔 이동 | Bimanual MoveL, virtual object, captured relative pose |
-| 충돌 대응 | 팔-팔·팔-몸체·팔/손-table reactive collision CBF |
-| 모바일 베이스 | 실제 steer/drive actuator와 wheel-ground contact로 이동 |
-| 파지 | 손가락 synergy와 contact force를 사용하며 물체를 강제로 붙이지 않음 |
+    base x/y/yaw, lift와 양팔 14축을 함께 풀거나 base·lift를 고정하고 팔만 푼다.
 
-!!! info "기능 범위"
-    Collision avoidance는 가까운 장애물에 반응하는 안전 계층이지 경로 플래너가
-    아니다. Whole-body OFF는 자동 IK의 base/lift 참여만 끄며 수동 주행까지 막지 않는다.
+-   **양손 목표 조작**
 
-## 데모 영상
+    독립 MoveL, world XYZ/RPY 입력, 3D Gizmo와 virtual object 기반 양손 이동을 제공한다.
 
-### Whole-body Control
+-   **충돌 대응과 실제 파지**
 
-<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
-  <iframe
-    src="https://www.youtube.com/embed/MzO1GpUfCd8?list=PLWyQPsEn5Atg"
-    title="ffw-sh5-grasp Whole-body Control 데모"
-    style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
-    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-    allowfullscreen>
-  </iframe>
+    가까운 충돌에는 velocity CBF로 반응하고, 물체는 weld 없이 손가락 접촉력과 마찰로 잡는다.
+
+-   **스워브 모바일 베이스**
+
+    차체 속도를 실제 steer/drive actuator 명령으로 바꾸고 wheel-ground contact로 이동한다.
+
 </div>
 
-[YouTube에서 Whole-body Control 데모 보기](https://www.youtube.com/watch?v=MzO1GpUfCd8&list=PLWyQPsEn5Atg)
+!!! info "구현 범위"
 
-[알고리즘 상세 구현: 전신 IK와 충돌 회피](guide/whole_body_ik.md)
+    Collision avoidance는 현재 거리와 접근 속도에 반응하는 제어 계층이며 경로 계획기는
+    아니다. Whole-body OFF는 자동 IK의 base·lift 참여만 끄며 키보드 주행은 유지한다.
 
-### Whole-body 미사용 (Arm-only)
+## 데모
 
-<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
-  <iframe
-    src="https://www.youtube.com/embed/2LV_RsAGdz8?list=PLWyQPsEn5Atg&index=2"
-    title="ffw-sh5-grasp Whole-body 미사용 데모"
-    style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
-    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-    allowfullscreen>
-  </iframe>
-</div>
+=== "전신 제어"
 
-[YouTube에서 Whole-body 미사용 데모 보기](https://www.youtube.com/watch?v=2LV_RsAGdz8&list=PLWyQPsEn5Atg&index=2)
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
+      <iframe
+        src="https://www.youtube.com/embed/AXAByoi5CxU"
+        title="ffw-sh5-grasp 전신 제어 데모"
+        style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen>
+      </iframe>
+    </div>
 
-[알고리즘 상세 구현: Whole-body OFF의 Arm-only hard gate](guide/whole_body_ik.md#whole-body-modes)
+    [YouTube에서 보기](https://www.youtube.com/watch?v=AXAByoi5CxU) ·
+    [전신 IK 구현](guide/whole_body_ik.md)
+
+=== "팔 전용 제어"
+
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
+      <iframe
+        src="https://www.youtube.com/embed/2LV_RsAGdz8?list=PLWyQPsEn5Atg&index=2"
+        title="ffw-sh5-grasp 팔 전용 제어 데모"
+        style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen>
+      </iframe>
+    </div>
+
+    [YouTube에서 보기](https://www.youtube.com/watch?v=2LV_RsAGdz8&list=PLWyQPsEn5Atg&index=2) ·
+    [Whole-body OFF 동작](guide/whole_body_ik.md#whole-body-modes)

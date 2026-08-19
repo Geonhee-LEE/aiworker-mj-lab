@@ -1,193 +1,138 @@
-# 아키텍처와 데이터 흐름
+# 시스템 구조
 
-코드를 읽기 전에 “어느 파일이 무엇을 소유하는가”를 빠르게 찾는 문서다. 제어 개념이
-먼저 필요하면 [동작 원리](concepts.md)를 읽는다.
+이 프로젝트는 ROS 없이 하나의 Python 프로세스에서 입력, IK, actuator 제어, MuJoCo
+물리와 렌더링을 순서대로 실행한다. 조립 지점은
+`src/ffw_sh5_grasp/application/teleop.py`의 `TeleopApp`이다.
 
-## 한 문장 구조
+## 상태와 명령
 
-`application/teleop.py`가 입력, target 변환, whole-body solver, actuator controller와 renderer를
-한 frame loop에 조립하며, 나머지 모듈은 각자의 계산만 담당한다.
-
-모든 실제 구현은 `src/ffw_sh5_grasp/` 패키지 아래에 있다. 저장소의
-`src/teleop_app.py`, `src/kinematics.py`, `src/ik.py`는 기존 실행 명령과 import를
-유지하는 얇은 호환 진입점이다.
-
-실행·알고리즘 튜닝값은 `config/default.yaml`이 소유하며 `config.py`가 시작 시 한 번
-검증한다. 자세한 적용법은 [YAML 파라미터 설정](configuration.md)을 참고한다.
-
-## 계층별 구조
-
-```mermaid
-flowchart TB
-    subgraph Presentation["입력 · 표시"]
-        UI["visualization/ui.py<br>ImGui widget"]
-        R["visualization/render.py<br>GLFW/MuJoCo/ImGuizmo"]
-    end
-    subgraph Intent["목표 표현"]
-        T["application/targets.py<br>좌표 변환 · marker · Bimanual state"]
-    end
-    subgraph Decision["명령 계산"]
-        W["control/whole_body.py<br>WBIK task · bound · command 조립"]
-        K["계산 모듈군<br>tree · collision · bimanual · box-QP"]
-        B["control/base.py<br>BodyTwist · swerve · reversal FSM"]
-        A["control/arm.py<br>PD + bias torque"]
-        G["control/grasp.py<br>finger synergy · contact 판정"]
-    end
-    APP["application/teleop.py<br>composition root · frame loop"]
-    P[("MuJoCo model/data/physics")]
-
-    UI <--> APP
-    R <--> APP
-    APP <--> T
-    APP --> W
-    W --> K
-    APP --> B
-    APP --> A
-    APP --> G
-    APP <--> P
-    B --> P
-    A --> P
-    G --> P
-    P --> R
-```
-
-## 파일 책임 지도
-
-| 파일 | 입력 | 출력 | 하지 않는 일 |
-|---|---|---|---|
-| `config.py` | 기본·사용자 YAML | 검증된 설정 스냅샷 | 제어 상태 변경 없음 |
-| `application/teleop.py` | 모든 app 상태와 입력 | frame별 actuator command + `mj_step` | 수학 구현을 중복하지 않음 |
-| `visualization/ui.py` | app 상태 | target/mode 상태 변경 | IK, physics, 3D render 없음 |
-| `visualization/render.py` | model/data/target pose | scene, camera, gizmo | controller 계산 없음 |
-| `application/targets.py` | UI target, base/anchor pose | world hand/virtual pose | actuator 접근 없음 |
-| `kinematics/` | model/data, site/geom id | 정규화 pose/Jacobian/distance gradient | target 정책 없음 |
-| `control/bimanual.py` | 두 손 pose/Jacobian, 캡처 reference | rigid-grasp 상대 task | actuator 접근 없음 |
-| `kinematics/solver.py` | pose 또는 행렬·벡터·bound·해법 | 반복 IK와 pseudoinverse/DLS/QP 해 | control 정책 없음 |
-| `kinematics/optimization.py` | Hessian·선형항·제약 | box/soft-barrier QP 해 | robot model 접근 없음 |
-| `control/whole_body.py` | current state, world target | base twist, lift/arm position | 수치 solver 중복·live qpos write 없음 |
-| `control/base.py` | keys/BodyTwist, wheel feedback | steer angle + wheel speed | MuJoCo/ROS import 없음 |
-| `control/arm.py` | current arm state, `q_des` | motor torque | IK target 해석 없음 |
-| `control/grasp.py` | grasp/thumb, contact | finger target, grasp 판정 | 물체 weld 없음 |
-| `kinematics/legacy.py` | 한 손 pose | 단일 팔 관절 해 | 현재 teleop WBIK 경로 아님 |
-| `mujoco_utils.py` | joint id | 연결된 actuator id | 제어 정책 없음 |
-
-조절 가능한 실행·알고리즘 값의 원본은 `config/default.yaml`이다. 각 계산 모듈은
-`config.py`가 검증한 값을 읽으며, 사용자 파일의 적용법은
-[YAML 파라미터 설정](configuration.md)에 정리되어 있다.
-
-구현을 수정할 때는 [시스템 이해와 개발 가이드](guide/index.md)의 목적별 경로에서 해당 모듈과
-최소 회귀 테스트를 함께 찾을 수 있다. 공용 pose/Jacobian/distance 계산은
-[기구학과 충돌 거리](guide/kinematics.md)에 따로 정리되어 있다.
-
-## 상태의 소유권
-
-| 상태 | 소유/갱신 위치 | 소비 위치 |
+| 구분 | 의미 | 대표 값 |
 |---|---|---|
-| `app.targets` | UI, gizmo, target transition | teleop target 변환, physics step |
-| `whole_body_enabled` | UI toggle / app transition | target frame, solver participation, arbitration |
-| `arm_mode` | arm panel | active solver side 또는 FK slider |
-| `cyclo_grasp_captured` | Capture/Release | virtual-object target과 rigid-grasp task |
-| `commanded_base_twist` | app arbitration | `SwerveDrive.update_twist()`와 status |
-| `q_des[side]` | WBIK 또는 FK selection | `arm_controllers[side]` |
-| collision diagnostics | WBIK command | status와 render overlay |
-| `data.qpos/qvel` | MuJoCo physics | 모든 feedback 계산 |
+| target | 사용자가 원하는 상태 | 손 pose, lift, grasp 값 |
+| command | solver/controller가 actuator에 보낼 값 | `q_des`, `BodyTwist`, torque |
+| measured state | MuJoCo가 적분한 실제 상태 | `data.qpos`, `data.qvel`, site pose |
 
-## 한 frame의 호출 흐름 { #frame-call-flow }
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant App as application.teleop
-    participant UI as visualization.ui
-    participant Targets as application.targets
-    participant IK as control.whole_body
-    participant Base as control.base
-    participant Physics as MuJoCo
-    participant Render as visualization.render
-
-    User->>App: keyboard/mouse event
-    App->>UI: draw_panel()
-    UI-->>App: target/mode state update
-    App->>Targets: raw/smoothed target → world pose
-    Targets-->>App: right/left target pose
-    App->>IK: solve(current state, targets, mode)
-    IK-->>App: base twist, lift, arms, collision diagnostics
-    App->>App: keyboard > braking zero > WBIK/zero arbitration
-    App->>Base: body twist + wheel feedback
-    Base-->>App: steer/drive commands
-    App->>Physics: arm/lift/wheel/finger ctrl + mj_step
-    Physics-->>Render: updated model/data
-    App->>Render: target/collision/gizmo state
-    Render-->>User: next frame
-```
-
-## Target 좌표 흐름
+UI와 Gizmo는 target만 바꾼다. controller가 command를 계산하고 `mj_step()`이 실제
+state를 갱신한다. 캔 reset 같은 자유물체 초기화를 제외하면 로봇의 `data.qpos`를
+직접 덮어쓰지 않는다.
 
 ```mermaid
 flowchart LR
-    RAW["app.targets<br>home-relative XYZ/RPY"] --> SM["frame rate limit<br>3 cm / 8°"]
-    SM --> MODE{"Whole-body?"}
-    MODE -->|ON| ANCHOR["startup/carried anchor → world-fixed"]
-    MODE -->|OFF| LOCAL["live base → world"]
-    ANCHOR --> POSE["world hand pose"]
-    LOCAL --> POSE
-    POSE --> IK["WBIK / arm-only"]
+    KEY["keyboard"] --> APP["application/teleop.py"]
+    INPUT["UI · Gizmo"] --> TARGET["application/targets.py<br>target state"]
+    TARGET --> APP
+    APP --> SOLVE["control/* · kinematics/*<br>command 계산"]
+    SOLVE --> CTRL["data.ctrl"]
+    CTRL --> STEP["mujoco.mj_step()"]
+    STEP --> STATE["qpos · qvel · site · contact"]
+    STATE --> SOLVE
+    STATE --> VIEW["visualization/*"]
 ```
 
-ON/OFF 전환은 현재 world pose를 저장한 뒤 반대 표현으로 역변환한다. 이 때문에 UI의
-숫자는 바뀔 수 있지만 marker의 실제 world 위치는 보존된다.
+## 코드 계층
 
-## Base 명령 우선순위
+```mermaid
+flowchart TB
+    APP["application/teleop.py<br>TeleopApp"]
+    TARGET["application/targets.py<br>좌표 변환 · 양손 target"]
+    UI["visualization/ui.py<br>ImGui widget"]
+    RENDER["visualization/render.py<br>scene · camera · Gizmo"]
+    CONTROL["control/*<br>WBIK · arm · base · grasp"]
+    KIN["kinematics/*<br>FK · task · constraint · solver"]
+    MJ[("MuJoCo model/data")]
 
-```text
-키보드 입력 중
-  → keyboard BodyTwist
-키 해제 뒤 물리 제동 중
-  → zero BodyTwist
-정지 완료 + Whole-body ON
-  → WBIK BodyTwist
-정지 완료 + Whole-body OFF
-  → zero BodyTwist
+    APP --> UI
+    APP --> TARGET
+    APP --> CONTROL
+    CONTROL --> KIN
+    APP --> MJ
+    APP --> RENDER
+    UI --> TARGET
+    RENDER --> TARGET
+    RENDER --> MJ
 ```
 
-모든 경우 마지막 단계는 같은 `SwerveDrive.update_twist()`다. 수동/자동 경로가 다른
-wheel controller를 사용하지 않는다.
+의존 방향의 기준은 다음과 같다.
 
-## ROS2 용어 대응표 { #ros2-concept-map }
+- `application`은 모듈 조립, 프레임 실행 순서와 상태 전환을 담당한다.
+- `visualization`은 target과 표시 상태만 변경하며 IK나 actuator를 실행하지 않는다.
+- `control`은 로봇 명령 정책, `kinematics`는 재사용 가능한 수학 계산을 담당한다.
+- 설정 원본은 `config/default.yaml`이고 `config.py`가 시작할 때 검증한다.
 
-이 프로젝트는 ROS2 node를 흉내 내는 별도 계층을 두지 않는다. 익숙한 ROS2 개념을
-아래처럼 현재 코드 경계로 바꿔 읽으면, 나머지 알고리즘 문서는 동일하다.
+## 파일별 역할
 
-| ROS2에서 흔한 구성 | 이 프로젝트의 경계 |
+| 수정하려는 내용 | 구현 파일 | 상세 문서 |
+|---|---|---|
+| 프레임 반복·모드 전환·명령 중재 | `application/teleop.py` | [애플리케이션](guide/teleop_app.md) |
+| target frame·양손 capture | `application/targets.py` | [애플리케이션](guide/teleop_app.md#target-frames) |
+| ImGui 입력·진단 창 | `visualization/ui.py` | [시각화](guide/teleop_ui.md) |
+| scene·camera·Gizmo·overlay | `visualization/render.py` | [시각화](guide/teleop_ui.md#render-flow) |
+| FK·Jacobian·충돌 거리·IK 해법 | `kinematics/*` | [기구학 안내](guide/kinematics.md) |
+| 전신 task와 명령 조립 | `control/whole_body.py` | [전신 IK](guide/whole_body_ik.md) |
+| 팔·base·손 actuator 정책 | `control/arm.py`, `base.py`, `grasp.py` | [제어 학습 순서](guide/index.md#algorithm-learning-order) |
+
+새 soft task는 `kinematics/tasks.py`, velocity bound나 CBF는
+`kinematics/constraints.py`, 새로운 IK 해법은 `kinematics/solver.py`에 둔다. 한
+controller 내부에서 상태를 유지하는 정책은 해당 `control` 모듈에 남긴다.
+
+## 한 프레임의 호출 흐름 { #frame-call-flow }
+
+```mermaid
+sequenceDiagram
+    participant App as application/teleop.py<br>TeleopApp.run()
+    participant UI as visualization/ui.py<br>draw_panel()
+    participant Target as application/targets.py
+    participant IK as control/whole_body.py<br>WholeBodyIK.solve()
+    participant Base as control/base.py<br>SwerveDrive.update_twist()
+    participant MJ as MuJoCo
+    participant Render as visualization/render.py
+
+    App->>Render: begin_frame() · handle_camera_mouse()
+    App->>UI: draw_panel(self)
+    UI-->>App: target/mode state 변경
+    App->>Target: target pose를 world pose로 변환
+    App->>IK: solve(data, targets, mode)
+    IK-->>App: base · lift · arm command
+    App->>Base: 선택된 BodyTwist + wheel feedback
+    Base-->>App: steer/drive command
+    App->>MJ: data.ctrl 기록 · mj_step()
+    App->>Render: render_scene() · end_frame()
+```
+
+세부 target 변환은 [애플리케이션](guide/teleop_app.md), base 명령 우선순위는
+[모바일 스워브 제어](guide/base_teleop.md#base-function-flow)에 정리되어 있다.
+
+## 상태 갱신 위치
+
+| 상태 | 갱신 위치 | 소비 위치 |
+|---|---|---|
+| `app.targets` | UI, Gizmo, target 전환 함수 | WBIK, marker render |
+| `whole_body_enabled`, `arm_mode` | `TeleopApp`의 전환 메서드 | target frame, solver |
+| `q_des` | WBIK 또는 FK UI 값 | `ArmTorqueController` |
+| `commanded_base_twist` | `_step_physics()` 중재 | `SwerveDrive` |
+| collision 진단값 | `WholeBodyIK.solve()` 결과 | status UI, overlay |
+| `data.qpos/qvel` | `mujoco.mj_step()` | 모든 feedback 계산 |
+
+## 필요한 MuJoCo 용어
+
+| 용어 | 이 프로젝트에서의 역할 |
 |---|---|
-| node | 하나의 `TeleopApp` 인스턴스와 frame loop |
-| topic/action | 함수 인자·반환값과 `app.targets` 상태 |
-| tf2 frame | MuJoCo body/site와 `application/targets.py`의 명시적 변환 |
-| URDF | `models/*.xml`의 MJCF |
-| joint state | `data.qpos`, `data.qvel` 직접 읽기 |
-| MoveIt Servo/IK | `WholeBodyIK.solve()`와 `DifferentialIKSolver.solve()` |
-| collision checker | MuJoCo geom distance + 자체 점 Jacobian CBF |
-| `cmd_vel` | `BodyTwist(vx, vy, wz)` |
-| `twist_mux` | `_step_physics()`의 keyboard/WBIK 명령 우선순위 |
-| swerve controller plugin | `SwerveDrive.update_twist()` |
-| `ros2_control` controller | `ArmTorqueController`, `SwerveDrive`, `apply_grasp()` |
-| RViz Interactive Marker | ImGuizmo와 MuJoCo mocap marker |
-| parameter server | 시작 시 검증되는 `config/default.yaml`과 사용자 override |
-| launch | `python3 src/teleop_app.py --config ...` |
-| `colcon test` | `tests/test_phase_*.py`, `tests/test_whole_body.py` |
+| `MjModel` | MJCF에서 컴파일된 body, joint, geom, actuator 구조 |
+| `MjData` | 현재 `qpos`, `qvel`, `ctrl`, site와 contact 상태 |
+| body / joint | 강체와 자유도 |
+| geom / site | 충돌·표시 형상과 질량 없는 기준 좌표계 |
+| actuator | 위치·속도·torque 입력을 joint에 적용 |
+| `mj_forward()` | 시간을 진행하지 않고 현재 state의 파생량 재계산 |
+| `mj_step()` | 한 timestep 물리 적분 |
 
-실행 중 topic이나 tf tree가 갱신되는 구조가 아니라, 한 프로세스에서 다음 함수가
-순서대로 호출된다. 실기 ROS2 adapter를 추가할 때도 알고리즘을 다시 쓰기보다 이
-입출력 경계에서 message와 Python 값 객체를 변환하는 것이 기준이다.
+## 검증
 
-## 테스트 연결
-
-| 계층 | 가장 직접적인 테스트 |
+| 변경 영역 | 최소 회귀 |
 |---|---|
-| target/UI/state transition | `test_phase_6.py` |
-| swerve input/FSM/물리 | `test_phase_5.py` |
-| WBIK/QP/collision/physical mobile | `test_whole_body.py` |
-| 단일 팔 FK/Jacobian/IK | `test_phase_3.py` |
-| grasp/contact | `test_phase_1.py`, `test_phase_2.py` |
+| app·target·UI·render | `python3 tests/test_phase_6.py` |
+| base | `python3 tests/test_phase_5.py` |
+| 기구학·WBIK·collision | `python3 tests/test_whole_body.py` |
+| 팔 FK·torque | `python3 tests/test_phase_3.py`, `python3 tests/test_phase_4.py` |
+| grasp/contact | `python3 tests/test_phase_1.py`, `python3 tests/test_phase_2.py` |
 
-변경 영역별 실행 순서는 [테스트와 검증](testing.md)에 있다.
+전체 실행 순서는 [테스트와 검증](testing.md)을 따른다.
