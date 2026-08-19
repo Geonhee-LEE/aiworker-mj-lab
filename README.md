@@ -1,4 +1,4 @@
-# ffw-sh5-grasp
+# aiworker-mj-lab
 
 ROBOTIS FFW-SH5 양팔 모바일 로봇의 MuJoCo 물리 기반 텔레오퍼레이션 프로젝트입니다.
 ROS 없이 손 목표, whole-body/arm-only IK, 실제 스워브 바퀴, 양손 grasp와 reactive
@@ -8,12 +8,12 @@ collision avoidance를 하나의 Python 앱에서 실행합니다.
 
 | Whole-body Control | Whole-body 미사용 (Arm-only) |
 |---|---|
-| [![Whole-body Control 데모](https://img.youtube.com/vi/MzO1GpUfCd8/hqdefault.jpg)](https://www.youtube.com/watch?v=MzO1GpUfCd8&list=PLWyQPsEn5Atg) | [![Whole-body 미사용 데모](https://img.youtube.com/vi/2LV_RsAGdz8/hqdefault.jpg)](https://www.youtube.com/watch?v=2LV_RsAGdz8&list=PLWyQPsEn5Atg&index=2) |
+| [![Whole-body Control 데모](https://img.youtube.com/vi/AXAByoi5CxU/hqdefault.jpg)](https://www.youtube.com/watch?v=AXAByoi5CxU) | [![Whole-body 미사용 데모](https://img.youtube.com/vi/2LV_RsAGdz8/hqdefault.jpg)](https://www.youtube.com/watch?v=2LV_RsAGdz8&list=PLWyQPsEn5Atg&index=2) |
 | base·lift·양팔이 함께 목표를 추종하는 버전 | base·lift 자동 참여를 끈 버전 |
 | [알고리즘 상세 구현: 전신 IK와 충돌 회피](docs/guide/whole_body_ik.md) | [알고리즘 상세 구현: Arm-only hard gate](docs/guide/whole_body_ik.md#whole-body-modes) |
 
-[문서 사이트](https://ggh-png.github.io/ffw-sh5-grasp/) ·
-[2.0.0 릴리스](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/v2.0.0)
+[문서 사이트](https://ggh-png.github.io/aiworker-mj-lab/) ·
+[2.0.0 릴리스](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v2.0.0)
 
 ## 먼저 읽을 문서
 

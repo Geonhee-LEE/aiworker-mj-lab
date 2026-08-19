@@ -2,7 +2,7 @@
 
 ## 2.0.0 — Explicit Whole-body QP & Safety Projection
 
-2026-08-07 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/v2.0.0)
+2026-08-07 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v2.0.0)
 
 ### 제어와 수치 해법
 
@@ -24,11 +24,11 @@
 - joint-limit/collision CBF, arm-only/base participation hard gate 검증
 - Phase 0–6, Whole-body 통합과 `mkdocs build --strict` 통과
 
-전체 diff: [1.4.0...v2.0.0](https://github.com/ggh-png/ffw-sh5-grasp/compare/1.4.0...v2.0.0)
+전체 diff: [1.4.0...v2.0.0](https://github.com/ggh-png/aiworker-mj-lab/compare/1.4.0...v2.0.0)
 
 ## 1.4.0 — Lean Runtime & Faster IK Defaults
 
-2026-08-03 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.4.0)
+2026-08-03 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/1.4.0)
 
 ### 코드와 API
 
@@ -50,11 +50,11 @@
 - Phase 0–6, YAML 설정, Whole-body 통합 테스트 통과
 - Python compile, diff whitespace와 `mkdocs build --strict` 통과
 
-전체 diff: [1.3.0...1.4.0](https://github.com/ggh-png/ffw-sh5-grasp/compare/1.3.0...1.4.0)
+전체 diff: [1.3.0...1.4.0](https://github.com/ggh-png/aiworker-mj-lab/compare/1.3.0...1.4.0)
 
 ## 1.3.0 — Modular Kinematics & Unified Developer Guide
 
-2026-08-02 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.3.0)
+2026-08-02 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/1.3.0)
 
 ### 구조와 코드
 
@@ -86,11 +86,11 @@
 - 무작위 WBIK 40/40 descent·read-only·bound 통과
 - `mkdocs build --strict`와 diff whitespace 검사 통과
 
-전체 diff: [1.2.0...1.3.0](https://github.com/ggh-png/ffw-sh5-grasp/compare/1.2.0...1.3.0)
+전체 diff: [1.2.0...1.3.0](https://github.com/ggh-png/aiworker-mj-lab/compare/1.2.0...1.3.0)
 
 ## 1.2.0 — Custom Kinematics & Compact Multi-Viewport UI
 
-2026-07-23 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.2.0)
+2026-07-23 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/1.2.0)
 
 ### 사용자에게 보이는 변화
 
@@ -118,11 +118,11 @@
 - compact UI gate: workspace 2개, 실제 플랫폼 viewport는 주 창 포함 3개
 - Phase 0–6, Whole-Body 통합, strict 문서 빌드 통과
 
-전체 diff: [1.1.1...1.2.0](https://github.com/ggh-png/ffw-sh5-grasp/compare/1.1.1...1.2.0)
+전체 diff: [1.1.1...1.2.0](https://github.com/ggh-png/aiworker-mj-lab/compare/1.1.1...1.2.0)
 
 ## 1.1.1 — Whole-body Control Toggle
 
-2026-07-19 발행. [GitHub Release](https://github.com/ggh-png/ffw-sh5-grasp/releases/tag/1.1.1)
+2026-07-19 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/1.1.1)
 
 ### 사용자에게 보이는 변화
 
@@ -150,7 +150,7 @@
 - 무작위 WBIK 40회와 실제 바퀴 4방향 추종
 - strict 문서 빌드
 
-전체 diff: [1.1.0...1.1.1](https://github.com/ggh-png/ffw-sh5-grasp/compare/1.1.0...1.1.1)
+전체 diff: [1.1.0...1.1.1](https://github.com/ggh-png/aiworker-mj-lab/compare/1.1.0...1.1.1)
 
 ## 1.1.0 — ROS-free Whole-body IK
 

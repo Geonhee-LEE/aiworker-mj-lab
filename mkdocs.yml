@@ -1,7 +1,7 @@
-site_name: "ffw-sh5-grasp"
+site_name: "aiworker-mj-lab"
 site_author: ggh-png
-repo_url: https://github.com/ggh-png/ffw-sh5-grasp
-site_url: https://ggh-png.github.io/ffw-sh5-grasp/
+repo_url: https://github.com/ggh-png/aiworker-mj-lab
+site_url: https://ggh-png.github.io/aiworker-mj-lab/
 site_description: "ROBOTIS FFW-SH5의 ROS-free MuJoCo 텔레오퍼레이션 — whole-body/arm-only IK, 실제 스워브 물리, 양손 grasp, reactive collision avoidance와 검증 문서."
 
 theme:
@@ -70,7 +70,7 @@ copyright: Copyright &copy; 2026 ggh-png
 extra:
     social:
         - icon: fontawesome/brands/github
-          link: https://github.com/ggh-png/ffw-sh5-grasp
+          link: https://github.com/ggh-png/aiworker-mj-lab
 
 extra_css:
     - css/custom.css

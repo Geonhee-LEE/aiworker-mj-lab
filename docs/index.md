@@ -1,4 +1,4 @@
-# ffw-sh5-grasp
+# aiworker-mj-lab
 
 FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 텔레오퍼레이션 프로젝트다.
 손 목표를 지정하면 전신 IK가 팔·리프트·스워브 베이스 명령을 계산하고, 실제 actuator와
@@ -94,7 +94,7 @@ UI는 로봇 관절을 순간 이동시키지 않는다. 목표값을 바꾸면 
     <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
       <iframe
         src="https://www.youtube.com/embed/AXAByoi5CxU"
-        title="ffw-sh5-grasp 전신 제어 데모"
+        title="aiworker-mj-lab 전신 제어 데모"
         style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowfullscreen>
@@ -109,7 +109,7 @@ UI는 로봇 관절을 순간 이동시키지 않는다. 목표값을 바꾸면 
     <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
       <iframe
         src="https://www.youtube.com/embed/2LV_RsAGdz8?list=PLWyQPsEn5Atg&index=2"
-        title="ffw-sh5-grasp 팔 전용 제어 데모"
+        title="aiworker-mj-lab 팔 전용 제어 데모"
         style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0;"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowfullscreen>
