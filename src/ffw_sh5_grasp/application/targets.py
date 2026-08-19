@@ -90,9 +90,10 @@ def carry_world_targets_with_base(app, previous_base_pose, current_base_pose):
 
 def base_pose(app):
     """MuJoCo 베이스 qpos에서 x·y·yaw, 삼각함수와 yaw 쿼터니언을 함께 반환한다."""
-    base_x = app.data.qpos[app.base_x_qadr]
-    base_y = app.data.qpos[app.base_y_qadr]
-    base_yaw = app.data.qpos[app.base_yaw_qadr]
+    bindings = app.bindings.base
+    base_x = app.data.qpos[bindings.x_qpos]
+    base_y = app.data.qpos[bindings.y_qpos]
+    base_yaw = app.data.qpos[bindings.yaw_qpos]
     cy, sy = math.cos(base_yaw), math.sin(base_yaw)
     base_quat = np.array([math.cos(base_yaw / 2), 0.0, 0.0, math.sin(base_yaw / 2)])
     return base_x, base_y, base_yaw, cy, sy, base_quat
@@ -278,17 +279,19 @@ def apply_virtual_object_target(app):
 
 def sync_marker_visibility(app):
     """양손 MoveL 캡처 상태에 맞춰 가상 물체 geom/site 마커의 투명도를 갱신한다."""
-    if not hasattr(app, "virtual_object_marker_geom_id"):
+    bindings = getattr(app, "bindings", None)
+    if bindings is None:
         return
+    markers = bindings.markers
     visible = (getattr(app, "cyclo_controller", "movel") == "bimanual_movel"
                and bool(getattr(app, "cyclo_grasp_captured", False)))
     alpha_scale = float(visible)
-    geom_rgba = app.virtual_object_marker_rgba["geom"].copy()
-    site_rgba = app.virtual_object_marker_rgba["site"].copy()
+    geom_rgba = markers.virtual_geom_rgba.copy()
+    site_rgba = markers.virtual_site_rgba.copy()
     geom_rgba[3] *= alpha_scale
     site_rgba[3] *= alpha_scale
-    app.model.geom_rgba[app.virtual_object_marker_geom_id] = geom_rgba
-    app.model.site_rgba[app.virtual_object_marker_site_id] = site_rgba
+    app.model.geom_rgba[markers.virtual_geom_id] = geom_rgba
+    app.model.site_rgba[markers.virtual_site_id] = site_rgba
 
 
 def active_gizmo_target(app):
@@ -325,14 +328,15 @@ def set_gizmo_target_world_pose(app, target, world_pos, world_quat):
 
 def sync_ik_mocaps_from_targets(app):
     """수치 UI 목표를 MuJoCo 손·가상 물체 mocap 마커 pose와 가시성에 반영한다."""
-    if not hasattr(app, "ik_target_mocap_ids"):
+    bindings = getattr(app, "bindings", None)
+    if bindings is None:
         return
-    for side, mocap_id in app.ik_target_mocap_ids.items():
+    markers = bindings.markers
+    for side, mocap_id in markers.hand_mocap_ids.items():
         pos, quat = target_world_pose(app, side)
         app.data.mocap_pos[mocap_id] = pos
         app.data.mocap_quat[mocap_id] = quat
-    if hasattr(app, "virtual_object_mocap_id"):
-        pos, quat = virtual_object_world_pose(app)
-        app.data.mocap_pos[app.virtual_object_mocap_id] = pos
-        app.data.mocap_quat[app.virtual_object_mocap_id] = quat
+    pos, quat = virtual_object_world_pose(app)
+    app.data.mocap_pos[markers.virtual_mocap_id] = pos
+    app.data.mocap_quat[markers.virtual_mocap_id] = quat
     sync_marker_visibility(app)

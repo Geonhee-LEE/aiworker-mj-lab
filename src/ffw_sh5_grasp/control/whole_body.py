@@ -87,6 +87,16 @@ class WholeBodyCommand:
     collision_constraint_violation: float = 0.0
 
 
+@dataclass(frozen=True)
+class _CollisionSafetyResult:
+    """Collision CBF 투영 뒤의 속도와 진단값."""
+
+    generalized_velocity: np.ndarray
+    minimum_distance: float = math.inf
+    active_pairs: tuple = ()
+    constraint_violation: float = 0.0
+
+
 class WholeBodyIK:
     """base, lift, 양팔을 함께 푸는 weighted bounded differential IK."""
 
@@ -543,31 +553,45 @@ class WholeBodyIK:
         else:
             self._previous_base_velocity_world[:] = 0.0
             self._last_solve_time = None
+        safety = self._project_collision_safety(
+            data, dt, qdot, lower, upper)
+        return self._command_from_velocity(
+            data, current_q, dt, active_sides,
+            position_errors, orientation_errors, safety)
+
+    def _project_collision_safety(self, data, dt, qdot, lower, upper):
+        """Base shaping 이후 collision CBF를 투영하고 진단값을 함께 반환한다."""
         collision_barriers = self._collision_constraints(data, dt)
-        if collision_barriers:
-            barrier_matrix = np.vstack([
-                barrier.gradient for barrier in collision_barriers])
-            barrier_lower = np.array([
-                barrier.lower for barrier in collision_barriers])
-            # base shaping 뒤에 safety projection을 적용해 가속도 제한이 위험한 접근
-            # 속도를 다시 만들지 않게 한다. 실제 projection 계산은 solver가 수행한다.
-            qdot = self.differential_solver.enforce_constraints(
-                qdot, lower, upper,
-                barrier_matrix, barrier_lower, self.collision_slack_weight,
-                variable_scale=self.velocity_limits,
-                barrier_scale=self.max_task_linear_speed)
-            # 다음 가속 ramp는 collision safety override까지 반영된 실제 명령에서 시작한다.
-            self._previous_base_velocity_world = qdot[:3].copy()
-            collision_violation = float(np.max(np.maximum(
-                barrier_lower - barrier_matrix @ qdot, 0.0)))
-            collision_names = tuple(
-                barrier.name for barrier in collision_barriers)
-            minimum_collision_distance = min(
-                barrier.distance for barrier in collision_barriers)
-        else:
-            collision_violation = 0.0
-            collision_names = ()
-            minimum_collision_distance = math.inf
+        if not collision_barriers:
+            return _CollisionSafetyResult(qdot)
+
+        barrier_matrix = np.vstack([
+            barrier.gradient for barrier in collision_barriers])
+        barrier_lower = np.array([
+            barrier.lower for barrier in collision_barriers])
+        # 가속도 제한 뒤에 투영해 shaping이 위험한 접근 속도를 다시 만들지 않게 한다.
+        safe_qdot = self.differential_solver.enforce_constraints(
+            qdot, lower, upper,
+            barrier_matrix, barrier_lower, self.collision_slack_weight,
+            variable_scale=self.velocity_limits,
+            barrier_scale=self.max_task_linear_speed)
+        # 다음 base 가속 ramp는 safety override가 반영된 실제 명령에서 시작한다.
+        self._previous_base_velocity_world = safe_qdot[:3].copy()
+        violation = float(np.max(np.maximum(
+            barrier_lower - barrier_matrix @ safe_qdot, 0.0)))
+        return _CollisionSafetyResult(
+            generalized_velocity=safe_qdot,
+            minimum_distance=min(
+                barrier.distance for barrier in collision_barriers),
+            active_pairs=tuple(
+                barrier.name for barrier in collision_barriers),
+            constraint_violation=violation,
+        )
+
+    def _command_from_velocity(self, data, current_q, dt, active_sides,
+                               position_errors, orientation_errors, safety):
+        """안전 투영된 generalized velocity를 actuator 계층용 명령으로 변환한다."""
+        qdot = safety.generalized_velocity
         next_q = current_q + qdot * dt
         next_q = self._clip_positions(next_q)
 
@@ -589,9 +613,9 @@ class WholeBodyIK:
             position_errors=position_errors,
             orientation_errors=orientation_errors,
             generalized_velocity=qdot,
-            minimum_collision_distance=minimum_collision_distance,
-            active_collision_pairs=collision_names,
-            collision_constraint_violation=collision_violation,
+            minimum_collision_distance=safety.minimum_distance,
+            active_collision_pairs=safety.active_pairs,
+            collision_constraint_violation=safety.constraint_violation,
         )
 
     def _collision_constraints(self, data, dt):

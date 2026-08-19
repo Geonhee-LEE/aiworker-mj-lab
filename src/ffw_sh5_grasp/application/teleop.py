@@ -46,7 +46,7 @@ from ffw_sh5_grasp.control import whole_body  # noqa: E402
 from ffw_sh5_grasp.config import CONFIG_ENV_VAR, SETTINGS  # noqa: E402
 from ffw_sh5_grasp.paths import MODEL_PATH  # noqa: E402
 from ffw_sh5_grasp.visualization import render, ui  # noqa: E402
-from . import targets  # noqa: E402
+from . import control_loop, state, targets  # noqa: E402
 
 # 양팔 관절 이름 목록 (IK solver / 토크 제어기에 그대로 넘겨진다).
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
@@ -107,20 +107,19 @@ def _joint_address(model, name, addresses):
     return int(addresses[joint_id])
 
 
-def _reset_can_random(model, data, rng):
+def _reset_can_random(model, data, rng, can_joint):
     """초기 키프레임 리셋 외에 이 파일에서 허용하는 유일한 qpos 쓰기다.
 
     자유 물체의 생성 자세를 재설정하는 명시적 예외이며, 로봇 자체의 기구학 상태를
     강제로 덮어쓰는 동작은 아니다.
     """
-    can_jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "can_free")
-    qadr = model.jnt_qposadr[can_jid]
+    qadr = model.jnt_qposadr[can_joint]
     key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, HOME_KEYFRAME)
     home_can_pos = model.key_qpos[key_id][qadr:qadr + 3].copy()
     data.qpos[qadr:qadr + 3] = home_can_pos + rng.uniform(
         -CAN_RESET_NOISE, CAN_RESET_NOISE, size=3)
     data.qpos[qadr + 3:qadr + 7] = [1, 0, 0, 0]
-    dof = model.jnt_dofadr[can_jid]
+    dof = model.jnt_dofadr[can_joint]
     data.qvel[dof:dof + 6] = 0.0
 
 
@@ -156,8 +155,15 @@ class TeleopApp:
     # 초기화
 
     def _setup_sim(self):
-        """모델 로드, 홈 자세 리셋, IK 솔버/토크 제어기, actuator/joint id 조회,
-        슬라이더 목표값(targets) 초기화까지 -- 렌더링/윈도우와 무관한 부분 전부."""
+        """렌더링과 독립적인 모델·제어기·주소·목표 상태를 순서대로 구성한다."""
+        self._load_model_state()
+        self._setup_control_systems()
+        self._bind_model_entities()
+        self._setup_target_state()
+        self.reset_can()
+
+    def _load_model_state(self):
+        """MJCF를 로드하고 home keyframe의 초기 ``MjData``를 만든다."""
         model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
         data = mujoco.MjData(model)
         key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, HOME_KEYFRAME)
@@ -165,7 +171,9 @@ class TeleopApp:
         self.model = model
         self.data = data
 
-        # 전신 IK solver와 팔 토크 제어기를 만든다. 기존 ik.py는 Phase 3/4 독립 회귀용이다.
+    def _setup_control_systems(self):
+        """팔 토크, Whole-body IK와 스워브 제어기를 모델에 연결한다."""
+        model = self.model
         self.arm_controllers = {
             side: arm.ArmTorqueController(model, joint_names)
             for side, joint_names in ARM_JOINTS.items()
@@ -190,60 +198,51 @@ class TeleopApp:
             ]
             for side, joints in ARM_JOINTS.items()
         }
-        self.lift_aid = _named_id(
-            model, mujoco.mjtObj.mjOBJ_ACTUATOR, "lift_joint"
+        self.base_drive = base.SwerveDrive()
+
+    def _bind_model_entities(self):
+        """프레임 루프가 반복 사용할 actuator, joint와 marker 주소를 저장한다."""
+        model = self.model
+        base_bindings = state.BaseBindings(
+            x_qpos=_joint_address(model, "base_x", model.jnt_qposadr),
+            y_qpos=_joint_address(model, "base_y", model.jnt_qposadr),
+            yaw_qpos=_joint_address(model, "base_yaw", model.jnt_qposadr),
+            x_dof=_joint_address(model, "base_x", model.jnt_dofadr),
+            y_dof=_joint_address(model, "base_y", model.jnt_dofadr),
+            yaw_dof=_joint_address(model, "base_yaw", model.jnt_dofadr),
         )
-        self.base_x_qadr = _joint_address(model, "base_x", model.jnt_qposadr)
-        self.base_y_qadr = _joint_address(model, "base_y", model.jnt_qposadr)
-        self.base_yaw_qadr = _joint_address(model, "base_yaw", model.jnt_qposadr)
-        self.base_x_dof = _joint_address(model, "base_x", model.jnt_dofadr)
-        self.base_y_dof = _joint_address(model, "base_y", model.jnt_dofadr)
-        self.base_yaw_dof = _joint_address(model, "base_yaw", model.jnt_dofadr)
         # 바퀴마다 실제 조향 위치 액추에이터와 구동 속도 액추에이터를 사용한다.
         # 자세한 변환은 ``control/base.py``의 ``SwerveDrive``가 담당한다. 베이스 이동은
         # base_x/base_y/base_yaw 직접 구동이 아니라 바퀴와 지면의 마찰 결과다. 해당
         # 관절은 base_link가 넘어지지 않게 남아 있지만 직접 구동되지는 않는다.
-        self.wheel_steer_aids = {
-            wheel: _named_id(
-                model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{wheel}_steer"
+        wheel_bindings = {
+            wheel: state.WheelBinding(
+                steer_actuator=_named_id(
+                    model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{wheel}_steer"),
+                drive_actuator=_named_id(
+                    model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{wheel}_drive"),
+                steer_qpos=_joint_address(
+                    model, f"{wheel}_steer_joint", model.jnt_qposadr),
+                drive_dof=_joint_address(
+                    model, f"{wheel}_drive_joint", model.jnt_dofadr),
             )
             for wheel in WHEELS
         }
-        self.wheel_drive_aids = {
-            wheel: _named_id(
-                model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{wheel}_drive"
-            )
-            for wheel in WHEELS
-        }
-        self.wheel_steer_qadrs = {
-            wheel: _joint_address(
-                model, f"{wheel}_steer_joint", model.jnt_qposadr
-            )
-            for wheel in WHEELS
-        }
-        self.wheel_drive_dofs = {
-            wheel: _joint_address(
-                model, f"{wheel}_drive_joint", model.jnt_dofadr
-            )
-            for wheel in WHEELS
-        }
-        # 모바일 베이스: SwerveDrive가 키 입력을 바퀴별 조향각+구동속도로 변환.
-        self.base_drive = base.SwerveDrive()
         monitor_joint_ids = {
             name: _named_id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
             for name in MONITOR_JOINTS
         }
-        self.monitor_qposadr = {
+        monitor_qpos = {
             name: int(model.jnt_qposadr[joint_id])
             for name, joint_id in monitor_joint_ids.items()
         }
-        self.monitor_ranges = {
+        monitor_ranges = {
             name: model.jnt_range[joint_id]
             for name, joint_id in monitor_joint_ids.items()
         }
         self.rng = np.random.default_rng()
 
-        self.ik_target_mocap_ids = {
+        hand_mocap_ids = {
             side: model.body_mocapid[
                 _named_id(
                     model, mujoco.mjtObj.mjOBJ_BODY, f"ik_target_{side}"
@@ -251,31 +250,42 @@ class TeleopApp:
             ]
             for side in SIDES
         }
-        self.virtual_object_mocap_id = model.body_mocapid[
+        virtual_mocap_id = model.body_mocapid[
             _named_id(
                 model, mujoco.mjtObj.mjOBJ_BODY, "virtual_object_marker"
             )
         ]
-        self.virtual_object_marker_geom_id = _named_id(
+        virtual_geom_id = _named_id(
             model, mujoco.mjtObj.mjOBJ_GEOM, "virtual_object_marker_geom")
-        self.virtual_object_marker_site_id = _named_id(
+        virtual_site_id = _named_id(
             model, mujoco.mjtObj.mjOBJ_SITE, "virtual_object_marker_site")
-        self.virtual_object_marker_rgba = {
-            "geom": model.geom_rgba[self.virtual_object_marker_geom_id].copy(),
-            "site": model.site_rgba[self.virtual_object_marker_site_id].copy(),
-        }
-        self.can_jid = _named_id(
-            model, mujoco.mjtObj.mjOBJ_JOINT, "can_free"
-        )
-        self.can_geom_id = _named_id(
-            model, mujoco.mjtObj.mjOBJ_GEOM, "can_geom"
+        self.bindings = state.ModelBindings(
+            lift_actuator=_named_id(
+                model, mujoco.mjtObj.mjOBJ_ACTUATOR, "lift_joint"),
+            lift_qpos=_joint_address(model, "lift_joint", model.jnt_qposadr),
+            base=base_bindings,
+            wheels=wheel_bindings,
+            monitor_qpos=monitor_qpos,
+            monitor_ranges=monitor_ranges,
+            markers=state.MarkerBindings(
+                hand_mocap_ids=hand_mocap_ids,
+                virtual_mocap_id=virtual_mocap_id,
+                virtual_geom_id=virtual_geom_id,
+                virtual_site_id=virtual_site_id,
+                virtual_geom_rgba=model.geom_rgba[virtual_geom_id],
+                virtual_site_rgba=model.site_rgba[virtual_site_id],
+            ),
+            can_joint=_named_id(
+                model, mujoco.mjtObj.mjOBJ_JOINT, "can_free"),
+            can_geom=_named_id(
+                model, mujoco.mjtObj.mjOBJ_GEOM, "can_geom"),
         )
         self._disable_legacy_box_asset()
-        # 각 손의 XYZ/RPY 슬라이더가 기준으로 삼는 자세다.
         targets.set_home_references(self)
 
-        # 슬라이더가 직접 쓰는 "목표값" 딕셔너리 -- 물리 루프는 이 값만 읽고, 이 값을
-        # GUI 슬라이더만 이 값을 쓴다. 데이터는 한 방향으로만 흐른다.
+    def _setup_target_state(self):
+        """UI 목표, 평활화 상태와 실행 중 표시·모드 상태를 초기화한다."""
+        data = self.data
         self.targets = {
             **{
                 f"{field}_{side}": [0.0, 0.0, 0.0]
@@ -289,9 +299,7 @@ class TeleopApp:
             },
             "virtual_object_pos": VIRTUAL_OBJECT_HOME_POS.tolist(),
             "virtual_object_rpy": [0.0, 0.0, 0.0],
-            "lift": float(
-                data.qpos[_joint_address(model, "lift_joint", model.jnt_qposadr)]
-            ),
+            "lift": float(data.qpos[self.bindings.lift_qpos]),
         }
         # 입력하거나 드래그한 목표가 급변하지 않도록 전신 IK는 평활화된 사본을 추종한다.
         self.smoothed_pos = {
@@ -304,9 +312,10 @@ class TeleopApp:
         self.whole_body_base_twist = base.BodyTwist()
         self.commanded_base_twist = base.BodyTwist()
         self._manual_override_active = False
+        base_bindings = self.bindings.base
         self._manual_reference_base_pose = np.array([
-            data.qpos[self.base_x_qadr], data.qpos[self.base_y_qadr],
-            data.qpos[self.base_yaw_qadr],
+            data.qpos[base_bindings.x_qpos], data.qpos[base_bindings.y_qpos],
+            data.qpos[base_bindings.yaw_qpos],
         ], dtype=float)
         targets.sync_ik_mocaps_from_targets(self)
         self.contact_viz = False
@@ -322,10 +331,7 @@ class TeleopApp:
         self.cyclo_grasp_captured = False
         self.cyclo_capture_offsets = None
         self.cyclo_status = "ready"
-        # ``ui.draw_panel``은 순환 import를 피하려고 상수를 import하지 않고 ``app``에서
-        # 아래 두 값을 직접 읽는다.
         self.lift_range = LIFT_RANGE
-        self.reset_can()
 
     def _setup_loop_state(self):
         """메인 루프에서만 쓰는 상태(IK 웜스타트 값, 타이밍, 입력 헬퍼)."""
@@ -355,7 +361,12 @@ class TeleopApp:
 
     def reset_can(self):
         """캔을 홈 주변의 작은 무작위 위치와 단위 자세로 재배치한다."""
-        _reset_can_random(self.model, self.data, self.rng)
+        _reset_can_random(
+            self.model, self.data, self.rng, self.bindings.can_joint)
+
+    def observe(self):
+        """현재 로봇 상태를 live MuJoCo 배열과 분리된 스냅샷으로 반환한다."""
+        return state.RobotObservation.capture(self)
 
     def reset_active_object(self):
         """캔과 파지·가상 물체 상태를 함께 초기화해 새 작업을 시작할 준비를 한다."""
@@ -566,36 +577,6 @@ class TeleopApp:
                 LIFT_RANGE[0], LIFT_RANGE[1]))
         return drive_keys
 
-    def _read_base_feedback(self):
-        """수동 주행과 전신 제어 전환에 사용할 바퀴·차체 피드백을 읽는다."""
-        data = self.data
-        steering_positions = {
-            wheel: float(data.qpos[address])
-            for wheel, address in self.wheel_steer_qadrs.items()
-        }
-        wheel_velocities = {
-            wheel: float(data.qvel[address])
-            for wheel, address in self.wheel_drive_dofs.items()
-        }
-        yaw = float(data.qpos[self.base_yaw_qadr])
-        cosine, sine = math.cos(yaw), math.sin(yaw)
-        vx_world = float(data.qvel[self.base_x_dof])
-        vy_world = float(data.qvel[self.base_y_dof])
-        body_twist = base.BodyTwist(
-            cosine * vx_world + sine * vy_world,
-            -sine * vx_world + cosine * vy_world,
-            float(data.qvel[self.base_yaw_dof]),
-        )
-        base_pose = np.array(
-            [
-                data.qpos[self.base_x_qadr],
-                data.qpos[self.base_y_qadr],
-                data.qpos[self.base_yaw_qadr],
-            ],
-            dtype=float,
-        )
-        return steering_positions, wheel_velocities, body_twist, base_pose
-
     def _update_grasp_targets(self):
         """원터치 열기·닫기 명령을 변화율 제한해 손 슬라이더 값으로 반영한다."""
         for side in SIDES:
@@ -644,22 +625,24 @@ class TeleopApp:
             for side in SIDES
         }
 
-    def _step_actuators(self, wheel_commands):
+    def _step_actuators(self, command):
         """렌더링 한 프레임 동안 현재 명령 묶음을 모든 물리 서브스텝에 적용한다."""
         data = self.data
         for _ in range(self.steps_per_frame):
             for side in SIDES:
-                self.arm_controllers[side].apply(data, self.q_des[side])
-            data.ctrl[self.lift_aid] = self.lift_cmd
-            for wheel, (steer_angle, drive_speed) in wheel_commands.items():
-                data.ctrl[self.wheel_steer_aids[wheel]] = steer_angle
-                data.ctrl[self.wheel_drive_aids[wheel]] = drive_speed
+                self.arm_controllers[side].apply(
+                    data, command.arm_positions[side])
+            data.ctrl[self.bindings.lift_actuator] = command.lift_position
+            for wheel, (steer_angle, drive_speed) in command.wheel_commands.items():
+                wheel_binding = self.bindings.wheels[wheel]
+                data.ctrl[wheel_binding.steer_actuator] = steer_angle
+                data.ctrl[wheel_binding.drive_actuator] = drive_speed
             for side in SIDES:
                 grasp.apply_grasp(
                     self.model,
                     data,
-                    grasp=self.targets[f"grasp_{side}"],
-                    thumb=self.targets[f"thumb_{side}"],
+                    grasp=command.grasp[side],
+                    thumb=command.thumb[side],
                     side=side,
                 )
             mujoco.mj_step(self.model, data)
@@ -668,32 +651,12 @@ class TeleopApp:
         """실제 물리 반영: target rate-limit -> world-fixed pose -> whole-body solve ->
         팔 torque/lift position/swerve/grasp actuator ctrl -> ``mj_step``. Solver는 live
         qpos를 읽기만 하며, robot qpos를 직접 쓰는 kinematic override는 없다."""
-        data = self.data
-        (
-            steering_positions,
-            wheel_velocities,
-            measured_body_twist,
-            current_base_pose,
-        ) = self._read_base_feedback()
-        # 수동 주행에서 WBIK로 전환할 때 차체 피드백으로 정지를 판정한다. 제동 중의
-        # 일시적인 타이어 미끄러짐 때문에 바퀴 오도메트리보다 모델에서 직접 읽는 평면
-        # 베이스 속도가 더 신뢰할 수 있는 정지 지표다.
-        manual_twist = self.base_drive.base.update_body(
-            drive_keys, self.frame_dt, measured_body_twist)
-        manual_keys_active = any(drive_keys.values())
-        measured_motion_active = (
-            math.hypot(measured_body_twist.vx, measured_body_twist.vy)
-            > MANUAL_STOP_LINEAR_SPEED
-            or abs(measured_body_twist.wz) > MANUAL_STOP_ANGULAR_SPEED)
-        if manual_keys_active and not self._manual_override_active:
-            # 수동 입력 시작 전의 WBIK 이동을 수동 이동으로 오인하지 않도록 시작점을 잡는다.
-            self._manual_reference_base_pose = current_base_pose.copy()
-        carry_manual_targets = manual_keys_active or self._manual_override_active
-        if carry_manual_targets:
-            # 입력을 놓은 직후의 물리 제동 이동까지 목표 운반에 포함한다.
-            targets.carry_world_targets_with_base(
-                self, self._manual_reference_base_pose, current_base_pose)
-        self._manual_reference_base_pose = current_base_pose.copy()
+        manual_state = control_loop.update_manual_drive(
+            self,
+            drive_keys,
+            stop_linear_speed=MANUAL_STOP_LINEAR_SPEED,
+            stop_angular_speed=MANUAL_STOP_ANGULAR_SPEED,
+        )
 
         if self.cyclo_grasp_captured:
             self.apply_virtual_object_target()
@@ -702,58 +665,35 @@ class TeleopApp:
 
         # 전신 IK 목표는 월드 좌표계에 고정되어야 한다. 매 프레임 현재 베이스 자세에서
         # 목표를 다시 만들면 베이스와 목표가 같은 만큼 움직여 작업 오차를 줄일 수 없다.
-        target_poses = self._smoothed_target_poses()
+        task_command = state.TaskCommand.create(
+            self._smoothed_target_poses(),
+            self.targets["lift"],
+            base_twist=(
+                manual_state.command if manual_state.keys_active
+                else base.BodyTwist()
+            ),
+            grasp={side: self.targets[f"grasp_{side}"] for side in SIDES},
+            thumb={side: self.targets[f"thumb_{side}"] for side in SIDES},
+        )
+        self.last_task_command = task_command
 
-        if carry_manual_targets:
+        if manual_state.carry_targets:
             # 전환 시 새 차체 자세를 공통 이동의 영점으로 다시 정의해야 한다. 그렇지 않으면
             # 시작 기준 때문에 WBIK가 관성처럼 느껴지는 역방향 명령을 낸다.
-            self.whole_body_solver.rebase(data, target_poses)
+            self.whole_body_solver.rebase(self.data, task_command.hand_poses)
 
-        active_sides = tuple(side for side in SIDES if self.arm_mode[side] == "ik")
-        whole_body_cmd = self.whole_body_solver.solve(
-            data, target_poses, self.frame_dt,
-            active_sides=active_sides,
+        control_loop.apply_whole_body_solution(
+            self,
+            task_command,
+            sides=SIDES,
             arm_nominal={"r": HOME_Q_R, "l": HOME_Q_L},
-            lift_nominal=self.targets["lift"],
-            rigid_grasp=(self.cyclo_controller == "bimanual_movel"
-                         and self.cyclo_grasp_captured),
-            whole_body_enabled=self.whole_body_enabled,
         )
-        self.whole_body_base_twist = whole_body_cmd.base_twist
-        self.collision_active_pairs = whole_body_cmd.active_collision_pairs
-        self.collision_min_distance = whole_body_cmd.minimum_collision_distance
-        self.collision_constraint_violation = whole_body_cmd.collision_constraint_violation
-        self.lift_cmd = (whole_body_cmd.lift_position if self.whole_body_enabled
-                         else self.targets["lift"])
-        for side in SIDES:
-            if side in whole_body_cmd.arm_positions:
-                self.q_des[side] = whole_body_cmd.arm_positions[side]
-                self.ik_err_mm[side] = whole_body_cmd.position_errors[side] * 1000.0
-            else:
-                self.q_des[side] = np.radians(self.fk_q_deg[side])
-
-        # 명시적인 키보드 이동이 우선한다. 키를 놓으면 차체 피드백이 정지를 확인할 때까지
-        # 영 속도를 명령하고, 그 뒤에만 같은 스워브 경로로 전신 IK를 재개한다.
-        if manual_keys_active:
-            self.commanded_base_twist = manual_twist
-        elif self._manual_override_active:
-            self.commanded_base_twist = base.BodyTwist()
-        elif self.whole_body_enabled:
-            self.commanded_base_twist = self.whole_body_base_twist
-        else:
-            self.commanded_base_twist = base.BodyTwist()
-        previous_manual_override = self._manual_override_active
-        wheel_cmds = self.base_drive.update_twist(
-            self.commanded_base_twist, self.frame_dt,
-            steering_positions, wheel_velocities)
-        self._manual_override_active = bool(
-            manual_keys_active
-            or (previous_manual_override
-                and measured_motion_active))
-        if previous_manual_override and not self._manual_override_active:
-            self.base_drive.base.reset_motion()
-
-        self._step_actuators(wheel_cmds)
+        wheel_cmds = control_loop.select_base_command(self, manual_state)
+        control_command = control_loop.build_control_command(
+            self, task_command, wheel_cmds)
+        self.last_control_command = control_command
+        self._step_actuators(control_command)
+        self.last_observation = self.observe()
 
 def _parse_args(argv):
     """텔레옵 CLI 인자를 파싱하고 설정 파일이 import 전에 적용됐는지 확인한다."""

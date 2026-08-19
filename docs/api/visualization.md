@@ -10,9 +10,31 @@ UI와 renderer는 target·표시 상태만 변경한다. IK, actuator 기록과 
 | 함수 | 입력·반환 또는 변경 |
 |---|---|
 | `draw_panel(app)` | Control Center와 Diagnostics를 그리고 app의 target·mode·창 상태 변경 |
-| `kinematic_tree_body_ids(app, scope=None, show_full=None)` | 표시할 body id의 `set`; scope는 `"r"`, `"l"`, `"both"` |
 
 `_draw_*` 함수는 widget 내부 구현이다.
+
+## Task Space 입력 { #task-space }
+
+모듈은 `visualization.task_space`다. ImGui와 분리되어 headless 환경에서도 사용할 수 있다.
+
+| 함수 | 입력·반환 또는 변경 |
+|---|---|
+| `ensure_state(app)` | 손별 world XYZ/RPY 편집 버퍼 초기화 |
+| `load_pose(app, side, source="target")` | target 또는 실제 site pose를 편집 버퍼에 복사 |
+| `apply_target(app, side, world_position, world_rpy)` | 입력을 검증하고 내부 IK target으로 변환; `(성공, 메시지)` 반환 |
+
+## 진단 패널 { #diagnostics }
+
+모듈은 `visualization.diagnostics`다.
+
+| 함수 | 입력·반환 또는 변경 |
+|---|---|
+| `draw_pose_graph_panel(app)` | target/current pose와 오차 시계열 표시 |
+| `draw_joint_monitor(app, data)` | 감시 관절을 제한 범위 대비 진행 막대로 표시 |
+| `draw_kinematic_tree(app)` | 선택한 손 또는 전체 MJCF tree 표시 |
+| `kinematic_tree_body_ids(app, scope=None, show_full=None)` | 표시할 body id의 `frozenset` 반환 |
+
+기존 `ui.kinematic_tree_body_ids()`는 호환을 위해 같은 함수를 가리킨다.
 
 ## 렌더링 { #render }
 

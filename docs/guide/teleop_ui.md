@@ -1,6 +1,8 @@
 # UI와 시각화
 
 `visualization/ui.py`는 ImGui widget을 그리고 target·mode·표시 상태를 바꾼다.
+`visualization/task_space.py`는 world XYZ/RPY 입력을 검증하고 내부 target으로 변환한다.
+`visualization/diagnostics.py`는 pose graph, joint monitor와 kinematic tree를 그린다.
 `visualization/render.py`는 GLFW, MuJoCo scene, camera, 3D Gizmo와 collision overlay를
 담당한다.
 
@@ -9,9 +11,11 @@
 | 파일 | 읽기 | 쓰기 |
 |---|---|---|
 | `ui.py` | app 상태, `data` 진단값 | `app.targets`, mode, UI 상태 |
+| `task_space.py` | world pose, 편집 버퍼 | 손 target, marker 동기화 상태 |
+| `diagnostics.py` | target/current pose, joint, kinematic tree | 진단용 시계열·필터 상태 |
 | `render.py` | model/data, target, collision 진단값 | camera·target 상태, framebuffer/window 출력 |
 
-두 모듈 모두 IK를 풀거나 actuator command를 기록하거나 `mj_step()`을 호출하지 않는다.
+네 모듈 모두 IK를 풀거나 actuator command를 기록하거나 `mj_step()`을 호출하지 않는다.
 
 ## UI 구성
 
@@ -36,7 +40,7 @@ multi-viewport로 메인 MuJoCo 창 밖의 OS 창으로 분리하거나 다시 �
 ### Task Space 입력
 
 Task Space 탭은 오른손 또는 왼손의 MuJoCo world-frame 절대 XYZ(m)와 RPY(deg)를
-입력받는다. `_apply_task_space_target()`은 다음만 수행한다.
+입력받는다. `visualization/task_space.py::apply_target()`은 다음만 수행한다.
 
 1. 3개씩의 유한한 숫자인지 검사한다.
 2. 캡처된 양손 모드라면 해제하고 선택한 팔을 IK 모드로 바꾼다.
@@ -85,7 +89,12 @@ Gizmo drag 결과는 `set_gizmo_target_world_pose()`를 통해 내부 target fra
 | 함수 | 역할 |
 |---|---|
 | `ui.draw_panel(app)` | UI 프레임 진입점 |
-| `ui.kinematic_tree_body_ids(...)` | 진단 트리에 표시할 body 범위 선택 |
+| `diagnostics.kinematic_tree_body_ids(...)` | 진단 트리에 표시할 body 범위 선택 |
+| `diagnostics.draw_pose_graph_panel(app)` | target/current pose 시계열 표시 |
+| `diagnostics.draw_joint_monitor(app, data)` | 관절 위치와 제한 범위 표시 |
+| `task_space.ensure_state(app)` | 손별 숫자 편집 버퍼 초기화 |
+| `task_space.load_pose(app, side, source)` | target 또는 실제 손 pose를 편집 버퍼로 복사 |
+| `task_space.apply_target(app, side, xyz, rpy)` | 입력 검증과 world pose의 내부 target 변환 |
 | `render.setup_render(...)` / `shutdown(...)` | GLFW·ImGui·MuJoCo render 자원 생명주기 |
 | `render.begin_frame(...)` / `end_frame(...)` | event 처리와 프레임 시간 조절 |
 | `render.handle_camera_mouse(...)` | UI가 사용하지 않는 mouse 입력으로 camera 이동 |

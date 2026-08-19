@@ -178,6 +178,8 @@ Whole-body ON에서는 앱 시작 시 base pose를 anchor로 저장한다. 손 o
 | mode별 hard pin | `_apply_mode_velocity_bounds()` | `control/whole_body.py` |
 | base shaping | `_shape_base_velocity()` | `control/whole_body.py` |
 | 충돌쌍 제약 생성 | `_collision_constraints()` | `control/whole_body.py` |
+| 충돌 안전 투영 | `_project_collision_safety()` | `control/whole_body.py` |
+| actuator 계층 명령 변환 | `_command_from_velocity()` | `control/whole_body.py` |
 | 양손 상대 task | `rigid_grasp_task()` | `control/bimanual.py` |
 
 task 수식과 수치 solver 함수는 [Differential IK 수학](ik-math.md)에 모았다.
@@ -186,7 +188,8 @@ task 수식과 수치 solver 함수는 [Differential IK 수학](ik-math.md)에 �
 
 ```mermaid
 flowchart TD
-    APP["application/teleop.py<br>TeleopApp._step_physics()"] --> SOLVE["control/whole_body.py<br>WholeBodyIK.solve()"]
+    APP["application/teleop.py<br>TeleopApp._step_physics()"] --> CALL["application/control_loop.py<br>apply_whole_body_solution()"]
+    CALL --> SOLVE["control/whole_body.py<br>WholeBodyIK.solve()"]
     SOLVE --> HAND["control/whole_body.py<br>_append_hand_tasks()"]
     HAND --> FK["kinematics/tree.py<br>KinematicTree.forward_site()"]
     HAND --> TASK["kinematics/tasks.py<br>pose_error() · pose_velocity_command()"]
@@ -202,15 +205,18 @@ flowchart TD
     BOUNDS --> NUM
     NUM --> WB{"whole_body_enabled?"}
     WB -->|ON| SHAPE["control/whole_body.py<br>_shape_base_velocity()"]
-    WB -->|OFF| ACTIVE
+    WB -->|OFF| PROJECT
     SOLVE --> COLL["kinematics/collision.py<br>collision_distance_gradient()"]
     COLL --> CBF["kinematics/constraints.py<br>collision_velocity_barriers()"]
-    SHAPE --> ACTIVE{"활성 collision barrier?"}
-    CBF --> ACTIVE
+    SHAPE --> PROJECT["control/whole_body.py<br>_project_collision_safety()"]
+    CBF --> PROJECT
+    PROJECT --> ACTIVE{"활성 collision barrier?"}
     ACTIVE -->|있음| SAFE["kinematics/solver.py<br>enforce_constraints()"]
-    ACTIVE -->|없음| CMD["control/whole_body.py<br>WholeBodyCommand"]
-    SAFE --> CMD
-    CMD --> ACT["application/teleop.py<br>TeleopApp._step_actuators()"]
+    ACTIVE -->|없음| BUILD["control/whole_body.py<br>_command_from_velocity()"]
+    SAFE --> BUILD
+    BUILD --> CMD["control/whole_body.py<br>WholeBodyCommand"]
+    CMD --> APPLY["application/control_loop.py<br>solver 결과를 app 상태에 반영"]
+    APPLY --> ACT["application/teleop.py<br>TeleopApp._step_actuators()"]
     ACT --> ARM["control/arm.py<br>ArmTorqueController.apply()"]
     ACT --> STEP["MuJoCo API<br>mujoco.mj_step()"]
 ```

@@ -18,6 +18,7 @@ import numpy as np
 from ..application import targets
 from ..config import SETTINGS
 from ..kinematics import rotations
+from . import diagnostics, task_space
 
 JOG_POS_STEP_DEFAULT = SETTINGS.number("ui.jog_position_step_m", positive=True)
 JOG_RPY_STEP_DEFAULT = SETTINGS.number("ui.jog_rotation_step_deg", positive=True)
@@ -31,11 +32,9 @@ JOG_POS_STEP_RANGE = (0.001, 0.050)
 JOG_RPY_STEP_RANGE = (0.5, 15.0)
 PSEUDOINVERSE_RCOND_RANGE = (1e-8, 1e-3)
 DLS_DAMPING_RANGE = (0.001, 0.5)
-POSE_GRAPH_HISTORY_SECONDS = 10.0
-POSE_GRAPH_SERIES_HEIGHT = 55.0
 POS_AXES = ("X", "Y", "Z")
 RPY_AXES = ("Roll", "Pitch", "Yaw")
-TASK_SPACE_SIDES = (("r", "Right hand"), ("l", "Left hand"))
+TASK_SPACE_SIDES = task_space.SIDES
 UI_WINDOW_SPECS = SETTINGS.get("ui.windows")
 for _spec in UI_WINDOW_SPECS.values():
     _spec["position"] = tuple(_spec["position"])
@@ -310,78 +309,9 @@ def _draw_cyclo_control_panel(app):
             "%.1f deg", apply_virtual_edit)
 
 
-def _load_task_space_pose(app, side, source="target"):
-    """손의 world pose를 task-space 숫자 입력 버퍼에 복사한다.
-
-    ``source="target"``은 현재 명령 마커를, ``source="current"``는 실제 손끝
-    site를 읽는다. 입력 중인 숫자가 매 프레임 목표값으로 덮이지 않도록 명시적인
-    Load 동작에서만 버퍼를 갱신한다.
-    """
-    if source == "target":
-        position, quaternion = targets.target_world_pose(app, side)
-    elif source == "current":
-        state = app.whole_body_solver.site_state(app.data, side)
-        position, quaternion = state.position, state.quaternion
-    else:
-        raise ValueError(f"Unknown task-space pose source: {source!r}")
-    app.task_space_position[side] = np.asarray(position, dtype=float).tolist()
-    app.task_space_rpy[side] = rotations.quat_to_rpy_deg(quaternion)
-
-
-def _ensure_task_space_state(app):
-    """world XYZ/RPY 입력 패널의 손별 편집 버퍼와 상태 문구를 지연 초기화한다."""
-    if not hasattr(app, "task_space_position"):
-        app.task_space_position = {}
-        app.task_space_rpy = {}
-        for side, _label in TASK_SPACE_SIDES:
-            _load_task_space_pose(app, side)
-    if not hasattr(app, "task_space_side") or app.task_space_side not in dict(TASK_SPACE_SIDES):
-        app.task_space_side = "r"
-    if not hasattr(app, "task_space_status"):
-        app.task_space_status = "Load or edit a world pose, then press Apply Target."
-
-
-def _apply_task_space_target(app, side, world_position, world_rpy):
-    """world XYZ/RPY 숫자를 손 목표로 변환해 기존 IK 명령 경로에 연결한다.
-
-    성공하면 ``app.targets``만 바꾸고, 실제 이동 속도 제한과 IK/actuator 적용은
-    메인 물리 루프가 그대로 담당한다. ``(성공 여부, 사용자 메시지)``를 반환한다.
-    """
-    position = np.asarray(world_position, dtype=float)
-    rpy = np.asarray(world_rpy, dtype=float)
-    if position.shape != (3,) or rpy.shape != (3,) or not np.all(
-            np.isfinite(np.concatenate((position, rpy)))):
-        return False, "Rejected: XYZ and RPY must contain three finite numbers."
-    if side not in dict(TASK_SPACE_SIDES):
-        return False, f"Rejected: unknown hand {side!r}."
-
-    target_position = np.asarray(
-        targets.world_to_target_pos(app, side, position), dtype=float)
-
-    # 캡처된 가상 물체가 다음 프레임에 양손 목표를 다시 덮어쓰지 않게 독립 MoveL로
-    # 전환한다. FK 팔은 현재 pose에서 IK로 전환한 다음 새 목표를 기록해 점프를 막는다.
-    if getattr(app, "cyclo_grasp_captured", False):
-        app.release_grasp()
-        app.cyclo_controller = "movel"
-    if app.arm_mode[side] != "ik":
-        app.set_arm_mode(side, "ik")
-
-    quaternion = rotations.rpy_deg_to_quat(rpy)
-    app.targets[f"pos_{side}"] = target_position.tolist()
-    target_rpy = np.asarray(
-        targets.world_quat_to_target_rpy(app, side, quaternion), dtype=float)
-    # 같은 회전을 나타내는 ±360도 표현 중 현재 평활화 상태에 가장 가까운 값을 골라
-    # +179도에서 -179도로 입력할 때 불필요하게 358도를 회전하는 경로를 피한다.
-    smoothed_rpy = np.asarray(app.smoothed_rpy[side], dtype=float)
-    target_rpy += 360.0 * np.round((smoothed_rpy - target_rpy) / 360.0)
-    app.targets[f"rpy_{side}"] = target_rpy.tolist()
-    targets.sync_ik_mocaps_from_targets(app)
-    return True, f"Applied {dict(TASK_SPACE_SIDES)[side]} world pose; IK is tracking it."
-
-
 def _draw_task_space_panel(app):
     """절대 world-frame 손 pose를 숫자로 입력해 IK 목표로 적용하는 UI를 그린다."""
-    _ensure_task_space_state(app)
+    task_space.ensure_state(app)
     imgui.text_wrapped(
         "Enter an absolute end-effector pose in the MuJoCo world frame. "
         "Apply Target sends it through target smoothing, whole-body IK, and actuators.")
@@ -414,15 +344,15 @@ def _draw_task_space_panel(app):
             rpy[index] = value
 
     if imgui.button("Load Current Pose##task_space_current"):
-        _load_task_space_pose(app, side, "current")
+        task_space.load_pose(app, side, "current")
         app.task_space_status = "Loaded the measured end-effector pose."
     imgui.same_line()
     if imgui.button("Load Target Pose##task_space_target"):
-        _load_task_space_pose(app, side, "target")
+        task_space.load_pose(app, side, "target")
         app.task_space_status = "Loaded the active IK target pose."
 
     if imgui.button("Apply Target##task_space_apply"):
-        _ok, app.task_space_status = _apply_task_space_target(
+        _ok, app.task_space_status = task_space.apply_target(
             app, side, position, rpy)
     _item_tooltip(
         "Applies this hand independently. If a bimanual grasp is captured, it is released first.")
@@ -447,8 +377,11 @@ def _draw_status_panel(app, data):
     method = app.whole_body_solver.solver_method
     imgui.text(
         f"IK [{method}]  L: {_ik_err_text(app, 'l')}   R: {_ik_err_text(app, 'r')}")
-    imgui.text(f"Base x={data.qpos[app.base_x_qadr]:+.2f}m y={data.qpos[app.base_y_qadr]:+.2f}m "
-               f"yaw={math.degrees(data.qpos[app.base_yaw_qadr]):+.1f}deg")
+    base_bindings = app.bindings.base
+    imgui.text(
+        f"Base x={data.qpos[base_bindings.x_qpos]:+.2f}m "
+        f"y={data.qpos[base_bindings.y_qpos]:+.2f}m "
+        f"yaw={math.degrees(data.qpos[base_bindings.yaw_qpos]):+.1f}deg")
     body_cmd = getattr(app, "commanded_base_twist", None)
     if body_cmd is not None:
         whole_body_state = "ON" if getattr(app, "whole_body_enabled", True) else "OFF (arm-only)"
@@ -636,238 +569,8 @@ def _draw_ik_solver_panel(app):
             solver.set_qp_weight(name, value)
 
 
-def _ensure_pose_graph_state(app):
-    """포즈 그래프 탭이 사용하는 per-side 시계열 버퍼를 지연 초기화한다."""
-    if hasattr(app, "pose_graph_state"):
-        return
-    app.pose_graph_side = "r"
-    app.pose_graph_state = {
-        side: {
-            "target_pos": [[], [], []],
-            "current_pos": [[], [], []],
-            "target_rpy": [[], [], []],
-            "current_rpy": [[], [], []],
-            "position_error_mm": [],
-            "orientation_error_deg": [],
-        }
-        for side in ("r", "l")
-    }
-
-
-def _trim_series(series, max_samples):
-    """리스트 기반 시계열을 지정 길이 이하로 유지한다."""
-    overflow = len(series) - max_samples
-    if overflow > 0:
-        del series[:overflow]
-
-
-def _append_pose_graph_sample(app, side):
-    """선택된 손의 현재/목표 포즈를 같은 좌표계(home-relative)로 기록한다."""
-    graph = app.pose_graph_state[side]
-    target_pos = np.asarray(app.targets[f"pos_{side}"], dtype=float)
-    target_rpy = np.asarray(app.targets[f"rpy_{side}"], dtype=float)
-
-    state = app.whole_body_solver.site_state(app.data, side)
-    current_pos = np.asarray(
-        targets.world_to_target_pos(app, side, state.position), dtype=float)
-    current_rpy = np.asarray(
-        targets.world_quat_to_target_rpy(app, side, state.quaternion), dtype=float)
-
-    rate_hz = 1.0 / max(float(getattr(app, "frame_dt", 1.0 / 60.0)), 1e-6)
-    max_samples = max(32, int(rate_hz * POSE_GRAPH_HISTORY_SECONDS))
-
-    for axis in range(3):
-        graph["target_pos"][axis].append(float(target_pos[axis]))
-        graph["current_pos"][axis].append(float(current_pos[axis]))
-        graph["target_rpy"][axis].append(float(target_rpy[axis]))
-        graph["current_rpy"][axis].append(float(current_rpy[axis]))
-        _trim_series(graph["target_pos"][axis], max_samples)
-        _trim_series(graph["current_pos"][axis], max_samples)
-        _trim_series(graph["target_rpy"][axis], max_samples)
-        _trim_series(graph["current_rpy"][axis], max_samples)
-
-    pos_error_mm = float(np.linalg.norm(target_pos - current_pos) * 1000.0)
-    ori_error_deg = float(np.linalg.norm(target_rpy - current_rpy))
-    graph["position_error_mm"].append(pos_error_mm)
-    graph["orientation_error_deg"].append(ori_error_deg)
-    _trim_series(graph["position_error_mm"], max_samples)
-    _trim_series(graph["orientation_error_deg"], max_samples)
-
-
-def _plot_series_or_wait(label, values, unit):
-    """샘플 수가 충분하면 선 그래프를, 아니면 대기 메시지를 그린다."""
-    if len(values) < 2:
-        imgui.text(f"{label}: collecting {unit} samples...")
-        return
-    imgui.plot_lines(
-        label, np.asarray(values, dtype=np.float32),
-        graph_size=imgui.ImVec2(0.0, POSE_GRAPH_SERIES_HEIGHT))
-
-
-def _draw_pose_axis_group(title, axis_names, target_series, current_series,
-                          value_fmt, unit, error_scale=1.0):
-    """축별 target/current 시계열과 최신 오차를 묶어서 그린다."""
-    imgui.separator_text(title)
-    for axis, axis_name in enumerate(axis_names):
-        if target_series[axis]:
-            current_value = current_series[axis][-1]
-            target_value = target_series[axis][-1]
-            axis_error = (target_value - current_value) * error_scale
-            imgui.text(
-                f"{axis_name}: cur {value_fmt.format(current_value)}{unit}  "
-                f"tgt {value_fmt.format(target_value)}{unit}  "
-                f"err {value_fmt.format(axis_error)}"
-                f"{' mm' if error_scale == 1000.0 else ' deg'}")
-        _plot_series_or_wait(
-            f"target##{title}_target_{axis_name}", target_series[axis], unit)
-        _plot_series_or_wait(
-            f"current##{title}_current_{axis_name}", current_series[axis], unit)
-
-
-def _draw_pose_graph_panel(app):
-    """타겟 포즈와 현재 포즈의 시계열 비교 그래프를 그린다."""
-    _ensure_pose_graph_state(app)
-    imgui.text("Pose graph (home-relative target frame)")
-    if imgui.radio_button("Right##pose_graph_side_r", app.pose_graph_side == "r"):
-        app.pose_graph_side = "r"
-    imgui.same_line()
-    if imgui.radio_button("Left##pose_graph_side_l", app.pose_graph_side == "l"):
-        app.pose_graph_side = "l"
-    imgui.same_line()
-    if imgui.button("Clear history##pose_graph_clear"):
-        app.pose_graph_state[app.pose_graph_side] = {
-            "target_pos": [[], [], []],
-            "current_pos": [[], [], []],
-            "target_rpy": [[], [], []],
-            "current_rpy": [[], [], []],
-            "position_error_mm": [],
-            "orientation_error_deg": [],
-        }
-
-    side = app.pose_graph_side
-    _append_pose_graph_sample(app, side)
-    graph = app.pose_graph_state[side]
-
-    _draw_pose_axis_group(
-        "Position (m)", POS_AXES,
-        graph["target_pos"], graph["current_pos"],
-        value_fmt="{:+.3f}", unit=" m", error_scale=1000.0)
-    _draw_pose_axis_group(
-        "Orientation (deg)", RPY_AXES,
-        graph["target_rpy"], graph["current_rpy"],
-        value_fmt="{:+.1f}", unit=" deg", error_scale=1.0)
-
-    imgui.separator_text("Pose error norm")
-    if graph["position_error_mm"]:
-        imgui.text(
-            f"Position error: {graph['position_error_mm'][-1]:.1f} mm   "
-            f"Orientation error: {graph['orientation_error_deg'][-1]:.2f} deg")
-    _plot_series_or_wait("position error##pose_graph_pos_norm", graph["position_error_mm"], "mm")
-    _plot_series_or_wait(
-        "orientation error##pose_graph_ori_norm", graph["orientation_error_deg"], "deg")
-
-
-def _draw_joint_monitor(app, data):
-    """감시 대상 관절의 현재 위치를 제한 범위 대비 진행 막대로 표시한다."""
-    imgui.begin_child("joint_monitor", (0, 0), True)
-    for name in app.monitor_qposadr:
-        val = float(data.qpos[app.monitor_qposadr[name]])
-        lo, hi = app.monitor_ranges[name]
-        frac = (val - lo) / (hi - lo) if hi > lo else 0.0
-        frac = _clamp(frac, 0.0, 1.0)
-        imgui.progress_bar(frac, (200, 0), f"{name} {math.degrees(val):+.1f}deg")
-    imgui.end_child()
-
-
-def kinematic_tree_body_ids(app, scope=None, show_full=None):
-    """손 선택과 전체 트리 설정에 따라 트리 창에 표시할 body ID를 반환한다."""
-    _ensure_window_state(app)
-    tree = app.whole_body_solver.kinematic_tree
-    scope = app.kinematic_tree_scope if scope is None else scope
-    show_full = app.kinematic_tree_show_full if show_full is None else show_full
-    if scope not in {"both", "r", "l"}:
-        raise ValueError(f"invalid kinematic tree scope: {scope!r}")
-    if show_full:
-        return frozenset(range(len(tree.bodies)))
-
-    visible = {0}
-    sides = ("r", "l") if scope == "both" else (scope,)
-    for side in sides:
-        site_id = app.whole_body_solver.site_ids[side]
-        visible.update(tree.site_paths[site_id])
-    return frozenset(visible)
-
-
-def _joint_state_text(app, joint):
-    """관절 종류에 맞춰 현재 qpos를 각도·거리 또는 multi-DOF 설명 문자열로 만든다."""
-    value = float(app.data.qpos[joint.qpos_adr])
-    if joint.kind_name == "hinge":
-        return f"{math.degrees(value):+.1f} deg"
-    if joint.kind_name == "slide":
-        return f"{value:+.3f} m"
-    return "multi-DOF state"
-
-
-def _draw_kinematic_body(app, body_id, visible_body_ids, controlled_joint_ids,
-                         target_site_ids):
-    """기구학 body 하나와 소속 joint/site, 표시 대상 자식 body를 재귀적으로 그린다."""
-    tree = app.whole_body_solver.kinematic_tree
-    body = tree.bodies[body_id]
-    body_name = body.name or "world"
-    flags = (imgui.TreeNodeFlags_.span_avail_width
-             | imgui.TreeNodeFlags_.draw_lines_to_nodes)
-    if not app.kinematic_tree_show_full or body_id == 0:
-        flags |= imgui.TreeNodeFlags_.default_open
-    expanded = imgui.tree_node_ex(f"{body_name}  [body {body_id}]##kinbody{body_id}", flags)
-    if not expanded:
-        return
-
-    for joint_id in body.joint_ids:
-        joint = tree.joints[joint_id]
-        marker = "[controlled] " if joint_id in controlled_joint_ids else ""
-        name = joint.name or f"joint {joint_id}"
-        imgui.bullet_text(
-            f"{marker}{name} <{joint.kind_name}>  {_joint_state_text(app, joint)}")
-    for site_id in tree.sites_by_body[body_id]:
-        site = tree.sites[site_id]
-        marker = "[IK target] " if site_id in target_site_ids else ""
-        name = site.name or f"site {site_id}"
-        imgui.bullet_text(f"{marker}{name} <site>")
-    for child_id in tree.children_by_body[body_id]:
-        if child_id in visible_body_ids:
-            _draw_kinematic_body(
-                app, child_id, visible_body_ids, controlled_joint_ids, target_site_ids)
-    imgui.tree_pop()
-
-
-def _draw_kinematic_tree(app):
-    """손 범위·전체 트리 선택 UI와 필터링된 MJCF 기구학 계층을 그린다."""
-    tree = app.whole_body_solver.kinematic_tree
-    imgui.text("Scope")
-    for index, (scope, label) in enumerate(
-            (("both", "Both arms"), ("r", "Right"), ("l", "Left"))):
-        if index:
-            imgui.same_line()
-        if imgui.radio_button(f"{label}##tree_scope_{scope}",
-                              app.kinematic_tree_scope == scope):
-            app.kinematic_tree_scope = scope
-    changed, show_full = imgui.checkbox(
-        "Show full MJCF tree", app.kinematic_tree_show_full)
-    if changed:
-        app.kinematic_tree_show_full = show_full
-
-    visible = kinematic_tree_body_ids(app)
-    controlled_joint_ids = set(map(int, app.whole_body_solver.joint_ids))
-    target_site_ids = set(app.whole_body_solver.site_ids.values())
-    imgui.text(
-        f"Showing {len(visible)}/{len(tree.bodies)} bodies  |  "
-        f"{len(controlled_joint_ids)} controlled joints")
-    imgui.text("[controlled] solver column   [IK target] grasp site")
-    imgui.separator()
-    imgui.begin_child("kinematic_tree_scroll", (0, 0), True)
-    _draw_kinematic_body(
-        app, 0, visible, controlled_joint_ids, target_site_ids)
-    imgui.end_child()
+# 기존 UI 공개 경로는 유지하고 구현은 diagnostics 모듈에서 제공한다.
+kinematic_tree_body_ids = diagnostics.kinematic_tree_body_ids
 
 
 def _draw_window_visibility(app):
@@ -943,7 +646,7 @@ def _draw_control_center(app, targets):
     _draw_tab(
         f"Left Arm ({app.arm_mode['l'].upper()})###left_arm_tab",
         lambda: _draw_arm_panel(app, targets, "l"))
-    _draw_tab("Pose Graph", lambda: _draw_pose_graph_panel(app))
+    _draw_tab("Pose Graph", lambda: diagnostics.draw_pose_graph_panel(app))
     _draw_tab("IK Solver", lambda: _draw_ik_solver_panel(app))
 
     def draw_robot_controls():
@@ -961,8 +664,8 @@ def _draw_diagnostics(app, data):
     """사용 빈도가 낮고 스크롤이 긴 검사 도구를 제어 흐름과 분리한다."""
     if not imgui.begin_tab_bar("diagnostics_tabs"):
         return
-    _draw_tab("Kinematic Tree", lambda: _draw_kinematic_tree(app))
-    _draw_tab("Joint Monitor", lambda: _draw_joint_monitor(app, data))
+    _draw_tab("Kinematic Tree", lambda: diagnostics.draw_kinematic_tree(app))
+    _draw_tab("Joint Monitor", lambda: diagnostics.draw_joint_monitor(app, data))
     imgui.end_tab_bar()
 
 

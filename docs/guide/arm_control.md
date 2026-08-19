@@ -95,8 +95,8 @@ flowchart TD
 
 ## 사용 위치
 
-`application/teleop.py`의 `_step_physics()`가 계산한 목표를 `_step_actuators()`가 양팔에 대해
-매 물리 substep 적용한다.
+`application/control_loop.py`의 `apply_whole_body_solution()`이 `q_des`를 갱신하고,
+`application/teleop.py`의 `_step_actuators()`가 양팔에 대해 매 물리 substep 적용한다.
 
 ```python
 for side in SIDES:

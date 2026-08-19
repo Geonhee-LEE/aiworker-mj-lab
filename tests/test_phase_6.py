@@ -20,9 +20,12 @@ MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
 import teleop_app  # noqa: E402
 from ffw_sh5_grasp.application import targets as teleop_targets  # noqa: E402
+from ffw_sh5_grasp.application import state as application_state  # noqa: E402
 from ffw_sh5_grasp.control import base  # noqa: E402
 from ffw_sh5_grasp.kinematics import rotations, tasks as pose_tasks  # noqa: E402
+from ffw_sh5_grasp.visualization import diagnostics  # noqa: E402
 from ffw_sh5_grasp.visualization import render as teleop_render  # noqa: E402
+from ffw_sh5_grasp.visualization import task_space  # noqa: E402
 from ffw_sh5_grasp.visualization import ui as teleop_ui  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
@@ -160,7 +163,8 @@ def run_cyclo_bimanual_virtual_object_gate():
     teleop_targets.sync_ik_mocaps_from_targets(app)
     vo_pos = teleop_targets.local_to_world_pos(
         app, app.targets["virtual_object_pos"])
-    marker_err = float(np.linalg.norm(app.data.mocap_pos[app.virtual_object_mocap_id] - vo_pos))
+    mocap_id = app.bindings.markers.virtual_mocap_id
+    marker_err = float(np.linalg.norm(app.data.mocap_pos[mocap_id] - vo_pos))
 
     app.release_grasp()
     release_ok = not app.cyclo_grasp_captured and app.cyclo_capture_offsets is None
@@ -212,8 +216,9 @@ def run_cyclo_3d_gizmo_pose_gate():
 def run_bimanual_marker_visibility_gate():
     """가상 물체 마커가 양손 캡처 중에만 보이고 release 뒤 숨는지 검사한다."""
     app = _make_sim_only_app()
-    geom_id = app.virtual_object_marker_geom_id
-    site_id = app.virtual_object_marker_site_id
+    markers = app.bindings.markers
+    geom_id = markers.virtual_geom_id
+    site_id = markers.virtual_site_id
     geom_alpha0 = float(app.model.geom_rgba[geom_id][3])
     site_alpha0 = float(app.model.site_rgba[site_id][3])
 
@@ -231,8 +236,8 @@ def run_bimanual_marker_visibility_gate():
 
     hidden_initial = geom_alpha0 == 0.0 and site_alpha0 == 0.0
     visible_capture = (
-        abs(geom_alpha_capture - app.virtual_object_marker_rgba["geom"][3]) < 1e-12
-        and abs(site_alpha_capture - app.virtual_object_marker_rgba["site"][3]) < 1e-12
+        abs(geom_alpha_capture - markers.virtual_geom_rgba[3]) < 1e-12
+        and abs(site_alpha_capture - markers.virtual_site_rgba[3]) < 1e-12
     )
     hidden_release = geom_alpha_release == 0.0 and site_alpha_release == 0.0
     ok = hidden_initial and visible_capture and hidden_release
@@ -245,9 +250,10 @@ def run_bimanual_marker_visibility_gate():
 def run_numeric_target_marker_sync_gate():
     """수치 XYZ/RPY 목표가 MuJoCo mocap 마커 pose에 정확히 동기화되는지 검사한다."""
     app = _make_sim_only_app()
-    app.data.qpos[app.base_x_qadr] = 0.12
-    app.data.qpos[app.base_y_qadr] = -0.04
-    app.data.qpos[app.base_yaw_qadr] = np.radians(17.0)
+    base_bindings = app.bindings.base
+    app.data.qpos[base_bindings.x_qpos] = 0.12
+    app.data.qpos[base_bindings.y_qpos] = -0.04
+    app.data.qpos[base_bindings.yaw_qpos] = np.radians(17.0)
     mujoco.mj_forward(app.model, app.data)
 
     app.targets["pos_r"] = [0.04, -0.03, 0.05]
@@ -255,7 +261,7 @@ def run_numeric_target_marker_sync_gate():
     app.targets["pos_l"] = [-0.02, 0.04, 0.06]
     app.targets["rpy_l"] = [-9.0, -6.0, -4.0]
 
-    for side, mocap_id in app.ik_target_mocap_ids.items():
+    for side, mocap_id in app.bindings.markers.hand_mocap_ids.items():
         app.data.mocap_pos[mocap_id] = [9.0, 9.0, 9.0]
         app.data.mocap_quat[mocap_id] = [0.0, 1.0, 0.0, 0.0]
 
@@ -263,7 +269,7 @@ def run_numeric_target_marker_sync_gate():
 
     ok = True
     reports = []
-    for side, mocap_id in app.ik_target_mocap_ids.items():
+    for side, mocap_id in app.bindings.markers.hand_mocap_ids.items():
         expected_pos = teleop_targets.target_world_pose(app, side)[0]
         expected_quat = teleop_targets.target_world_quat(app, side)
         pos_err = float(np.linalg.norm(app.data.mocap_pos[mocap_id] - expected_pos))
@@ -481,8 +487,8 @@ def run_task_space_input_gate():
         initial.quaternion, rotations.rpy_deg_to_quat([7.0, -4.0, 6.0]))
     desired_rpy = rotations.quat_to_rpy_deg(desired_quaternion)
 
-    teleop_ui._ensure_task_space_state(app)
-    applied, message = teleop_ui._apply_task_space_target(
+    task_space.ensure_state(app)
+    applied, message = task_space.apply_target(
         app, side, desired_position, desired_rpy)
     converted_position, converted_quaternion = teleop_targets.target_world_pose(
         app, side)
@@ -511,9 +517,9 @@ def run_task_space_input_gate():
     converged = error.position_norm < 0.005 and error.orientation_norm < np.radians(5.0)
 
     previous_target = np.asarray(app.targets["pos_r"], dtype=float).copy()
-    finite_ok, _ = teleop_ui._apply_task_space_target(
+    finite_ok, _ = task_space.apply_target(
         app, side, [np.nan, 0.0, 0.0], [0.0, 0.0, 0.0])
-    side_ok, _ = teleop_ui._apply_task_space_target(
+    side_ok, _ = task_space.apply_target(
         app, "invalid", initial.position, desired_rpy)
     rejects_invalid = (
         not finite_ok and not side_ok
@@ -526,6 +532,64 @@ def run_task_space_input_gate():
         f"pos_err={error.position_norm*1000:.2f}mm "
         f"ori_err={np.degrees(error.orientation_norm):.2f}deg "
         f"rejects_invalid={rejects_invalid}: {'OK' if ok else 'FAIL'}")
+    return ok
+
+
+def run_application_state_gate():
+    """모델 주소와 task/control/observation 스냅샷이 실제 frame 경로에 쓰이는지 검사한다."""
+    app = _make_sim_only_app()
+    app.q_des = {
+        "r": teleop_app.HOME_Q_R.copy(),
+        "l": teleop_app.HOME_Q_L.copy(),
+    }
+    app.arm_mode = {"r": "ik", "l": "ik"}
+    app.fk_q_deg = {
+        side: np.degrees(q_des).tolist()
+        for side, q_des in app.q_des.items()
+    }
+    app.frame_dt = 1.0 / teleop_app.LOOP_HZ
+    app.steps_per_frame = max(
+        1, round(app.frame_dt / app.model.opt.timestep))
+    app.ik_err_mm = {"r": 0.0, "l": 0.0}
+    no_keys = {
+        key: False for key in ("w", "a", "s", "d", "left", "right")
+    }
+
+    app._step_physics(no_keys)
+    task = app.last_task_command
+    control = app.last_control_command
+    observation = app.last_observation
+    bindings_ok = (
+        isinstance(app.bindings, application_state.ModelBindings)
+        and set(app.bindings.wheels) == set(base.WHEELS)
+        and set(app.bindings.markers.hand_mocap_ids) == {"r", "l"}
+    )
+    command_ok = (
+        isinstance(task, application_state.TaskCommand)
+        and isinstance(control, application_state.ControlCommand)
+        and set(task.hand_poses) == {"r", "l"}
+        and set(control.arm_positions) == {"r", "l"}
+        and set(control.wheel_commands) == set(base.WHEELS)
+    )
+
+    qpos_snapshot = observation.qpos.copy()
+    base_x = app.bindings.base.x_qpos
+    app.data.qpos[base_x] += 0.01
+    snapshot_ok = (
+        isinstance(observation, application_state.RobotObservation)
+        and not np.shares_memory(observation.qpos, app.data.qpos)
+        and np.array_equal(observation.qpos, qpos_snapshot)
+        and not observation.qpos.flags.writeable
+        and all(not pose.flags.writeable
+                for pose in observation.hand_positions.values())
+    )
+    app.data.qpos[base_x] -= 0.01
+    mujoco.mj_forward(app.model, app.data)
+
+    ok = bindings_ok and command_ok and snapshot_ok
+    print(f"Application state gate: bindings={bindings_ok} "
+          f"task_control={command_ok} snapshot={snapshot_ok}: "
+          f"{'OK' if ok else 'FAIL'}")
     return ok
 
 
@@ -542,10 +606,10 @@ def run_split_ui_and_tree_gate():
     )
 
     tree = app.whole_body_solver.kinematic_tree
-    right = teleop_ui.kinematic_tree_body_ids(app, "r", False)
-    left = teleop_ui.kinematic_tree_body_ids(app, "l", False)
-    both = teleop_ui.kinematic_tree_body_ids(app, "both", False)
-    full = teleop_ui.kinematic_tree_body_ids(app, "both", True)
+    right = diagnostics.kinematic_tree_body_ids(app, "r", False)
+    left = diagnostics.kinematic_tree_body_ids(app, "l", False)
+    both = diagnostics.kinematic_tree_body_ids(app, "both", False)
+    full = diagnostics.kinematic_tree_body_ids(app, "both", True)
     right_site = app.whole_body_solver.site_ids["r"]
     left_site = app.whole_body_solver.site_ids["l"]
     tree_ok = (
@@ -581,6 +645,7 @@ def main():
           and run_whole_body_toggle_gate()
           and run_collision_visualization_gate()
           and run_task_space_input_gate()
+          and run_application_state_gate()
           and run_manual_xyz_rpy_ik_gate())
     print("PASS" if ok else "FAIL")
     sys.exit(0 if ok else 1)

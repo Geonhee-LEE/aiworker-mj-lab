@@ -873,9 +873,10 @@ def run_world_anchor_gate():
     hand_before = teleop_targets.target_world_pose(app, "r")
     virtual_before = teleop_targets.virtual_object_world_pose(app)
 
-    app.data.qpos[app.base_x_qadr] += 0.25
-    app.data.qpos[app.base_y_qadr] -= 0.12
-    app.data.qpos[app.base_yaw_qadr] += np.radians(35.0)
+    base_bindings = app.bindings.base
+    app.data.qpos[base_bindings.x_qpos] += 0.25
+    app.data.qpos[base_bindings.y_qpos] -= 0.12
+    app.data.qpos[base_bindings.yaw_qpos] += np.radians(35.0)
     mujoco.mj_forward(app.model, app.data)
     hand_after = teleop_targets.target_world_pose(app, "r")
     virtual_after = teleop_targets.virtual_object_world_pose(app)
@@ -901,17 +902,20 @@ def run_manual_handover_gate():
     virtual_before = teleop_targets.virtual_object_world_pose(app)
     app.whole_body_solver.solve(app.data, targets_before, 0.04)
 
+    base_bindings = app.bindings.base
     previous_base = np.array([
-        app.data.qpos[app.base_x_qadr], app.data.qpos[app.base_y_qadr],
-        app.data.qpos[app.base_yaw_qadr],
+        app.data.qpos[base_bindings.x_qpos],
+        app.data.qpos[base_bindings.y_qpos],
+        app.data.qpos[base_bindings.yaw_qpos],
     ])
-    app.data.qpos[app.base_x_qadr] += 0.25
-    app.data.qpos[app.base_y_qadr] -= 0.10
-    app.data.qpos[app.base_yaw_qadr] += np.radians(20.0)
+    app.data.qpos[base_bindings.x_qpos] += 0.25
+    app.data.qpos[base_bindings.y_qpos] -= 0.10
+    app.data.qpos[base_bindings.yaw_qpos] += np.radians(20.0)
     mujoco.mj_forward(app.model, app.data)
     current_base = np.array([
-        app.data.qpos[app.base_x_qadr], app.data.qpos[app.base_y_qadr],
-        app.data.qpos[app.base_yaw_qadr],
+        app.data.qpos[base_bindings.x_qpos],
+        app.data.qpos[base_bindings.y_qpos],
+        app.data.qpos[base_bindings.yaw_qpos],
     ])
     teleop_targets.carry_world_targets_with_base(app, previous_base, current_base)
     targets_after = {
@@ -983,18 +987,21 @@ def run_manual_release_physical_gate():
 
     for _ in range(25):
         app._step_physics(backward)
-    release_x = float(app.data.qpos[app.base_x_qadr])
+    base_bindings = app.bindings.base
+    release_x = float(app.data.qpos[base_bindings.x_qpos])
     positions = [release_x]
     stop_time = None
     wheel_stop_time = None
     for frame in range(75):
         app._step_physics(no_keys)
-        positions.append(float(app.data.qpos[app.base_x_qadr]))
+        positions.append(float(app.data.qpos[base_bindings.x_qpos]))
         max_wheel_speed = max(
-            abs(app.data.qvel[dof]) for dof in app.wheel_drive_dofs.values())
+            abs(app.data.qvel[wheel.drive_dof])
+            for wheel in app.bindings.wheels.values())
         if wheel_stop_time is None and max_wheel_speed < 0.01:
             wheel_stop_time = (frame + 1) * app.frame_dt
-        if (stop_time is None and abs(app.data.qvel[app.base_x_dof]) < 0.01
+        if (stop_time is None
+                and abs(app.data.qvel[base_bindings.x_dof]) < 0.01
                 and not app._manual_override_active):
             stop_time = (frame + 1) * app.frame_dt
 

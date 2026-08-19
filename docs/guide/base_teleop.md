@@ -131,8 +131,8 @@ FSM 전이 판정에만 사용한다.
 
 ## 명령 중재
 
-`application/teleop.py::_step_physics()`는 manual command와 전신 IK command를 다음
-우선순위로 선택한다.
+`application/control_loop.py::select_base_command()`는 manual command와 전신 IK
+command를 다음 우선순위로 선택한다.
 
 | 상태 | `commanded_base_twist` |
 |---|---|
@@ -155,7 +155,8 @@ FSM 전이 판정에만 사용한다.
 | 동치 조향 상태 선택 | `_nearest_feasible_state()` | `control/base.py` |
 | reversal·조향·정렬 처리 | `_control_module()` | `control/base.py` |
 | drive 변화율 제한 | `_rate_limit_drive_commands()` | `control/base.py` |
-| manual/WBIK 중재 | `TeleopApp._step_physics()` | `application/teleop.py` |
+| base feedback·수동 상태 | `update_manual_drive()` | `application/control_loop.py` |
+| manual/WBIK 중재 | `select_base_command()` | `application/control_loop.py` |
 | actuator 기록 | `TeleopApp._step_actuators()` | `application/teleop.py` |
 
 ## 함수 흐름 { #base-function-flow }
@@ -163,10 +164,10 @@ FSM 전이 판정에만 사용한다.
 ```mermaid
 flowchart TD
     APP["application/teleop.py<br>TeleopApp._step_physics()"]
-    FB["_read_base_feedback()<br>steering · wheel velocity · body twist"]
+    FB["application/control_loop.py<br>update_manual_drive()"]
     KEY["control/base.py<br>BaseTeleop.update_body()"]
     IK["control/whole_body.py<br>WholeBodyIK.solve() · base_twist"]
-    ARB{"manual / stopping / WBIK"}
+    ARB["application/control_loop.py<br>select_base_command()"]
     DRIVE["control/base.py<br>SwerveDrive.update_twist()"]
     ZERO{"zero twist?"}
     HOLD["_hold_zero()<br>steering 유지 · drive 0"]

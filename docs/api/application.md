@@ -8,6 +8,7 @@
 |---|---|---|
 | `main(argv=None)` | CLI 인자 목록, 반환 없음 | `TeleopApp`을 생성하고 종료할 때까지 실행 |
 | `TeleopApp.run()` | 반환 없음 | 입력 → UI → 제어·물리 → 렌더링 반복 |
+| `TeleopApp.observe()` | `RobotObservation` | 현재 qpos, qvel, base twist와 양손 pose 복사 |
 | `KeyEdge.pressed(window, key)` | GLFW window/key → `bool` | 키를 누른 첫 프레임에만 `True` |
 
 `--config PATH`는 `python3 src/teleop_app.py` 실행기가 패키지를 import하기 전에 적용한다.
@@ -27,6 +28,31 @@
 | `toggle_collision_visualization()` | collision overlay 표시 변경 |
 
 상세 실행 순서는 [애플리케이션과 목표 좌표](../guide/teleop_app.md)를 참고한다.
+
+## `application.state` { #state }
+
+| 자료구조 | 포함하는 값 |
+|---|---|
+| `ModelBindings` | lift, base, wheel, marker, monitor와 캔의 MuJoCo 주소 |
+| `TaskCommand` | 양손 world pose, lift, base twist와 손 명령 |
+| `ControlCommand` | 물리 적용 단계로 전달할 양팔·lift·wheel·손 명령 |
+| `RobotObservation` | 시간, qpos, qvel, base twist와 양손 실제 pose |
+
+`RobotObservation`, `TaskCommand`, `ControlCommand`의 배열은 생성 시 복사되며 읽기
+전용이다. 따라서 이후 `mj_step()`이나 UI 변경으로 과거 frame 값이 바뀌지 않는다.
+
+## `application.control_loop` { #control-loop }
+
+이 함수들은 한 제어 frame의 base feedback과 명령 중재를 담당한다. UI나 렌더링을
+호출하지 않는다.
+
+| 함수 | 반환 또는 변경 |
+|---|---|
+| `read_base_feedback(app)` | steering, wheel velocity, body twist와 base pose를 `BaseFeedback`으로 반환 |
+| `update_manual_drive(app, drive_keys, ...)` | 수동 우선권·target 운반 상태를 갱신하고 `ManualDriveState` 반환 |
+| `apply_whole_body_solution(app, task_command, ...)` | solver 호출 후 팔·리프트·collision 진단 상태 갱신 |
+| `select_base_command(app, manual_state)` | manual/제동/WBIK 명령을 선택해 wheel command 반환 |
+| `build_control_command(app, task_command, wheel_commands)` | 물리 적용용 값을 `ControlCommand`로 복사 |
 
 ## `application.targets` { #targets }
 

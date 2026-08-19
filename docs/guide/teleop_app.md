@@ -1,7 +1,9 @@
 # 애플리케이션과 목표 좌표
 
 `application/teleop.py`는 model/data와 controller를 만들고 프레임 반복 실행을 담당한다.
-`application/targets.py`는 UI 값, world pose와 marker pose 사이의 변환만 담당한다.
+`application/control_loop.py`는 수동 주행과 IK 명령을 중재하며, `application/targets.py`는
+UI 값, world pose와 marker pose 사이의 변환을 담당한다. `application/state.py`는 모델
+주소와 한 frame의 입력·출력 스냅샷을 정의한다.
 
 ```bash
 python3 src/teleop_app.py
@@ -12,8 +14,10 @@ python3 src/teleop_app.py --config config/local.yaml
 
 | 파일 | 역할 | 하지 않는 일 |
 |---|---|---|
-| `application/teleop.py` | 초기화, 입력, 모드 전환, 명령 중재, physics step | FK·IK 수식 중복 구현 |
+| `application/teleop.py` | 초기화, 입력, 모드 전환, frame·physics 순서 조율 | FK·IK 수식 중복 구현 |
+| `application/control_loop.py` | base feedback, 수동/WBIK 중재, solver 결과 반영 | UI·렌더링 |
 | `application/targets.py` | target frame 변환, 양손 capture, marker 동기화 | IK solve, actuator 기록 |
+| `application/state.py` | 모델 주소와 task/control/observation 자료구조 | solver 계산 |
 
 루트의 `src/teleop_app.py`는 설정 경로를 적용한 뒤
 `ffw_sh5_grasp.application.teleop.main()`을 호출하는 실행기다.
@@ -23,29 +27,36 @@ python3 src/teleop_app.py --config config/local.yaml
 ```mermaid
 flowchart TD
     MAIN["src/teleop_app.py<br>main()"] --> APP["application/teleop.py<br>TeleopApp.__init__()"]
-    APP --> SETUP["_setup_sim() · _setup_loop_state()"]
-    SETUP --> RUN["TeleopApp.run()"]
+    APP --> SETUP["_setup_sim()<br>model → controller → ID → target"]
+    SETUP --> LOOPSTATE["_setup_loop_state()"]
+    LOOPSTATE --> RUN["TeleopApp.run()"]
     RUN --> BEGIN["visualization/render.py<br>begin_frame()"]
     BEGIN --> INPUT["_handle_edge_keys()<br>_read_drive_and_lift_keys()"]
     INPUT --> UI["visualization/ui.py<br>draw_panel()"]
     UI --> STEP["TeleopApp._step_physics()"]
-    STEP --> FEEDBACK["_read_base_feedback()"]
-    FEEDBACK --> TARGET["application/targets.py<br>target 변환"]
-    TARGET --> IK["control/whole_body.py<br>WholeBodyIK.solve()"]
-    IK --> BASE["control/base.py<br>SwerveDrive.update_twist()"]
-    BASE --> ACT["_step_actuators()<br>data.ctrl · mj_step()"]
-    ACT --> RENDER["visualization/render.py<br>render_scene() · end_frame()"]
+    STEP --> MANUAL["application/control_loop.py<br>update_manual_drive()"]
+    MANUAL --> TARGET["application/targets.py<br>target 변환"]
+    TARGET --> TASK["application/state.py<br>TaskCommand.create()"]
+    TASK --> APPLY["application/control_loop.py<br>apply_whole_body_solution()"]
+    APPLY --> IK["control/whole_body.py<br>WholeBodyIK.solve()"]
+    IK --> SELECT["application/control_loop.py<br>select_base_command()"]
+    SELECT --> BASE["control/base.py<br>SwerveDrive.update_twist()"]
+    BASE --> COMMAND["build_control_command()<br>ControlCommand"]
+    COMMAND --> ACT["_step_actuators()<br>data.ctrl · mj_step()"]
+    ACT --> OBS["TeleopApp.observe()<br>RobotObservation"]
+    OBS --> RENDER["visualization/render.py<br>render_scene() · end_frame()"]
     RENDER --> RUN
 ```
 
 ### `_step_physics()` 순서
 
-1. steering, wheel velocity, body twist와 base pose를 읽는다.
+1. `update_manual_drive()`가 base feedback을 읽고 수동 주행 상태를 갱신한다.
 2. 수동 주행 중이면 측정된 base SE(2) 이동만큼 target 기준을 운반한다.
 3. grasp target과 손 target 변화율을 제한한다.
-4. 양손 target을 world pose로 변환하고 `WholeBodyIK.solve()`를 호출한다.
-5. manual, 제동용 zero, WBIK 중 하나의 `BodyTwist`를 선택한다.
-6. wheel·arm·lift·finger command를 각 physics substep에 기록하고 `mj_step()`을 실행한다.
+4. 양손 world pose와 lift·손 값을 `TaskCommand`로 묶어 solver에 전달한다.
+5. `select_base_command()`가 manual, 제동용 zero, WBIK 중 하나를 선택한다.
+6. 결과를 `ControlCommand`로 묶어 각 physics substep에 적용한다.
+7. `mj_step()` 뒤 상태를 `RobotObservation`으로 복사한다.
 
 base 명령 중재와 wheel 제어는 [모바일 스워브 제어](base_teleop.md#base-function-flow)에
 정리되어 있다.
@@ -113,7 +124,9 @@ R_{hand}=R_{obj}R_{offset}
 
 ```mermaid
 flowchart LR
-    EDIT["UI 숫자 · slider · jog"] --> STATE["app.targets"]
+    NUM["Task Space 숫자"] --> APPLYNUM["visualization/task_space.py<br>apply_target()"]
+    APPLYNUM --> STATE["app.targets"]
+    EDIT["slider · jog"] --> STATE
     GIZMO["visualization/render.py<br>draw_transform_gizmo()"] --> SET["application/targets.py<br>set_gizmo_target_world_pose()"]
     SET --> STATE
     STATE --> POSE["target_world_pose()"]
@@ -137,6 +150,11 @@ flowchart LR
 | `TeleopApp.set_arm_mode()` | IK/FK 전환과 현재 상태 동기화 |
 | `TeleopApp.set_whole_body_enabled()` | world pose를 보존하며 ON/OFF 전환 |
 | `TeleopApp._step_physics()` | target, solver, 명령 중재와 physics 순서 조율 |
+| `TeleopApp.observe()` | 현재 상태를 독립된 `RobotObservation`으로 복사 |
+| `control_loop.update_manual_drive()` | base feedback과 수동 우선권·target 운반 갱신 |
+| `control_loop.apply_whole_body_solution()` | solver 호출 결과를 팔·리프트·진단 상태에 반영 |
+| `control_loop.select_base_command()` | manual/제동/WBIK 명령 선택과 wheel 명령 생성 |
+| `control_loop.build_control_command()` | 물리 적용용 명령 스냅샷 생성 |
 | `target_world_pose()` | 손 target을 최종 world pose로 변환 |
 | `world_to_target_pos()` | world 위치를 현재 target frame으로 역변환 |
 | `capture_grasp()` / `apply_virtual_object_target()` | virtual object 기준 양손 target 저장·복원 |
@@ -152,6 +170,6 @@ python3 tests/test_phase_6.py
 ```
 
 Phase 6는 초기 target 일치, world↔target 변환, Whole-body 전환 pose 보존, 양손 capture,
-marker 동기화와 Task Space 입력을 검사한다.
+marker 동기화, Task Space 입력과 상태·명령 스냅샷을 검사한다.
 
 [← 시스템 구조](../overview.md) · [시각화 →](teleop_ui.md)
