@@ -189,3 +189,21 @@ render:
       distance: 0.5
       azimuth_deg: 90.0
       elevation_deg: -15.0
+
+# ROS/whole-body 경로와 분리된 ALOHA-style imitation 환경 설정이다.
+imitation:
+  control_hz: 25.0
+  camera:
+    names: [cam_high, cam_left_wrist, cam_right_wrist]
+    width: 320
+    height: 240
+  reset:
+    # 캔 중심의 균등분포 범위. 목표 상자와 겹치지 않는 테이블 왼쪽 영역이다.
+    can_x_range_m: [0.27, 0.48]
+    can_y_range_m: [-0.17, -0.06]
+    can_z_m: 0.7866
+  task:
+    target_site: target_bin_center
+    inner_half_extents_m: [0.075, 0.075]
+    success_height_range_m: [0.76, 0.86]
+    settle_speed_m_s: 0.08

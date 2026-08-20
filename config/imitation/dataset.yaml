@@ -1,0 +1,8 @@
+task_name: can_to_box
+dataset_dir: datasets/can_to_box
+control_hz: 25.0
+camera_names: [cam_high, cam_left_wrist, cam_right_wrist]
+state_dim: 16
+action_dim: 16
+episode_split: [0.8, 0.1, 0.1]
+split_seed: 42

@@ -371,6 +371,9 @@
               <joint name="head_joint2" class="head_joint2"/>
               <geom type="mesh" mesh="head_link2" material="white" class="visual"/>
               <geom type="mesh" mesh="head_link2" class="collision"/>
+              <!-- ACT의 cam_high. 카메라의 -Z 축이 테이블 작업공간을 향한다. -->
+              <camera name="cam_high" pos="0.055 0 0.055"
+                xyaxes="0 -1 0 0.899 0 0.438" fovy="58"/>
             </body>
           </body>
 
@@ -417,6 +420,9 @@
                         <geom type="mesh" mesh="arm_l_link7" material="black" class="visual"/>
                         <geom type="mesh" mesh="arm_l_link7" class="collision"/>
                         <geom size="0.0115 0.021 0.021" pos="0.107944 0 -0.065588" quat="0.475435 -0.475435 0.523413 0.523413" type="box"/>
+                        <!-- 손목과 강체로 함께 움직이는 policy 카메라. -->
+                        <camera name="cam_left_wrist" pos="0.13 -0.04 -0.03"
+                          xyaxes="0 -1 0 0.37 0 -0.93" fovy="72"/>
 
                         <!-- 왼손(HX5-D20) -->
                         <body name="hx5_l_base" pos="0 0 -0.078" quat="0 -0.7071068 0.7071068 0">
@@ -606,6 +612,8 @@
                         <geom type="mesh" mesh="arm_r_link7" material="black" class="visual"/>
                         <geom type="mesh" mesh="arm_r_link7" class="collision"/>
                         <geom size="0.0115 0.021 0.021" pos="0.107944 0 -0.065588" quat="0.475435 -0.475435 0.523413 0.523413" type="box"/>
+                        <camera name="cam_right_wrist" pos="0.13 0.04 -0.03"
+                          xyaxes="0 -1 0 0.37 0 -0.93" fovy="72"/>
 
                         <!-- 오른손(HX5-D20) -->
                         <body name="hx5_r_base" pos="0 0 -0.078" quat="0 0.7071068 0.7071068 0">
@@ -773,7 +781,7 @@
       <geom type="mesh" mesh="can_side_detail" material="can_mat" class="visual"/>
       <geom type="mesh" mesh="can_cap_detail" material="can_cap_mat" class="visual"/>
       <geom name="can_geom" type="cylinder" size="0.033 0.055" rgba="0 0 0 0"
-        priority="1" condim="6" friction="0.5 0.01 0.003"
+        priority="1" contype="1" conaffinity="3" condim="6" friction="0.5 0.01 0.003"
         solimp="0.5 0.99 0.0001" solref="0.005 1"/>
     </body>
     <body name="box_body" pos="0.4055 0.0 0.8716">
@@ -781,6 +789,27 @@
       <geom name="box_geom" type="box" size="0.10 0.10 0.14" mass="0.2"
         rgba="0.8 0.6 0.3 1" priority="1" condim="6" friction="1.0 0.5 0.01"
         solimp="0.5 0.99 0.0001" solref="0.005 1"/>
+    </body>
+    <!-- 캔 배치 task의 고정 목표 상자. 내부 바닥과 네 벽을 별도 geom으로 만들어
+         위가 열린 실제 receptacle처럼 충돌하며, policy camera에서도 쉽게 구분된다. -->
+    <body name="target_bin" pos="0.5155 0.145 0.7391">
+      <geom name="target_bin_floor" type="box" size="0.085 0.085 0.0075"
+        contype="2" conaffinity="0" rgba="0.15 0.45 0.9 1"
+        friction="0.8 0.02 0.002"/>
+      <geom name="target_bin_front" type="box" pos="0 -0.08 0.0875"
+        size="0.085 0.005 0.08" contype="2" conaffinity="0"
+        rgba="0.12 0.38 0.82 0.85"/>
+      <geom name="target_bin_back" type="box" pos="0 0.08 0.0875"
+        size="0.085 0.005 0.08" contype="2" conaffinity="0"
+        rgba="0.12 0.38 0.82 0.85"/>
+      <geom name="target_bin_left" type="box" pos="-0.08 0 0.0875"
+        size="0.005 0.075 0.08" contype="2" conaffinity="0"
+        rgba="0.12 0.38 0.82 0.85"/>
+      <geom name="target_bin_right" type="box" pos="0.08 0 0.0875"
+        size="0.005 0.075 0.08" contype="2" conaffinity="0"
+        rgba="0.12 0.38 0.82 0.85"/>
+      <site name="target_bin_center" pos="0 0 0.0625" size="0.01"
+        rgba="0.1 1 0.2 0.35"/>
     </body>
     <body name="ik_target_l" mocap="true" pos="0.45 0.25 0.95">
       <geom name="ik_target_l_geom" type="sphere" size="0.025" rgba="0.1 0.9 0.1 0.35"

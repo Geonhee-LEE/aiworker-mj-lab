@@ -15,6 +15,7 @@
 | grasp/contact | `test_phase_1.py`, `test_phase_2.py` | Phase 3, 4 |
 | collision CBF | `test_whole_body.py` | Phase 5, 6 |
 | 모델 XML/actuator | 관련 Phase + `test_whole_body.py` | 전체 suite |
+| imitation/ACT | `test_il_action.py`, `test_il_env.py`, `test_il_dataset.py` | `test_il_*.py` 전체 |
 
 ## 빠른 핵심 검증
 
@@ -24,6 +25,19 @@ python3 tests/test_phase_6.py
 python3 tests/test_whole_body.py
 mkdocs build --strict
 ```
+
+Arm-only imitation 전체 gate:
+
+```bash
+for test_file in tests/test_il_*.py; do
+  python3 "$test_file"
+done
+```
+
+카메라 gate는 headless EGL을 사용하고, training gate는 3-frame synthetic episode로
+실제 checkpoint/metric/PNG 산출물을 한 epoch 생성한다. Rerun SDK가 설치되지 않은
+환경에서는 dependency boundary와 오류 안내를 검사하고, 실제 `.rrd` 생성은 SDK가
+있는 학습·평가 환경에서 수행한다.
 
 이 조합은 현재 UI target, Bimanual/Whole-body mode, ROS-free dependency, WBIK,
 collision, 스워브와 실제 wheel-ground 추종을 빠르게 확인한다.

@@ -1,137 +1,138 @@
-# 모방학습 데이터와 실기 전환
+# Arm-only ALOHA/ACT 파이프라인
 
-!!! warning "현재 구현되지 않음"
-    episode recorder, dataset loader, policy runner와 실물 driver는 없다.
-    `tests/record_demo.py`는 GIF 생성용 테스트 도구다. 아래 인터페이스는 확장 시의
-    제안이며 현재 API가 아니다.
-
-## 권장 policy 출력
-
-첫 버전은 actuator나 torque 대신 손 pose 변화량과 finger synergy를 출력하는 편이
-현재 안전 계층을 재사용하기 쉽다.
-
-\[
-a_t=[\Delta p_r,\Delta\theta_r,\Delta p_l,\Delta\theta_l,
-\Delta g_r,\Delta t_r,\Delta g_l,\Delta t_l]
-\]
-
-| 값 | 단위·frame |
-|---|---|
-| \(\Delta p\) | task frame 위치 변화량, m |
-| \(\Delta\theta\) | 같은 frame의 rotation vector, rad |
-| \(\Delta g,\Delta t\) | `grasp`, `thumb` 변화량 |
-
-이 action은 `application.targets`를 거쳐 기존 target smoothing, WBIK, collision CBF,
-swerve와 저수준 팔 제어를 사용한다.
-
-## 기록할 데이터
-
-`TeleopApp._step_physics()`가 한 control frame의 입력과 최종 명령을 모두 보는 조립
-지점이다. 계산 모듈에서 직접 파일을 쓰지 말고 recorder에 snapshot을 넘긴다.
+현재 구현은 ROS와 Whole-body IK를 사용하지 않는 첫 모방학습 경로다. base, lift,
+head는 home reference에 고정되고 policy는 양팔 7축과 손별 grasp synergy만 제어한다.
 
 ```text
-observation_t
-  + raw human target/event
-  + normalized policy action
-  + WholeBodyCommand
-  + wheel/finger/actuator command
-  -> physics substeps
-  -> observation_t+1
+GizmoLeader 또는 ACT
+  → absolute 16D joint action
+  → ArmTorqueController + grasp synergy
+  → MuJoCo physics
+  → 16D state + RGB 3개
 ```
 
-### Episode metadata
+## Can-to-box task와 reset
 
-- `schema_version`, episode ID, git commit, model hash
-- seed와 reset 값
-- control Hz와 physics dt
-- joint·actuator·camera 이름 순서
-- controller config
-- task, success, failure reason
+첫 task는 테이블의 무작위 위치에서 시작하는 캔을 고정된 파란 상자 안에 넣는 것이다.
+`R`을 누르면 기록 중인 미완성 episode를 폐기하고 로봇 전체를 `home` keyframe으로
+되돌린 뒤 캔의 x/y만 설정 범위에서 다시 추출한다. 상자는 고정되어 있다. 각 reset의
+seed와 실제 초기 캔 위치가 HDF5 attribute에 남으므로 replay할 수 있다.
 
-### Step record
+성공은 캔 중심의 상자 내부 x/y 범위, 높이 범위, 선속도 안정화 조건을 모두 만족할
+때만 참이다. 범위는 `config/default.yaml`의 `imitation.task`에 있다.
 
-- sequence, monotonic/simulation timestamp, dt, dropped-frame 표시
-- qpos, qvel, base pose/twist, wheel feedback
-- 양손·물체 pose와 상대 pose
-- 접촉력, 최소 충돌 거리, 활성 pair, CBF 위반량
-- Whole-body/IK/FK/Bimanual/manual mode
-- raw target, 학습 action, solver 출력, 최종 actuator command
-- 선택적 RGB/depth frame과 sensor timestamp
+## Policy 입출력
 
-`observation_t`를 읽고 action을 적용한 결과는 `observation_t+1`에 저장한다. 기본
-표본 주기는 physics 1 kHz가 아니라 control 25 Hz다. 배열 순서는 metadata의 이름
-목록으로 고정하고 episode 단위 완료 표시와 schema version을 둔다.
+action과 policy qpos/qvel은 모두 다음 left-first 순서의 16차원이다.
 
-## 데이터 검증
+```text
+left arm joint 1..7, left grasp,
+right arm joint 1..7, right grasp
+```
 
-- timestamp와 sequence가 단조 증가하는가
-- 모든 수치가 finite이고 quaternion norm이 1인가
-- joint/actuator 배열 길이와 이름 순서가 고정됐는가
-- action과 다음 observation이 한 step 어긋나지 않았는가
-- target·velocity·command가 코드 limit 안에 있는가
-- 수동 개입과 collision CBF 개입이 표시됐는가
-- train/validation/test를 frame이 아니라 episode 단위로 나눴는가
+grasp는 0(open)에서 1(close)이고 기존 finger controller가 실제 손가락 관절로
+확장한다. policy가 finger joint 12개를 직접 예측하지 않는다. `env.step(action)`은
+robot qpos를 덮어쓰지 않고 팔 PD+bias torque와 손 position actuator를 물리
+substep마다 적용한다.
 
-리플레이는 target action을 현재 controller에 다시 넣는 closed-loop 방식을 기본으로
-한다. actuator open-loop replay는 dynamics 변경 감지용이며 장기 궤적 일치를 기대하지
-않는다. 초기 상태 외에 robot qpos를 기록값으로 계속 덮어쓰지 않는다.
+Observation은 다음 계약을 따른다.
+
+```python
+{
+    "qpos": float32[16],
+    "qvel": float32[16],
+    "images": {
+        "cam_high": uint8[H,W,3],
+        "cam_left_wrist": uint8[H,W,3],
+        "cam_right_wrist": uint8[H,W,3],
+    },
+}
+```
+
+## Demonstration 기록
+
+```bash
+python3 src/record_episodes.py --task-name can_to_box
+```
+
+| 입력 | 동작 |
+|---|---|
+| `R` | robot home + random can reset |
+| `SPACE` | episode 기록 시작/완료 |
+| `BACKSPACE` | 현재 episode 폐기 |
+| `TAB` | Gizmo가 조작할 손 전환 |
+| `O` / `P` | 선택한 손 열기/닫기 |
+| `ESC` | 종료 |
+
+GizmoLeader는 각 손 목표를 arm-only differential IK로 7축 target으로 바꾼다. 이
+16D action을 follower env가 받으므로 demonstration과 ACT inference가 같은 실행
+경계를 공유한다.
+
+매 frame은 step 전에 `obs_t`와 `action_t`를 함께 append한다. 파일 layout은 ALOHA와
+호환되는 `/observations/qpos`, `/observations/qvel`,
+`/observations/images/<camera>`, `/action`이다. debug에는 EE/object/전체 state를
+저장하지만 ACT 입력에는 사용하지 않는다.
+
+## 확인과 replay
+
+```bash
+python3 src/visualize_episodes.py \
+  --episode datasets/can_to_box/episode_000000.hdf5
+python3 src/rerun_episode.py \
+  --episode datasets/can_to_box/episode_000000.hdf5
+python3 src/replay_episodes.py \
+  --episode datasets/can_to_box/episode_000000.hdf5
+```
+
+일반 viewer는 세 영상을 나란히 둔 MP4를 만들고, Rerun viewer는 같은 `frame`
+timeline에 RGB, qpos/qvel, expert action을 기록한다. replay는 저장 seed와 action을
+같은 actuator 경로에 다시 적용해 policy qpos 오차를 검사한다.
+
+## ACT 학습과 산출물
+
+```bash
+python3 src/train_act.py --config config/imitation/act.yaml
+```
+
+loader는 frame이 아니라 episode 단위로 train/validation을 나눈다. 각 timestep에서
+현재 qpos와 세 RGB, padded future action chunk를 만든다. 먼저 성공 episode 하나만
+사용해 overfit할 수 있는지 확인한 뒤 10, 50, 100개 순으로 확장한다.
+
+```text
+outputs/act/<run>/
+├── config.yaml
+├── dataset_stats.pkl
+├── checkpoints/policy_best.ckpt
+├── checkpoints/policy_last.ckpt
+├── metrics/metrics.jsonl
+├── metrics/metrics.csv
+├── plots/{loss,l1,kl,learning_rate}.png
+└── rerun/training.rrd
+```
+
+학습 metric은 epoch 기준 train/validation loss, L1, KL, padding loss, learning rate,
+global step과 elapsed time을 남긴다. PNG loss에는 최소 validation loss와 best epoch를
+표시한다.
+
+## Closed-loop 평가
+
+```bash
+python3 src/eval_act.py \
+  --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt
+
+python3 src/compare_policy_episode.py \
+  --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt \
+  --episode datasets/can_to_box/episode_000000.hdf5
+```
+
+ACT가 낸 `[K,16]` chunk는 temporal aggregation을 거쳐 현재 16D action이 된다. 각
+rollout `.rrd`에는 카메라, qpos, predicted chunk tensor, executed action, success와
+object error가 함께 기록된다. `evaluation.json`은 success rate, episode length,
+final error, action magnitude와 action delta를 집계한다.
 
 ## 실기 전환 경계
 
-| 현재 모듈 | 실기에서 필요한 변경 |
-|---|---|
-| `application/targets.py`, `rotations.py` | frame·단위 계약이 같으면 재사용 가능 |
-| `KinematicTree`, legacy `KinematicsSolver` | 실제 축·zero·tool pose와 일치할 때 FK/Jacobian만 재사용 |
-| `WholeBodyIK.solve(MjData, ...)` | shadow model 또는 observation adapter 필요 |
-| `kinematics/collision.py` | calibrated scene나 실기 collision source 필요 |
-| `SwerveDrive` | wheel 위치·반지름·부호·gear·feedback 보정 필요 |
-| `ArmTorqueController.apply()` | MuJoCo bias/ctrl 전용이므로 실물에 직접 사용 금지 |
-| `grasp.apply_grasp()` | hand actuator와 current/force limit adapter 필요 |
-
-제안하는 hardware 경계는 측정, 명령, 정지, fault reset만 노출한다.
-
-```python
-class RobotHardware:
-    def read_observation(self): ...
-    def write_command(self, command): ...
-    def stop(self): ...
-    def reset_faults(self): ...
-```
-
-vendor SDK, CAN/EtherCAT 또는 ROS2 연결은 이 경계 아래에 둔다.
-
-## 실기 전 필수 확인
-
-- world/base/tool/camera frame, 길이 단위와 quaternion 순서
-- encoder zero·joint sign·gear ratio·관절 한계
-- tool center와 collision geometry 위치
-- sensor timestamp, 통신 지연·jitter·packet loss
-- wheel slip, 마찰, backlash, torque/current limit
-- stale-command 거부, watchdog, E-stop
-
-정책 출력은 항상 다음 안전 경로를 통과해야 한다.
-
-```text
-policy action
-→ workspace·joint·속도·가속도 제한
-→ collision 접근 속도 제한
-→ command rate limit
-→ hardware command
-→ watchdog·E-stop
-```
-
-WBIK의 CBF는 미모델링 장애물과 사람을 감지하지 않으므로 단독 안전 장치가 아니다.
-
-## 배포 순서
-
-1. dataset schema와 deterministic target replay 검증
-2. 보지 않은 reset과 dynamics randomization에서 simulation 평가
-3. 명령을 보내지 않는 실물 shadow mode로 frame·zero·지연 확인
-4. 무부하·저속 단축 시험으로 sign, limit, watchdog, E-stop 확인
-5. base/팔 분리 시험 후 저속 teleop 시험
-6. operator dead-man switch를 유지한 짧은 policy trial
-
-각 단계에서 frame, model, 저수준 추종, perception, policy 오류를 구분해 기록한다.
-
-[API 레퍼런스](../api/index.md)는 현재 구현된 함수만 다룬다. 기존 simulation 최소
-회귀는 [테스트와 검증](../testing.md)을 따른다.
+simulation의 `ArmTorqueController`는 MuJoCo bias force에 의존하므로 실물에 직접 쓸
+수 없다. 실기 adapter는 동일한 16D 측정/명령 계약 아래 vendor driver, limit,
+watchdog와 E-stop을 제공해야 한다. 카메라 frame, encoder zero/sign, joint limit,
+지연과 명령 rate limit을 shadow mode에서 먼저 검증한다.

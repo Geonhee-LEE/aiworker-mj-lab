@@ -4,8 +4,9 @@ ROBOTIS AIWORKER(FFW-SH5)를 MuJoCo에서 연구하기 위한 저장소입니다
 텔레오퍼레이션, 직접 구현한 FK/Jacobian과 differential IK, 전신 제어, 스워브 주행,
 접촉 기반 파지와 충돌 회피를 하나의 Python 앱에서 실행합니다.
 
-모방학습(IL)과 고전적 경로 계획은 향후 확장 범위이며 아직 실행 코드에는 포함되지
-않았습니다.
+ALOHA-style 모방학습 경로는 별도의 arm-only 계층으로 제공됩니다. 세 policy camera,
+16D joint action, HDF5 record/replay, ACT 학습·평가와 Rerun 분석을 포함하며 기존
+Whole-body 텔레옵 기능과 분리되어 있습니다.
 
 [문서 사이트](https://ggh-png.github.io/aiworker-mj-lab/) ·
 [빠른 시작](docs/getting-started.md) ·
@@ -45,7 +46,7 @@ Linux 데스크톱과 OpenGL 화면 세션이 필요합니다.
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install mujoco numpy glfw imgui-bundle pyyaml
+python -m pip install mujoco numpy glfw imgui-bundle pyyaml h5py torch pillow imageio rerun-sdk
 python3 src/teleop_app.py
 ```
 
@@ -93,6 +94,29 @@ python3 tests/test_whole_body.py
 mkdocs build --strict
 ```
 
+## Arm-only ACT 파이프라인
+
+첫 시나리오는 무작위 위치의 캔을 고정된 파란 목표 상자에 넣는 작업입니다. 이
+경로에서는 base/lift/head를 고정하고 Whole-body IK를 사용하지 않습니다.
+
+```bash
+# R: robot home + random can reset, SPACE: record, BACKSPACE: discard
+python3 src/record_episodes.py --task-name can_to_box
+
+python3 src/rerun_episode.py \
+  --episode datasets/can_to_box/episode_000000.hdf5
+python3 src/replay_episodes.py \
+  --episode datasets/can_to_box/episode_000000.hdf5
+
+python3 src/train_act.py --config config/imitation/act.yaml
+python3 src/eval_act.py \
+  --checkpoint outputs/act/can_to_box_overfit/checkpoints/policy_best.ckpt
+```
+
+대규모 수집 전에 성공 episode 하나로 overfit gate를 통과시키는 것을 기본 절차로
+삼습니다. 자세한 schema와 산출물은 [모방학습 가이드](docs/guide/imitation-sim2real.md)에
+정리되어 있습니다.
+
 전체 Phase 실행 명령과 각 gate의 의미는 [테스트와 검증](docs/testing.md)에 있습니다.
 
 ## 코드 구조
@@ -105,6 +129,7 @@ src/ffw_sh5_grasp/application/      앱 loop, 모델 주소, 상태·명령과 �
 src/ffw_sh5_grasp/kinematics/       tree, FK/Jacobian, IK와 충돌 거리
 src/ffw_sh5_grasp/control/          팔·전신·스워브·양손·파지 제어
 src/ffw_sh5_grasp/visualization/    UI, renderer와 진단 표시
+src/ffw_sh5_grasp/imitation/        arm-only dataset, ACT, replay와 Rerun
 tests/                              headless 회귀와 보조 도구
 ```
 
@@ -113,8 +138,5 @@ tests/                              headless 회귀와 보조 도구
 
 ## 확장 방향
 
-- 텔레오퍼레이션 demonstration 기록과 imitation learning 학습·평가
+- ACT 정책의 실물 observation/command adapter와 안전 계층
 - 환경 collision check를 사용하는 고전적 경로 탐색과 trajectory 실행
-
-현재 IL 관련 문서는 구현 완료를 뜻하지 않는 설계 메모입니다. 범위와 전제는
-[모방학습과 Sim-to-Real](docs/guide/imitation-sim2real.md)에서 확인할 수 있습니다.
