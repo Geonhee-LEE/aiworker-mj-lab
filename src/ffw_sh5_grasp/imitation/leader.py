@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 import mujoco
 import numpy as np
 
+from ..config import SETTINGS
 from ..kinematics import DifferentialIKSolver, KinematicTree
 from ..kinematics.tasks import pose_error, pose_velocity_command
 from .action import ARM_JOINTS, ActionAdapter, SIDES
@@ -44,16 +45,24 @@ class GizmoLeader(Leader):
     ACT. No whole-body solver is imported or invoked.
     """
 
-    def __init__(self, env, *, linear_speed=0.6, angular_speed=2.0,
-                 joint_speed=4.5):
+    def __init__(self, env, *, linear_speed=None, angular_speed=None,
+                 joint_speed=None, position_gain=None,
+                 orientation_gain=None):
         self.env = env
         self.model = env.model
         self.tree = KinematicTree(self.model)
         self.solver = DifferentialIKSolver(method="dls")
         self.adapter = ActionAdapter(self.model)
-        self.linear_speed = float(linear_speed)
-        self.angular_speed = float(angular_speed)
-        self.joint_speed = float(joint_speed)
+        self.linear_speed = self._positive_setting(
+            "max_linear_speed_m_s", linear_speed)
+        self.angular_speed = self._positive_setting(
+            "max_angular_speed_rad_s", angular_speed)
+        self.joint_speed = self._positive_setting(
+            "max_joint_speed_rad_s", joint_speed)
+        self.position_gain = self._positive_setting(
+            "position_gain", position_gain)
+        self.orientation_gain = self._positive_setting(
+            "orientation_gain", orientation_gain)
         self.site_ids = {
             side: mujoco.mj_name2id(
                 self.model, mujoco.mjtObj.mjOBJ_SITE, f"grasp_target_{side}")
@@ -78,6 +87,15 @@ class GizmoLeader(Leader):
         self.targets = {}
         self.grasp = {"l": 0.0, "r": 0.0}
         self.reset()
+
+    @staticmethod
+    def _positive_setting(name, override):
+        value = (SETTINGS.number(
+            f"imitation.teleop.{name}", positive=True)
+            if override is None else float(override))
+        if value <= 0.0:
+            raise ValueError(f"{name} must be positive")
+        return value
 
     def _current_site(self, side):
         return self.tree.forward_site(
@@ -138,7 +156,8 @@ class GizmoLeader(Leader):
                 state.position, state.quaternion,
                 target_position, target_quaternion)
             velocity = pose_velocity_command(
-                error, position_gain=8.0, orientation_gain=6.0,
+                error, position_gain=self.position_gain,
+                orientation_gain=self.orientation_gain,
                 max_linear_speed=self.linear_speed,
                 max_angular_speed=self.angular_speed)
             lower = np.full(7, -self.joint_speed)

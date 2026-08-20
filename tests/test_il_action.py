@@ -33,6 +33,11 @@ def test_action_contract():
 def test_locked_left_leader_action():
     with AIWorkerMujocoEnv(render_images=False, seed=3) as env:
         leader = GizmoLeader(env)
+        assert leader.linear_speed == 1.0
+        assert leader.angular_speed == 3.0
+        assert leader.joint_speed == 4.8
+        assert leader.position_gain == 12.0
+        assert leader.orientation_gain == 9.0
         action = leader.get_action()
         assert np.allclose(action[:7], env.left_arm_park_position)
         assert action[7] == env.left_grasp_fixed

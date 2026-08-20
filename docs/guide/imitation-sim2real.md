@@ -91,6 +91,10 @@ GizmoLeader는 오른손 목표를 arm-only differential IK로 7축 target으로
 왼쪽 8개 상수를 포함한 16D action을 follower env가 받으므로 demonstration과 ACT
 inference가 같은 실행 경계를 공유한다.
 
+Gizmo IK의 추종 gain과 task/joint 최대 속도는
+`config/default.yaml` 아래의 `imitation.teleop`에서 조절한다. 기본값은
+선속도 1.0 m/s, 각속도 3.0 rad/s, 관절 속도 4.8 rad/s이다.
+
 매 frame은 step 전에 `obs_t`와 `action_t`를 함께 append한다. 파일 layout은 ALOHA와
 호환되는 `/observations/qpos`, `/observations/qvel`,
 `/observations/images/<camera>`, `/action`이다. debug에는 EE/object/전체 state를

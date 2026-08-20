@@ -87,7 +87,7 @@ class RecordEpisodesApp:
 
     def _draw_panel(self):
         imgui.set_next_window_pos((10, 10), imgui.Cond_.first_use_ever)
-        imgui.set_next_window_size((355, 410), imgui.Cond_.first_use_ever)
+        imgui.set_next_window_size((355, 430), imgui.Cond_.first_use_ever)
         imgui.begin("ALOHA Dataset Recorder")
         imgui.text("Task: random can -> fixed blue box")
         imgui.text("Control: arm-only (whole-body disabled)")
@@ -95,6 +95,9 @@ class RecordEpisodesApp:
         imgui.text(f"Recording: {'YES' if self.recorder.recording else 'NO'}")
         imgui.text(f"Frame: {self.recorder.frame}")
         imgui.text(f"Control Hz: {self.env.actual_control_hz:.1f}")
+        imgui.text(
+            f"IK max: {self.leader.linear_speed:.1f} m/s, "
+            f"{self.leader.angular_speed:.1f} rad/s")
         imgui.text(f"Dropped: {self.recorder.dropped}")
         imgui.text(f"Rerun live: {'ON' if self.live_rerun.enabled else 'OFF'}")
         imgui.text(f"Selected hand: {'LEFT' if self.selected_side == 'l' else 'RIGHT'}")

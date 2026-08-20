@@ -193,6 +193,14 @@ render:
 # ROS/whole-body 경로와 분리된 ALOHA-style imitation 환경 설정이다.
 imitation:
   control_hz: 25.0
+  teleop:
+    # DLS IK의 task-space 추종 감도와 최대 속도다. 관절 속도는
+    # FFW-SH5 follower URDF의 arm joint 한계인 4.8 rad/s를 넘지 않는다.
+    position_gain: 12.0
+    orientation_gain: 9.0
+    max_linear_speed_m_s: 1.0
+    max_angular_speed_rad_s: 3.0
+    max_joint_speed_rad_s: 4.8
   # ZED-M extrinsic은 원본 브라켓 방향을 바꾸지 않고, 실제 목 관절을
   # 아래로 꺽어 작업대를 본다. joint1의 양의 방향이 아래쪽 pitch이다.
   head_fixed_position_rad: [0.6951, 0.0]
