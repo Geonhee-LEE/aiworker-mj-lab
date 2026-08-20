@@ -378,11 +378,25 @@
 
             <body name="head_link2" pos="0.0365694 0 0.0563797">
               <joint name="head_joint2" class="head_joint2"/>
-              <geom type="mesh" mesh="head_link2" material="white" class="visual"/>
+              <!-- 구형 head CAD는 optical origin을 둘러싼 렌즈 하우징까지
+                   닫힌 mesh로 포함한다. 정확한 sensor frame에서 렌더하면
+                   자신의 하우징이 시야를 가리므로 policy camera에서만 빼는
+                   group 4로 분리한다. 일반 GUI에서는 그대로 보인다. -->
+              <geom type="mesh" mesh="head_link2" material="white"
+                class="visual" group="4"/>
               <geom type="mesh" mesh="head_link2" class="collision"/>
-              <!-- ACT의 cam_high. 카메라의 -Z 축이 테이블 작업공간을 향한다. -->
-              <camera name="cam_high" pos="0.055 0 0.055"
-                xyaxes="0 -1 0 0.899 0 0.438" fovy="58"/>
+              <!-- ROBOTIS FFW-SH5 URDF의 ZED-M 브라켓 체인을 그대로 유지한다.
+                   cam_high는 실기 cam_left_head에 대응하는 왼쪽 optical
+                   frame이다. MuJoCo camera의 +X/+Y/-Z를 ROS optical
+                   frame의 +X/-Y/+Z에 맞추기 위해 camera frame에서
+                   x=-Y, y=+Z를 사용한다. -->
+              <body name="zedm_camera_link" pos="0.0238122 -0.00651797 -0.0242094">
+                <body name="zedm_camera_center" pos="0 0 0.01325">
+                  <body name="zedm_left_camera_frame" pos="0 0.0315 0">
+                    <camera name="cam_high" xyaxes="0 -1 0 0 0 1" fovy="58"/>
+                  </body>
+                </body>
+              </body>
             </body>
           </body>
 
@@ -428,13 +442,20 @@
                         <joint name="arm_l_joint7" class="arm_l_joint7"/>
                         <geom type="mesh" mesh="arm_l_link7" material="black" class="visual"/>
                         <geom type="mesh" mesh="arm_l_link7" class="collision"/>
-                        <geom size="0.0115 0.021 0.021" pos="0.107944 0 -0.065588" quat="0.475435 -0.475435 0.523413 0.523413" type="box"/>
-                        <!-- 손목과 강체로 함께 움직이는 policy 카메라. -->
-                        <!-- can-to-box의 고정 palm-up 왼팔 자세에서 테이블 중앙을
-                             내려다보는 extrinsic이다. -->
-                        <camera name="cam_left_wrist" pos="0.06 -0.12 -0.08"
-                          xyaxes="-0.6657 0 0.7462 -0.3455 -0.8863 -0.3084"
-                          fovy="72"/>
+                        <!-- ROBOTIS FFW-SH5의 D405 브라켓: link7 -> bottom screw
+                             mount -> camera_link. 기존의 평탄화된 collision box도
+                             같은 frame 체인 아래에 놓아 수치와 구조를 둘 다
+                             원본 URDF와 맞춘다. -->
+                        <body name="camera_l_bottom_screw_frame"
+                          pos="0.108236 -0.021 -0.062552"
+                          quat="0.475435128973 -0.475435128973 0.523413257512 0.523413257512">
+                          <body name="camera_l_link" pos="0.01085 0.009 0.021">
+                            <geom name="camera_l_collision" type="box"
+                              size="0.0115 0.021 0.021" pos="-0.0078 -0.009 0"/>
+                            <camera name="cam_left_wrist"
+                              xyaxes="0 -1 0 0 0 1" fovy="72"/>
+                          </body>
+                        </body>
 
                         <!-- 왼손(HX5-D20) -->
                         <body name="hx5_l_base" pos="0 0 -0.078" quat="0 -0.7071068 0.7071068 0">
@@ -623,9 +644,18 @@
                         <joint name="arm_r_joint7" class="arm_r_joint7"/>
                         <geom type="mesh" mesh="arm_r_link7" material="black" class="visual"/>
                         <geom type="mesh" mesh="arm_r_link7" class="collision"/>
-                        <geom size="0.0115 0.021 0.021" pos="0.107944 0 -0.065588" quat="0.475435 -0.475435 0.523413 0.523413" type="box"/>
-                        <camera name="cam_right_wrist" pos="0.13 0.04 -0.03"
-                          xyaxes="0 -1 0 0.37 0 -0.93" fovy="72"/>
+                        <!-- 실기 양쪽 손목은 좌우 대칭으로 추정하지 않고,
+                             ROBOTIS URDF처럼 동일한 D405 브라켓 변환을 쓴다. -->
+                        <body name="camera_r_bottom_screw_frame"
+                          pos="0.108236 -0.021 -0.062552"
+                          quat="0.475435128973 -0.475435128973 0.523413257512 0.523413257512">
+                          <body name="camera_r_link" pos="0.01085 0.009 0.021">
+                            <geom name="camera_r_collision" type="box"
+                              size="0.0115 0.021 0.021" pos="-0.0078 -0.009 0"/>
+                            <camera name="cam_right_wrist"
+                              xyaxes="0 -1 0 0 0 1" fovy="72"/>
+                          </body>
+                        </body>
 
                         <!-- 오른손(HX5-D20) -->
                         <body name="hx5_r_base" pos="0 0 -0.078" quat="0 0.7071068 0.7071068 0">

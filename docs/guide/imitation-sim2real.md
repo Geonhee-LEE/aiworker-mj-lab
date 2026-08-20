@@ -1,7 +1,7 @@
 # Arm-only ALOHA/ACT 파이프라인
 
-현재 구현은 ROS와 Whole-body IK를 사용하지 않는 첫 모방학습 경로다. base, lift,
-head는 home reference에 고정된다. can-to-box v1은 오른팔 7축과 오른손 grasp만
+현재 구현은 ROS와 Whole-body IK를 사용하지 않는 첫 모방학습 경로다. base와 lift는
+home reference에, head는 작업대를 보는 고정 pose에 유지된다. can-to-box v1은 오른팔 7축과 오른손 grasp만
 조작하고, 왼팔은 손바닥이 월드 +Z를 향하는 주차 자세로 고정한다.
 
 ```text
@@ -17,8 +17,9 @@ GizmoLeader 또는 ACT
 첫 task는 테이블의 무작위 위치에서 시작하는 캔을 오른팔로 고정된 파란 상자 안에
 넣는 것이다. 상자는 바닥과 네 벽 모두 collision geom이며 캔·손·팔과 실제 contact를
 만든다.
-`R`을 누르면 기록 중인 미완성 episode를 폐기하고 오른팔·base·lift·head를 `home`
-기준으로, 왼팔을 palm-up 주차 자세로 되돌린 뒤 캔의 x/y만 설정 범위에서 다시
+`R`을 누르면 기록 중인 미완성 episode를 폐기하고 오른팔·base·lift를 `home`
+기준으로, head를 고정된 하향 pose로, 왼팔을 palm-up 주차 자세로 되돌린 뒤
+캔의 x/y만 설정 범위에서 다시
 추출한다. 상자는 고정되어 있다. 각 reset의 seed와 실제 초기 캔 위치가 HDF5
 attribute에 남으므로 replay할 수 있다.
 
@@ -39,6 +40,19 @@ grasp는 0(open)에서 1(close)이고 기존 finger controller가 실제 손가�
 robot qpos를 덮어쓰지 않고 팔 PD+bias torque와 손 position actuator를 물리
 substep마다 적용한다. 왼쪽 8개 action은 dataset과 실행 시 항상 설정된 palm-up
 관절값과 open grasp 상수로 치환된다.
+
+## Policy camera extrinsic
+
+세 카메라의 위치와 방향은 작업공간을 보도록 임의로 맞춘 값이 아니다.
+`cam_high`는 ROBOTIS FFW-SH5의 `head_link2 → zedm_camera_link →
+zedm_camera_center → zedm_left_camera_frame` 브라켓 체인을 사용한다.
+손목 두 곳은 원본 D405와 같이 `link7 → bottom_screw_frame → camera_link`
+체인을 사용하며, 왼쪽과 오른쪽 모두 동일한 브라켓 변환이다.
+
+MuJoCo의 camera 축(+X right, +Y up, -Z forward)은 ROS optical 축(+X
+right, +Y down, +Z forward)에 맞게 변환한다. Head camera를 별도로
+기울이지 않고 `imitation.head_fixed_position_rad`의 목 pitch를 이용해
+작업대를 본다.
 
 Observation은 다음 계약을 따른다.
 

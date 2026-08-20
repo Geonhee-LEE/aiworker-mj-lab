@@ -17,6 +17,9 @@ def test_arm_only_env_reset_and_step():
         robot_home = first["debug"]["full_qpos"][:env.task.can_qpos].copy()
         assert first["qpos"].shape == (16,)
         assert first["images"] == {}
+        assert np.allclose(
+            first["debug"]["full_qpos"][env.head_qpos],
+            env.head_fixed_position)
         assert np.allclose(first["qpos"][:7], env.left_arm_park_position)
         assert first["qpos"][7] == env.left_grasp_fixed
         assert np.all(env.model.geom_contype[env.target_bin_geom_ids] == 1)

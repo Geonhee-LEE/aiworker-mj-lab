@@ -46,6 +46,21 @@ class AIWorkerMujocoEnv:
 
         self.action_adapter = ActionAdapter(self.model)
         self.state_adapter = PolicyStateAdapter(self.model)
+        self.head_fixed_position = np.asarray(
+            SETTINGS.get("imitation.head_fixed_position_rad"), dtype=float)
+        if self.head_fixed_position.shape != (2,):
+            raise ValueError(
+                "imitation.head_fixed_position_rad must contain 2 values")
+        head_joint_ids = np.asarray([
+            self._name_id(mujoco.mjtObj.mjOBJ_JOINT, name)
+            for name in ("head_joint1", "head_joint2")
+        ], dtype=int)
+        self.head_qpos = self.model.jnt_qposadr[head_joint_ids].copy()
+        self.head_dofs = self.model.jnt_dofadr[head_joint_ids].copy()
+        head_ranges = self.model.jnt_range[head_joint_ids]
+        if np.any(self.head_fixed_position < head_ranges[:, 0]) or np.any(
+                self.head_fixed_position > head_ranges[:, 1]):
+            raise ValueError("configured head position exceeds joint limits")
         self.left_arm_fixed = bool(SETTINGS.get("imitation.left_arm_fixed"))
         self.left_arm_park_position = np.asarray(
             SETTINGS.get("imitation.left_arm_park_position_rad"), dtype=float)
@@ -106,6 +121,15 @@ class AIWorkerMujocoEnv:
         self.fixed_ctrl = np.asarray(
             self.model.key_ctrl[self.home_key, self.fixed_actuators],
             dtype=float).copy()
+        for name, target in zip(
+                ("head_joint1", "head_joint2"), self.head_fixed_position):
+            actuator_id = self._name_id(
+                mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+            fixed_index = np.flatnonzero(self.fixed_actuators == actuator_id)
+            if fixed_index.size != 1:
+                raise ValueError(
+                    f"head actuator is not fixed exactly once: {name}")
+            self.fixed_ctrl[fixed_index[0]] = target
 
     def _enable_target_bin_collisions(self):
         """Enable physical robot/can contacts for the task-local target bin.
@@ -168,6 +192,8 @@ class AIWorkerMujocoEnv:
         self.rng = np.random.default_rng(seed)
         self.last_seed = int(seed)
         mujoco.mj_resetDataKeyframe(self.model, self.data, self.home_key)
+        self.data.qpos[self.head_qpos] = self.head_fixed_position
+        self.data.qvel[self.head_dofs] = 0.0
         if self.left_arm_fixed:
             self.data.qpos[self.state_adapter.arm_qpos["l"]] = (
                 self.left_arm_park_position)

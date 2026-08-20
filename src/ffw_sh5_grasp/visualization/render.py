@@ -95,6 +95,10 @@ def setup_render(app, window_w, window_h):
     set_camera_preset(app.cam, 0)
     app.opt = mujoco.MjvOption()
     mujoco.mjv_defaultOption(app.opt)
+    # Group 4 is hidden only from policy-camera rendering because the legacy
+    # head mesh encloses the calibrated optical origin. The operator view must
+    # continue to display the physical head housing.
+    app.opt.geomgroup[4] = 1
     app.pert = mujoco.MjvPerturb()
     app.context = mujoco.MjrContext(app.model, mujoco.mjtFontScale.mjFONTSCALE_150)
 
