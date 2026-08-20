@@ -11,6 +11,7 @@ from ..visualization import render
 from .leader import GizmoLeader
 from .mujoco_env import AIWorkerMujocoEnv
 from .recorder import EpisodeRecorder
+from .visualization.rerun_live import LiveRecordingRerunLogger
 
 
 class _KeyEdge:
@@ -31,7 +32,7 @@ class RecordEpisodesApp:
     """GLFW/ImGui app whose only motion source is an arm-only GizmoLeader."""
 
     def __init__(self, dataset_dir, *, task_name="can_to_box", seed=None,
-                 width=1440, height=900):
+                 width=1440, height=900, live_rerun=True, rerun_port=9876):
         self.env = AIWorkerMujocoEnv(seed=seed)
         self.model, self.data = self.env.model, self.env.data
         self.leader = GizmoLeader(self.env)
@@ -47,6 +48,9 @@ class RecordEpisodesApp:
         self.last_mouse = [0.0, 0.0]
         render.setup_render(self, width, height)
         self.last_mouse = list(glfw.get_cursor_pos(self.window))
+        self.live_rerun = LiveRecordingRerunLogger(
+            self.env.camera_names, enabled=live_rerun, port=rerun_port)
+        self.live_rerun.start()
 
     def reset(self):
         """R semantics: discard partial data, home robot, randomize the can."""
@@ -92,6 +96,7 @@ class RecordEpisodesApp:
         imgui.text(f"Frame: {self.recorder.frame}")
         imgui.text(f"Control Hz: {self.env.actual_control_hz:.1f}")
         imgui.text(f"Dropped: {self.recorder.dropped}")
+        imgui.text(f"Rerun live: {'ON' if self.live_rerun.enabled else 'OFF'}")
         imgui.text(f"Selected hand: {'LEFT' if self.selected_side == 'l' else 'RIGHT'}")
         if self.env.left_arm_fixed:
             imgui.text("Left hand: LOCKED (palm up)")
@@ -186,13 +191,21 @@ class RecordEpisodesApp:
                 self._handle_keys(io)
                 self._draw_panel()
                 action = self.leader.get_action()
+                episode_frame = self.recorder.frame
                 self.recorder.record(self.observation, action)
+                self.live_rerun.log(
+                    self.observation,
+                    action,
+                    recording=self.recorder.recording,
+                    episode_frame=episode_frame,
+                )
                 self.observation = self.env.step(action)
                 self._render()
                 render.end_frame(self, started)
         finally:
             if self.recorder.recording:
                 self.recorder.discard()
+            self.live_rerun.close()
             self.env.close()
             glfw.make_context_current(self.window)
             render.shutdown(self)

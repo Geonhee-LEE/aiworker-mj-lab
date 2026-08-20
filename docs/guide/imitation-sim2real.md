@@ -60,6 +60,11 @@ Observation은 다음 계약을 따른다.
 python3 src/record_episodes.py --task-name can_to_box
 ```
 
+실행하면 조작용 recorder 창과 live Rerun Viewer가 함께 열린다. Rerun은 녹화 전
+preview부터 세 policy camera와 16D qpos/qvel/action, task 성공 여부, 녹화 상태와
+episode frame을 같은 실시간 timeline에 표시한다. Rerun을 띄우지 않으려면
+`--no-live-rerun`을 사용한다.
+
 | 입력 | 동작 |
 |---|---|
 | `R` | task pose + random can reset |
