@@ -14,6 +14,10 @@ def test_arm_only_env_reset_and_step():
     with AIWorkerMujocoEnv(render_images=False, seed=11) as env:
         first = env.reset(seed=11)
         first_can = env.initial_can_position.copy()
+        target_xy = env.data.site_xpos[env.task.target_site, :2].copy()
+        spawn_anchor = target_xy + env.task.spawn_anchor_offset
+        assert np.linalg.norm(first_can[:2] - spawn_anchor) <= (
+            env.task.spawn_jitter_radius + 1e-12)
         robot_home = first["debug"]["full_qpos"][:env.task.can_qpos].copy()
         assert first["qpos"].shape == (16,)
         assert first["images"] == {}

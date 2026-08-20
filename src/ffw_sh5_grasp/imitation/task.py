@@ -33,10 +33,11 @@ class CanInBoxTask:
             raise ValueError("can-to-bin task entities are missing from the model")
         self.can_qpos = int(model.jnt_qposadr[self.can_joint])
         self.can_dof = int(model.jnt_dofadr[self.can_joint])
-        self.x_range = tuple(float(v) for v in SETTINGS.get(
-            "imitation.reset.can_x_range_m"))
-        self.y_range = tuple(float(v) for v in SETTINGS.get(
-            "imitation.reset.can_y_range_m"))
+        self.spawn_anchor_offset = np.asarray(SETTINGS.get(
+            "imitation.reset.can_anchor_offset_from_target_xy_m"),
+            dtype=float)
+        self.spawn_jitter_radius = SETTINGS.number(
+            "imitation.reset.can_spawn_jitter_radius_m", minimum=0.0)
         self.can_z = SETTINGS.number("imitation.reset.can_z_m")
         self.inner_half_extents = np.asarray(SETTINGS.get(
             "imitation.task.inner_half_extents_m"), dtype=float)
@@ -44,15 +45,23 @@ class CanInBoxTask:
             "imitation.task.success_height_range_m"))
         self.settle_speed = SETTINGS.number(
             "imitation.task.settle_speed_m_s", minimum=0.0)
-        if not (self.x_range[0] < self.x_range[1]
-                and self.y_range[0] < self.y_range[1]
-                and self.height_range[0] < self.height_range[1]):
-            raise ValueError("imitation reset/task ranges must be increasing")
+        if self.spawn_anchor_offset.shape != (2,):
+            raise ValueError(
+                "can_anchor_offset_from_target_xy_m must contain 2 values")
+        if not self.height_range[0] < self.height_range[1]:
+            raise ValueError("imitation task height range must be increasing")
 
     def reset(self, data, rng):
         """Reset only the free task object; robot reset is owned by the environment."""
+        # sqrt(U) makes area, rather than radius, uniform over the disk. The
+        # configured radius is therefore also a strict Euclidean error bound.
+        radius = self.spawn_jitter_radius * np.sqrt(rng.uniform())
+        angle = rng.uniform(0.0, 2.0 * np.pi)
+        jitter = radius * np.asarray([np.cos(angle), np.sin(angle)])
+        target_xy = np.asarray(data.site_xpos[self.target_site, :2])
+        can_xy = target_xy + self.spawn_anchor_offset + jitter
         data.qpos[self.can_qpos:self.can_qpos + 3] = [
-            rng.uniform(*self.x_range), rng.uniform(*self.y_range), self.can_z]
+            can_xy[0], can_xy[1], self.can_z]
         data.qpos[self.can_qpos + 3:self.can_qpos + 7] = [1.0, 0.0, 0.0, 0.0]
         data.qvel[self.can_dof:self.can_dof + 6] = 0.0
         return np.asarray(data.qpos[self.can_qpos:self.can_qpos + 3]).copy()

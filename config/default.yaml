@@ -214,9 +214,11 @@ imitation:
     width: 320
     height: 240
   reset:
-    # 캔 중심의 균등분포 범위. 목표 상자와 겹치지 않는 테이블 왼쪽 영역이다.
-    can_x_range_m: [0.27, 0.48]
-    can_y_range_m: [-0.17, -0.06]
+    # 캔은 파란 상자 중심(target site)에서 로봇 쪽(-Y)으로 18 cm
+    # 떨어진 지점 옆에 배치한다. 임의 오차는 반지름 5 cm 원 안의
+    # 균일 분포이며, 최악의 경우에도 캔과 상자 벽이 겹치지 않는다.
+    can_anchor_offset_from_target_xy_m: [0.0, -0.18]
+    can_spawn_jitter_radius_m: 0.05
     can_z_m: 0.7866
   task:
     target_site: target_bin_center

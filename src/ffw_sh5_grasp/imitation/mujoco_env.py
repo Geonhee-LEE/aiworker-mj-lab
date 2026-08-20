@@ -198,6 +198,9 @@ class AIWorkerMujocoEnv:
             self.data.qpos[self.state_adapter.arm_qpos["l"]] = (
                 self.left_arm_park_position)
             self.data.qvel[self.state_adapter.arm_dofs["l"]] = 0.0
+        # CanInBoxTask derives its spawn anchor from the target site's world
+        # position, so refresh kinematics after restoring the robot keyframe.
+        mujoco.mj_forward(self.model, self.data)
         self.initial_can_position = self.task.reset(self.data, self.rng)
         self.data.ctrl[self.fixed_actuators] = self.fixed_ctrl
         mujoco.mj_forward(self.model, self.data)

@@ -14,8 +14,10 @@ GizmoLeader 또는 ACT
 
 ## Can-to-box task와 reset
 
-첫 task는 테이블의 무작위 위치에서 시작하는 캔을 오른팔로 고정된 파란 상자 안에
-넣는 것이다. 상자는 바닥과 네 벽 모두 collision geom이며 캔·손·팔과 실제 contact를
+첫 task는 파란 상자 옆에서 시작하는 캔을 오른팔로 고정된 상자 안에
+넣는 것이다. 캔의 기준점은 상자 중심에서 로봇 쪽으로 18 cm 떨어져
+있고 reset마다 그 점을 중심으로 반지름 5 cm 이내에서 무작위로 배치된다.
+상자는 바닥과 네 벽 모두 collision geom이며 캔·손·팔과 실제 contact를
 만든다.
 `R`을 누르면 기록 중인 미완성 episode를 폐기하고 오른팔·base·lift를 `home`
 기준으로, head를 고정된 하향 pose로, 왼팔을 palm-up 주차 자세로 되돌린 뒤
