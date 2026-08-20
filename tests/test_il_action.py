@@ -36,6 +36,10 @@ def test_locked_left_leader_action():
         action = leader.get_action()
         assert np.allclose(action[:7], env.left_arm_park_position)
         assert action[7] == env.left_grasp_fixed
+        assert leader.toggle_grasp("r") == 1.0
+        assert leader.get_action()[15] == 1.0
+        assert leader.toggle_grasp("r") == 0.0
+        assert leader.get_action()[15] == 0.0
 
 
 if __name__ == "__main__":

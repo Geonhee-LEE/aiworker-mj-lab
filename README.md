@@ -102,7 +102,7 @@ mkdocs build --strict
 만듭니다.
 
 ```bash
-# R: task pose + random can reset, SPACE: record, BACKSPACE: discard
+# R: task pose + random can reset, Q: grab/release, SPACE: record
 python3 src/record_episodes.py --task-name can_to_box
 
 python3 src/rerun_episode.py \

@@ -115,6 +115,16 @@ class GizmoLeader(Leader):
             return
         self.grasp[side] = float(np.clip(value, 0.0, 1.0))
 
+    def toggle_grasp(self, side):
+        """Toggle a hand between fully open and fully closed."""
+        if side not in SIDES:
+            raise ValueError(f"unknown side: {side}")
+        if side == "l" and self.env.left_arm_fixed:
+            return self.grasp[side]
+        value = 0.0 if self.grasp[side] >= 0.5 else 1.0
+        self.set_grasp(side, value)
+        return value
+
     def get_action(self):
         arms = {}
         dt = 1.0 / self.env.actual_control_hz

@@ -65,7 +65,7 @@ python3 src/record_episodes.py --task-name can_to_box
 | `R` | task pose + random can reset |
 | `SPACE` | episode 기록 시작/완료 |
 | `BACKSPACE` | 현재 episode 폐기 |
-| `O` / `P` | 오른손 열기/닫기 |
+| `Q` | 오른손 잡기/놓기 토글 |
 | `ESC` | 종료 |
 
 GizmoLeader는 오른손 목표를 arm-only differential IK로 7축 target으로 바꾼다.

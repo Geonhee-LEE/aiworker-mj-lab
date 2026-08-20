@@ -78,19 +78,12 @@ class RecordEpisodesApp:
         if (not self.env.left_arm_fixed
                 and self.keys.pressed(self.window, glfw.KEY_TAB)):
             self.selected_side = "l" if self.selected_side == "r" else "r"
-        grasp_delta = 0.0
-        if glfw.get_key(self.window, glfw.KEY_O) == glfw.PRESS:
-            grasp_delta -= self.frame_dt
-        if glfw.get_key(self.window, glfw.KEY_P) == glfw.PRESS:
-            grasp_delta += self.frame_dt
-        if grasp_delta:
-            self.leader.set_grasp(
-                self.selected_side,
-                self.leader.grasp[self.selected_side] + grasp_delta)
+        if self.keys.pressed(self.window, glfw.KEY_Q):
+            self.leader.toggle_grasp(self.selected_side)
 
     def _draw_panel(self):
         imgui.set_next_window_pos((10, 10), imgui.Cond_.first_use_ever)
-        imgui.set_next_window_size((355, 360), imgui.Cond_.first_use_ever)
+        imgui.set_next_window_size((355, 410), imgui.Cond_.first_use_ever)
         imgui.begin("ALOHA Dataset Recorder")
         imgui.text("Task: random can -> fixed blue box")
         imgui.text("Control: arm-only (whole-body disabled)")
@@ -102,6 +95,9 @@ class RecordEpisodesApp:
         imgui.text(f"Selected hand: {'LEFT' if self.selected_side == 'l' else 'RIGHT'}")
         if self.env.left_arm_fixed:
             imgui.text("Left hand: LOCKED (palm up)")
+        grasp_side = self.selected_side
+        grasp_state = "CLOSED" if self.leader.grasp[grasp_side] >= 0.5 else "OPEN"
+        imgui.text(f"{grasp_side.upper()} grasp target: {grasp_state}")
         imgui.text(f"Task success: {self.observation['task']['success']}")
         if imgui.button("Reset robot + random can [R]"):
             self.reset()
@@ -109,11 +105,13 @@ class RecordEpisodesApp:
             self.toggle_recording()
         if imgui.button("Discard [BACKSPACE]"):
             self.recorder.discard()
+        if imgui.button("Grab / Release [Q]"):
+            self.leader.toggle_grasp(self.selected_side)
         imgui.separator()
         if self.env.left_arm_fixed:
-            imgui.text("O/P: open/close right hand")
+            imgui.text("Q: grab/release right hand")
         else:
-            imgui.text("TAB: select hand | O/P: open/close")
+            imgui.text("TAB: select hand | Q: grab/release")
         imgui.text("Drag Gizmo arrows/rings to move selected hand")
         for name in self.env.camera_names:
             image = self.observation["images"].get(name)

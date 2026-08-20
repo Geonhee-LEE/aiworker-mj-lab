@@ -65,6 +65,7 @@ class AIWorkerMujocoEnv:
         }
         self.task = CanInBoxTask(self.model)
         self._enable_target_bin_collisions()
+        self._enable_task_hand_world_collisions()
         self._bind_fixed_actuators()
         self._configure_passive_base_hold()
 
@@ -120,6 +121,33 @@ class AIWorkerMujocoEnv:
             raise ValueError("target_bin must contain one floor and four collision walls")
         self.model.geom_contype[self.target_bin_geom_ids] = 1
         self.model.geom_conaffinity[self.target_bin_geom_ids] = 1
+        # MuJoCo caches the union of geom masks per body at compile time and
+        # uses it during broad-phase filtering. Updating only geom_* lets the
+        # can (whose affinity includes bit 2) hit the bin but still filters out
+        # robot/bin pairs. Keep the body-level cache consistent as well.
+        self.model.body_contype[body_id] = 1
+        self.model.body_conaffinity[body_id] = 1
+
+    def _enable_task_hand_world_collisions(self):
+        """Restore right ring/pinky contacts needed by the fixed task bin.
+
+        The shared model excludes these cosmetic fingers from ``world`` to
+        preserve older table-grasp regressions. The fixed target bin is welded
+        to world, so those exclusions also (unintentionally) let the two
+        fingers pass through its walls. Disable only those eight exclusions on
+        this environment's private model instance and keep the signature array
+        sorted as required by MuJoCo's contact filter.
+        """
+        disabled_signature = np.iinfo(self.model.exclude_signature.dtype).max
+        for index in range(13, 21):
+            body_id = self._name_id(
+                mujoco.mjtObj.mjOBJ_BODY, f"finger_r_link{index}")
+            matches = np.flatnonzero(self.model.exclude_signature == body_id)
+            if matches.size != 1:
+                raise ValueError(
+                    f"expected one world exclusion for finger_r_link{index}")
+            self.model.exclude_signature[matches[0]] = disabled_signature
+        self.model.exclude_signature.sort()
 
     def _configure_passive_base_hold(self):
         """Hold unactuated planar base joints with physical spring/damping forces."""
