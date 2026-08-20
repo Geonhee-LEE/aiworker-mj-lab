@@ -136,9 +136,16 @@ class RecordEpisodesApp:
             float(main_viewport.pos.x), float(main_viewport.pos.y),
             float(main_viewport.size.x), float(main_viewport.size.y))
         gizmo.set_orthographic(False)
-        changed = gizmo.manipulate(
-            view, projection, gizmo.OPERATION.translate | gizmo.OPERATION.rotate,
+        # pyimgui-bundle의 OPERATION은 IntFlag처럼 보이지만 OR 결과는 Python int가
+        # 되어 manipulate()의 enum 인자 검사를 통과하지 못한다. 기존 teleop Gizmo와
+        # 같이 각 operation을 enum 값 그대로 따로 호출한다.
+        changed_translate = gizmo.manipulate(
+            view, projection, gizmo.OPERATION.translate,
             gizmo.MODE.world, matrix)
+        changed_rotate = gizmo.manipulate(
+            view, projection, gizmo.OPERATION.rotate,
+            gizmo.MODE.local, matrix)
+        changed = changed_translate or changed_rotate
         self.gizmo_mouse_active = bool(gizmo.is_using_any() or gizmo.is_over())
         if changed:
             new_position, new_quaternion = render.imguizmo_matrix_to_pose(matrix)
