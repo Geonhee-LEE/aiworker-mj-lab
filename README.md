@@ -96,11 +96,13 @@ mkdocs build --strict
 
 ## Arm-only ACT 파이프라인
 
-첫 시나리오는 무작위 위치의 캔을 고정된 파란 목표 상자에 넣는 작업입니다. 이
-경로에서는 base/lift/head를 고정하고 Whole-body IK를 사용하지 않습니다.
+첫 시나리오는 무작위 위치의 캔을 오른팔로 고정된 파란 목표 상자에 넣는 작업입니다.
+이 경로에서는 base/lift/head를 고정하고 Whole-body IK를 사용하지 않습니다. 왼팔은
+상자와 간섭하지 않는 palm-up 자세로 고정되며, 상자 바닥·네 벽은 실제 contact를
+만듭니다.
 
 ```bash
-# R: robot home + random can reset, SPACE: record, BACKSPACE: discard
+# R: task pose + random can reset, SPACE: record, BACKSPACE: discard
 python3 src/record_episodes.py --task-name can_to_box
 
 python3 src/rerun_episode.py \

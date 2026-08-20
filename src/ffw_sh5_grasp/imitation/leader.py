@@ -95,6 +95,8 @@ class GizmoLeader(Leader):
     def set_target_pose(self, side, position, quaternion):
         if side not in SIDES:
             raise ValueError(f"unknown side: {side}")
+        if side == "l" and self.env.left_arm_fixed:
+            return
         position = np.asarray(position, dtype=float)
         quaternion = np.asarray(quaternion, dtype=float)
         if position.shape != (3,) or quaternion.shape != (4,):
@@ -109,12 +111,17 @@ class GizmoLeader(Leader):
     def set_grasp(self, side, value):
         if side not in SIDES:
             raise ValueError(f"unknown side: {side}")
+        if side == "l" and self.env.left_arm_fixed:
+            return
         self.grasp[side] = float(np.clip(value, 0.0, 1.0))
 
     def get_action(self):
         arms = {}
         dt = 1.0 / self.env.actual_control_hz
         for side in SIDES:
+            if side == "l" and self.env.left_arm_fixed:
+                arms[side] = self.env.left_arm_park_position.copy()
+                continue
             state = self._current_site(side)
             target_position, target_quaternion = self.targets[side]
             error = pose_error(
@@ -132,8 +139,10 @@ class GizmoLeader(Leader):
             arms[side] = np.clip(
                 current + dt * qdot,
                 self.ranges[side][:, 0], self.ranges[side][:, 1])
+        left_grasp = (self.env.left_grasp_fixed
+                      if self.env.left_arm_fixed else self.grasp["l"])
         return self.adapter.encode(
-            arms["l"], self.grasp["l"], arms["r"], self.grasp["r"])
+            arms["l"], left_grasp, arms["r"], self.grasp["r"])
 
 
 __all__ = ["GizmoLeader", "Leader", "ReplayLeader"]

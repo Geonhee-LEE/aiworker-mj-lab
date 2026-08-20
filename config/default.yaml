@@ -193,6 +193,11 @@ render:
 # ROS/whole-body 경로와 분리된 ALOHA-style imitation 환경 설정이다.
 imitation:
   control_hz: 25.0
+  # can-to-box v1은 오른팔만 조작한다. 왼손은 작업공간 밖에서 손바닥(+X local)이
+  # 월드 +Z를 향하는 자세로 고정한다. 16D dataset 계약의 왼쪽 값은 이 상수다.
+  left_arm_fixed: true
+  left_arm_park_position_rad: [0.8077, 0.0, -0.136, -2.136, 1.4976, -0.1147, -0.2384]
+  left_grasp_fixed: 0.0
   camera:
     names: [cam_high, cam_left_wrist, cam_right_wrist]
     width: 320

@@ -9,6 +9,8 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from ffw_sh5_grasp.imitation.action import (  # noqa: E402
     ACTION_DIM, ACTION_NAMES, ActionAdapter)
+from ffw_sh5_grasp.imitation.leader import GizmoLeader  # noqa: E402
+from ffw_sh5_grasp.imitation.mujoco_env import AIWorkerMujocoEnv  # noqa: E402
 
 
 def test_action_contract():
@@ -28,6 +30,15 @@ def test_action_contract():
         raise AssertionError("invalid action shape was accepted")
 
 
+def test_locked_left_leader_action():
+    with AIWorkerMujocoEnv(render_images=False, seed=3) as env:
+        leader = GizmoLeader(env)
+        action = leader.get_action()
+        assert np.allclose(action[:7], env.left_arm_park_position)
+        assert action[7] == env.left_grasp_fixed
+
+
 if __name__ == "__main__":
     test_action_contract()
+    test_locked_left_leader_action()
     print("PASS")

@@ -1,7 +1,8 @@
 # Arm-only ALOHA/ACT 파이프라인
 
 현재 구현은 ROS와 Whole-body IK를 사용하지 않는 첫 모방학습 경로다. base, lift,
-head는 home reference에 고정되고 policy는 양팔 7축과 손별 grasp synergy만 제어한다.
+head는 home reference에 고정된다. can-to-box v1은 오른팔 7축과 오른손 grasp만
+조작하고, 왼팔은 손바닥이 월드 +Z를 향하는 주차 자세로 고정한다.
 
 ```text
 GizmoLeader 또는 ACT
@@ -13,17 +14,20 @@ GizmoLeader 또는 ACT
 
 ## Can-to-box task와 reset
 
-첫 task는 테이블의 무작위 위치에서 시작하는 캔을 고정된 파란 상자 안에 넣는 것이다.
-`R`을 누르면 기록 중인 미완성 episode를 폐기하고 로봇 전체를 `home` keyframe으로
-되돌린 뒤 캔의 x/y만 설정 범위에서 다시 추출한다. 상자는 고정되어 있다. 각 reset의
-seed와 실제 초기 캔 위치가 HDF5 attribute에 남으므로 replay할 수 있다.
+첫 task는 테이블의 무작위 위치에서 시작하는 캔을 오른팔로 고정된 파란 상자 안에
+넣는 것이다. 상자는 바닥과 네 벽 모두 collision geom이며 캔·손·팔과 실제 contact를
+만든다.
+`R`을 누르면 기록 중인 미완성 episode를 폐기하고 오른팔·base·lift·head를 `home`
+기준으로, 왼팔을 palm-up 주차 자세로 되돌린 뒤 캔의 x/y만 설정 범위에서 다시
+추출한다. 상자는 고정되어 있다. 각 reset의 seed와 실제 초기 캔 위치가 HDF5
+attribute에 남으므로 replay할 수 있다.
 
 성공은 캔 중심의 상자 내부 x/y 범위, 높이 범위, 선속도 안정화 조건을 모두 만족할
 때만 참이다. 범위는 `config/default.yaml`의 `imitation.task`에 있다.
 
 ## Policy 입출력
 
-action과 policy qpos/qvel은 모두 다음 left-first 순서의 16차원이다.
+action과 policy qpos/qvel은 호환성을 위해 다음 left-first 16차원을 유지한다.
 
 ```text
 left arm joint 1..7, left grasp,
@@ -33,7 +37,8 @@ right arm joint 1..7, right grasp
 grasp는 0(open)에서 1(close)이고 기존 finger controller가 실제 손가락 관절로
 확장한다. policy가 finger joint 12개를 직접 예측하지 않는다. `env.step(action)`은
 robot qpos를 덮어쓰지 않고 팔 PD+bias torque와 손 position actuator를 물리
-substep마다 적용한다.
+substep마다 적용한다. 왼쪽 8개 action은 dataset과 실행 시 항상 설정된 palm-up
+관절값과 open grasp 상수로 치환된다.
 
 Observation은 다음 계약을 따른다.
 
@@ -57,16 +62,15 @@ python3 src/record_episodes.py --task-name can_to_box
 
 | 입력 | 동작 |
 |---|---|
-| `R` | robot home + random can reset |
+| `R` | task pose + random can reset |
 | `SPACE` | episode 기록 시작/완료 |
 | `BACKSPACE` | 현재 episode 폐기 |
-| `TAB` | Gizmo가 조작할 손 전환 |
-| `O` / `P` | 선택한 손 열기/닫기 |
+| `O` / `P` | 오른손 열기/닫기 |
 | `ESC` | 종료 |
 
-GizmoLeader는 각 손 목표를 arm-only differential IK로 7축 target으로 바꾼다. 이
-16D action을 follower env가 받으므로 demonstration과 ACT inference가 같은 실행
-경계를 공유한다.
+GizmoLeader는 오른손 목표를 arm-only differential IK로 7축 target으로 바꾼다.
+왼쪽 8개 상수를 포함한 16D action을 follower env가 받으므로 demonstration과 ACT
+inference가 같은 실행 경계를 공유한다.
 
 매 frame은 step 전에 `obs_t`와 `action_t`를 함께 append한다. 파일 layout은 ALOHA와
 호환되는 `/observations/qpos`, `/observations/qvel`,

@@ -30,7 +30,7 @@ def evaluate(checkpoint, *, stats_path=None, output_dir=None, num_episodes=10,
                     path, env.camera_names, enabled=rerun) as logger:
                 for frame in range(max_steps):
                     action, policy_info = runner.get_action(observation)
-                    action = env.action_adapter.validate(action, clip=True)
+                    action = env.prepare_action(action)
                     logger.log(
                         frame, observation, action,
                         predicted_chunk=policy_info["predicted_chunk"])

@@ -46,11 +46,25 @@ class AIWorkerMujocoEnv:
 
         self.action_adapter = ActionAdapter(self.model)
         self.state_adapter = PolicyStateAdapter(self.model)
+        self.left_arm_fixed = bool(SETTINGS.get("imitation.left_arm_fixed"))
+        self.left_arm_park_position = np.asarray(
+            SETTINGS.get("imitation.left_arm_park_position_rad"), dtype=float)
+        self.left_grasp_fixed = SETTINGS.number(
+            "imitation.left_grasp_fixed", minimum=0.0)
+        if self.left_arm_park_position.shape != (7,):
+            raise ValueError("imitation.left_arm_park_position_rad must contain 7 values")
+        left_ranges = self.action_adapter.arm_ranges["l"]
+        if np.any(self.left_arm_park_position < left_ranges[:, 0]) or np.any(
+                self.left_arm_park_position > left_ranges[:, 1]):
+            raise ValueError("configured left-arm park position exceeds joint limits")
+        if self.left_grasp_fixed > 1.0:
+            raise ValueError("imitation.left_grasp_fixed must not exceed 1")
         self.arm_controllers = {
             side: arm.ArmTorqueController(self.model, ARM_JOINTS[side])
             for side in SIDES
         }
         self.task = CanInBoxTask(self.model)
+        self._enable_target_bin_collisions()
         self._bind_fixed_actuators()
         self._configure_passive_base_hold()
 
@@ -92,6 +106,21 @@ class AIWorkerMujocoEnv:
             self.model.key_ctrl[self.home_key, self.fixed_actuators],
             dtype=float).copy()
 
+    def _enable_target_bin_collisions(self):
+        """Enable physical robot/can contacts for the task-local target bin.
+
+        The shared MJCF keeps these geoms on an isolated collision bit so legacy
+        teleop regression tasks are unchanged. This environment owns its model
+        instance and promotes the bin geoms to the normal contact group.
+        """
+        body_id = self._name_id(mujoco.mjtObj.mjOBJ_BODY, "target_bin")
+        self.target_bin_geom_ids = np.flatnonzero(
+            self.model.geom_bodyid == body_id).astype(int)
+        if self.target_bin_geom_ids.size != 5:
+            raise ValueError("target_bin must contain one floor and four collision walls")
+        self.model.geom_contype[self.target_bin_geom_ids] = 1
+        self.model.geom_conaffinity[self.target_bin_geom_ids] = 1
+
     def _configure_passive_base_hold(self):
         """Hold unactuated planar base joints with physical spring/damping forces."""
         for name in ("base_x", "base_y", "base_yaw"):
@@ -111,10 +140,14 @@ class AIWorkerMujocoEnv:
         self.rng = np.random.default_rng(seed)
         self.last_seed = int(seed)
         mujoco.mj_resetDataKeyframe(self.model, self.data, self.home_key)
+        if self.left_arm_fixed:
+            self.data.qpos[self.state_adapter.arm_qpos["l"]] = (
+                self.left_arm_park_position)
+            self.data.qvel[self.state_adapter.arm_dofs["l"]] = 0.0
         self.initial_can_position = self.task.reset(self.data, self.rng)
         self.data.ctrl[self.fixed_actuators] = self.fixed_ctrl
         mujoco.mj_forward(self.model, self.data)
-        self.last_action = self.get_qpos().astype(float)
+        self.last_action = self.prepare_action(self.get_qpos())
         return self.get_observation()
 
     def _apply_action_once(self, decoded):
@@ -128,13 +161,21 @@ class AIWorkerMujocoEnv:
 
     def step(self, action):
         """Advance one 25 Hz control frame through actuator-level physics."""
-        bounded = self.action_adapter.validate(action, clip=True)
+        bounded = self.prepare_action(action)
         decoded = self.action_adapter.decode(bounded)
         for _ in range(self.steps_per_control):
             self._apply_action_once(decoded)
             mujoco.mj_step(self.model, self.data)
         self.last_action = bounded
         return self.get_observation()
+
+    def prepare_action(self, action):
+        """Clip policy output and replace the locked-left fields with constants."""
+        bounded = self.action_adapter.validate(action, clip=True)
+        if self.left_arm_fixed:
+            bounded[:7] = self.left_arm_park_position
+            bounded[7] = self.left_grasp_fixed
+        return bounded
 
     def get_qpos(self):
         return self.state_adapter.get_qpos(self.data)

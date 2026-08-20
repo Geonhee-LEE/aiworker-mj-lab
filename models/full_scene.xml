@@ -421,8 +421,11 @@
                         <geom type="mesh" mesh="arm_l_link7" class="collision"/>
                         <geom size="0.0115 0.021 0.021" pos="0.107944 0 -0.065588" quat="0.475435 -0.475435 0.523413 0.523413" type="box"/>
                         <!-- 손목과 강체로 함께 움직이는 policy 카메라. -->
-                        <camera name="cam_left_wrist" pos="0.13 -0.04 -0.03"
-                          xyaxes="0 -1 0 0.37 0 -0.93" fovy="72"/>
+                        <!-- can-to-box의 고정 palm-up 왼팔 자세에서 테이블 중앙을
+                             내려다보는 extrinsic이다. -->
+                        <camera name="cam_left_wrist" pos="0.06 -0.12 -0.08"
+                          xyaxes="-0.6657 0 0.7462 -0.3455 -0.8863 -0.3084"
+                          fovy="72"/>
 
                         <!-- 왼손(HX5-D20) -->
                         <body name="hx5_l_base" pos="0 0 -0.078" quat="0 -0.7071068 0.7071068 0">

@@ -75,7 +75,8 @@ class RecordEpisodesApp:
             self.toggle_recording()
         if self.keys.pressed(self.window, glfw.KEY_BACKSPACE):
             self.recorder.discard()
-        if self.keys.pressed(self.window, glfw.KEY_TAB):
+        if (not self.env.left_arm_fixed
+                and self.keys.pressed(self.window, glfw.KEY_TAB)):
             self.selected_side = "l" if self.selected_side == "r" else "r"
         grasp_delta = 0.0
         if glfw.get_key(self.window, glfw.KEY_O) == glfw.PRESS:
@@ -99,6 +100,8 @@ class RecordEpisodesApp:
         imgui.text(f"Control Hz: {self.env.actual_control_hz:.1f}")
         imgui.text(f"Dropped: {self.recorder.dropped}")
         imgui.text(f"Selected hand: {'LEFT' if self.selected_side == 'l' else 'RIGHT'}")
+        if self.env.left_arm_fixed:
+            imgui.text("Left hand: LOCKED (palm up)")
         imgui.text(f"Task success: {self.observation['task']['success']}")
         if imgui.button("Reset robot + random can [R]"):
             self.reset()
@@ -107,7 +110,10 @@ class RecordEpisodesApp:
         if imgui.button("Discard [BACKSPACE]"):
             self.recorder.discard()
         imgui.separator()
-        imgui.text("TAB: select hand | O/P: open/close")
+        if self.env.left_arm_fixed:
+            imgui.text("O/P: open/close right hand")
+        else:
+            imgui.text("TAB: select hand | O/P: open/close")
         imgui.text("Drag Gizmo arrows/rings to move selected hand")
         for name in self.env.camera_names:
             image = self.observation["images"].get(name)
