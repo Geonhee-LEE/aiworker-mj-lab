@@ -47,6 +47,29 @@ def test_locked_left_leader_action():
         assert leader.get_action()[15] == 0.0
 
 
+def test_right_arm_bounded_home_return():
+    with AIWorkerMujocoEnv(render_images=False, seed=3) as env:
+        right_qpos = env.state_adapter.arm_qpos["r"]
+        env.data.qpos[right_qpos] += np.asarray(
+            [0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2])
+        mujoco.mj_forward(env.model, env.data)
+        leader = GizmoLeader(env)
+        current = env.data.qpos[right_qpos].copy()
+        before = np.abs(leader.home_arms["r"] - current)
+
+        leader.return_home("r")
+        action = leader.get_action()
+        after = np.abs(leader.home_arms["r"] - action[8:15])
+        max_step = leader.joint_speed / env.actual_control_hz
+        assert leader.returning_home["r"]
+        assert np.all(after < before)
+        assert np.all(np.abs(action[8:15] - current) <= max_step + 1e-12)
+
+        position, quaternion = leader.targets["r"]
+        leader.set_target_pose("r", position, quaternion)
+        assert not leader.returning_home["r"]
+
+
 if __name__ == "__main__":
     test_action_contract()
     test_locked_left_leader_action()

@@ -87,6 +87,7 @@ episode frame을 같은 실시간 timeline에 표시한다. Rerun을 띄우지 �
 | `SPACE` | episode 기록 시작/완료 |
 | `BACKSPACE` | 현재 episode 폐기 |
 | `Q` | 오른손 잡기/놓기 토글 |
+| `E` | 오른팔을 속도 제한 안에서 home 관절 자세로 복귀 |
 | `ESC` | 종료 |
 
 GizmoLeader는 오른손 목표를 arm-only differential IK로 7축 target으로 바꾼다.

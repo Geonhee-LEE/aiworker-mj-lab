@@ -84,10 +84,12 @@ class RecordEpisodesApp:
             self.selected_side = "l" if self.selected_side == "r" else "r"
         if self.keys.pressed(self.window, glfw.KEY_Q):
             self.leader.toggle_grasp(self.selected_side)
+        if self.keys.pressed(self.window, glfw.KEY_E):
+            self.leader.return_home(self.selected_side)
 
     def _draw_panel(self):
         imgui.set_next_window_pos((10, 10), imgui.Cond_.first_use_ever)
-        imgui.set_next_window_size((355, 430), imgui.Cond_.first_use_ever)
+        imgui.set_next_window_size((355, 465), imgui.Cond_.first_use_ever)
         imgui.begin("ALOHA Dataset Recorder")
         imgui.text("Task: random can -> fixed blue box")
         imgui.text("Control: arm-only (whole-body disabled)")
@@ -106,6 +108,8 @@ class RecordEpisodesApp:
         grasp_side = self.selected_side
         grasp_state = "CLOSED" if self.leader.grasp[grasp_side] >= 0.5 else "OPEN"
         imgui.text(f"{grasp_side.upper()} grasp target: {grasp_state}")
+        if self.leader.returning_home[self.selected_side]:
+            imgui.text(f"{self.selected_side.upper()} arm: HOME RETURN/HOLD")
         imgui.text(f"Task success: {self.observation['task']['success']}")
         if imgui.button("Reset robot + random can [R]"):
             self.reset()
@@ -115,11 +119,13 @@ class RecordEpisodesApp:
             self.recorder.discard()
         if imgui.button("Grab / Release [Q]"):
             self.leader.toggle_grasp(self.selected_side)
+        if imgui.button("Return arm home [E]"):
+            self.leader.return_home(self.selected_side)
         imgui.separator()
         if self.env.left_arm_fixed:
-            imgui.text("Q: grab/release right hand")
+            imgui.text("Q: grab/release | E: return right arm home")
         else:
-            imgui.text("TAB: select hand | Q: grab/release")
+            imgui.text("TAB: select hand | Q: grab/release | E: arm home")
         imgui.text("Drag Gizmo arrows/rings to move selected hand")
         for name in self.env.camera_names:
             image = self.observation["images"].get(name)

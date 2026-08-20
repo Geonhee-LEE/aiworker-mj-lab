@@ -84,8 +84,17 @@ class GizmoLeader(Leader):
             side: np.asarray(self.model.jnt_range[ids], dtype=float)
             for side, ids in self.joint_ids.items()
         }
+        self.home_arms = {
+            side: np.asarray(
+                self.model.key_qpos[env.home_key, self.qpos_adrs[side]],
+                dtype=float).copy()
+            for side in SIDES
+        }
+        if self.env.left_arm_fixed:
+            self.home_arms["l"] = self.env.left_arm_park_position.copy()
         self.targets = {}
         self.grasp = {"l": 0.0, "r": 0.0}
+        self.returning_home = {side: False for side in SIDES}
         self.reset()
 
     @staticmethod
@@ -102,6 +111,7 @@ class GizmoLeader(Leader):
             self.env.data.qpos, self.site_ids[side], self.joint_ids[side])
 
     def reset(self):
+        self.returning_home = {side: False for side in SIDES}
         self.targets = {
             side: (state.position.copy(), state.quaternion.copy())
             for side in SIDES
@@ -124,7 +134,27 @@ class GizmoLeader(Leader):
         norm = np.linalg.norm(quaternion)
         if norm < 1e-12:
             raise ValueError("target quaternion cannot be zero")
+        self.returning_home[side] = False
         self.targets[side] = (position.copy(), quaternion / norm)
+
+    def return_home(self, side):
+        """Enter a bounded joint-space return mode for one arm.
+
+        The mode remains active until the operator drags the Gizmo or resets
+        the task. Keeping it active holds the exact home joint posture instead
+        of allowing the redundant seventh joint to drift under pose-only IK.
+        """
+        if side not in SIDES:
+            raise ValueError(f"unknown side: {side}")
+        if side == "l" and self.env.left_arm_fixed:
+            return
+        home_qpos = np.asarray(self.env.data.qpos, dtype=float).copy()
+        home_qpos[self.qpos_adrs[side]] = self.home_arms[side]
+        home_state = self.tree.forward_site(
+            home_qpos, self.site_ids[side], self.joint_ids[side])
+        self.targets[side] = (
+            home_state.position.copy(), home_state.quaternion.copy())
+        self.returning_home[side] = True
 
     def set_grasp(self, side, value):
         if side not in SIDES:
@@ -150,6 +180,15 @@ class GizmoLeader(Leader):
             if side == "l" and self.env.left_arm_fixed:
                 arms[side] = self.env.left_arm_park_position.copy()
                 continue
+            current = np.asarray(
+                self.env.data.qpos[self.qpos_adrs[side]], dtype=float)
+            if self.returning_home[side]:
+                max_step = self.joint_speed * dt
+                arms[side] = np.clip(
+                    current + np.clip(
+                        self.home_arms[side] - current, -max_step, max_step),
+                    self.ranges[side][:, 0], self.ranges[side][:, 1])
+                continue
             state = self._current_site(side)
             target_position, target_quaternion = self.targets[side]
             error = pose_error(
@@ -163,8 +202,6 @@ class GizmoLeader(Leader):
             lower = np.full(7, -self.joint_speed)
             upper = np.full(7, self.joint_speed)
             qdot = self.solver.solve(state.jacobian, velocity, lower, upper)
-            current = np.asarray(
-                self.env.data.qpos[self.qpos_adrs[side]], dtype=float)
             arms[side] = np.clip(
                 current + dt * qdot,
                 self.ranges[side][:, 0], self.ranges[side][:, 1])
