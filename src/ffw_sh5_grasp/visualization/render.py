@@ -58,6 +58,11 @@ def setup_render(app, window_w, window_h):
     """
     if not glfw.init():
         raise RuntimeError("glfw.init() failed")
+    # ``mujoco.Renderer``의 GLFW offscreen context는 숨김 창을 만들기 위해
+    # GLFW_VISIBLE=false window hint를 설정한다. Hint는 다음 create_window()에도
+    # 남아 있으므로 policy camera를 먼저 만든 recorder에서는 주 창까지 UnMapped
+    # 상태가 됐다. 사용자 창은 항상 보이도록 생성 직전에 명시적으로 복원한다.
+    glfw.window_hint(glfw.VISIBLE, glfw.TRUE)
     window = glfw.create_window(window_w, window_h, "FFW-SH5 Teleop", None, None)
     if not window:
         glfw.terminate()
@@ -113,6 +118,23 @@ def shutdown(app):
     glfw.terminate()
 
 
+def _move_camera(app, action, relative_x, relative_y):
+    """MuJoCo 버전에 맞는 ``mjv_moveCamera`` 서명으로 free camera를 움직인다.
+
+    MuJoCo 3.11은 더 이상 ``MjvScene`` 인자를 받지 않지만 이전 버전은 scene을
+    camera 앞에 요구한다. 현재 서명을 먼저 사용하고 구버전에서만 fallback한다.
+    """
+    try:
+        mujoco.mjv_moveCamera(
+            app.model, action, relative_x, relative_y, app.cam)
+    except TypeError as current_error:
+        try:
+            mujoco.mjv_moveCamera(
+                app.model, action, relative_x, relative_y, app.scene, app.cam)
+        except TypeError:
+            raise current_error
+
+
 def handle_camera_mouse(app, io):
     """UI와 기즈모가 사용하지 않은 마우스 드래그·휠 입력으로 MuJoCo 카메라를 조작한다."""
     cur_mouse = list(glfw.get_cursor_pos(app.window))
@@ -134,10 +156,11 @@ def handle_camera_mouse(app, io):
             action = mujoco.mjtMouse.mjMOUSE_ROTATE_H if mod_shift else mujoco.mjtMouse.mjMOUSE_ROTATE_V
         else:
             action = mujoco.mjtMouse.mjMOUSE_ZOOM
-        mujoco.mjv_moveCamera(app.model, action, dx / win_h, dy / win_h, app.scene, app.cam)
+        _move_camera(app, action, dx / win_h, dy / win_h)
     if io.mouse_wheel != 0:
-        mujoco.mjv_moveCamera(app.model, mujoco.mjtMouse.mjMOUSE_ZOOM, 0.0,
-                              -MOUSE_ZOOM_SCALE * io.mouse_wheel, app.scene, app.cam)
+        _move_camera(
+            app, mujoco.mjtMouse.mjMOUSE_ZOOM, 0.0,
+            -MOUSE_ZOOM_SCALE * io.mouse_wheel)
 
 
 def pose_to_imguizmo_matrix(world_pos, world_quat):
