@@ -6,6 +6,7 @@ import numpy as np
 
 DEFAULT_CAMERA_NAMES = ("cam_high", "cam_left_wrist", "cam_right_wrist")
 POLICY_SELF_OCCLUDER_GROUP = 4
+OPERATOR_MARKER_GROUP = 5
 
 
 class MujocoCameraManager:
@@ -30,6 +31,10 @@ class MujocoCameraManager:
         # Keep its housing visible in the operator GUI but do not let the
         # simulated sensor render the opaque shell around itself.
         self._scene_option.geomgroup[POLICY_SELF_OCCLUDER_GROUP] = 0
+        # IK targets and diagnostic sites belong to the operator UI, not to
+        # observations recorded in HDF5 or streamed to Rerun.
+        self._scene_option.geomgroup[OPERATOR_MARKER_GROUP] = 0
+        self._scene_option.sitegroup[OPERATOR_MARKER_GROUP] = 0
         self._renderer = None
 
     def _get_renderer(self):
@@ -66,5 +71,5 @@ class MujocoCameraManager:
 
 __all__ = [
     "DEFAULT_CAMERA_NAMES", "MujocoCameraManager",
-    "POLICY_SELF_OCCLUDER_GROUP",
+    "OPERATOR_MARKER_GROUP", "POLICY_SELF_OCCLUDER_GROUP",
 ]

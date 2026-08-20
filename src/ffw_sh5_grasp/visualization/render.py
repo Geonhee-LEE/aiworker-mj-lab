@@ -99,6 +99,10 @@ def setup_render(app, window_w, window_h):
     # head mesh encloses the calibrated optical origin. The operator view must
     # continue to display the physical head housing.
     app.opt.geomgroup[4] = 1
+    # Group 5 contains Gizmo targets and diagnostic sites. They remain useful
+    # in this operator view but policy-camera observations explicitly hide it.
+    app.opt.geomgroup[5] = 1
+    app.opt.sitegroup[5] = 1
     app.pert = mujoco.MjvPerturb()
     app.context = mujoco.MjrContext(app.model, mujoco.mjtFontScale.mjFONTSCALE_150)
 

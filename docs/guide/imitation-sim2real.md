@@ -55,6 +55,8 @@ MuJoCo의 camera 축(+X right, +Y up, -Z forward)은 ROS optical 축(+X
 right, +Y down, +Z forward)에 맞게 변환한다. Head camera를 별도로
 기울이지 않고 `imitation.head_fixed_position_rad`의 목 pitch를 이용해
 작업대를 본다.
+조작용 Gizmo 목표, grasp site, 상자 중심 site는 메인 GUI에서만 보이고
+HDF5와 Rerun에 저장되는 policy camera 영상에서는 제외된다.
 
 Observation은 다음 계약을 따른다.
 

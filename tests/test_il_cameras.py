@@ -10,6 +10,8 @@ import numpy as np
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from ffw_sh5_grasp.imitation.cameras import (  # noqa: E402
+    OPERATOR_MARKER_GROUP)
 from ffw_sh5_grasp.imitation.mujoco_env import AIWorkerMujocoEnv  # noqa: E402
 
 
@@ -79,6 +81,24 @@ def test_policy_cameras():
         mujoco.mj_forward(env.model, env.data)
         after = env.data.cam_xpos[camera_id].copy()
         assert np.linalg.norm(after - before) > 1e-3
+
+
+def test_debug_markers_are_excluded_from_policy_cameras():
+    with AIWorkerMujocoEnv(
+            camera_width=160, camera_height=120, seed=3) as env:
+        for name in (
+                "ik_target_l_geom", "ik_target_r_geom",
+                "virtual_object_marker_geom"):
+            geom_id = _id(env.model, mujoco.mjtObj.mjOBJ_GEOM, name)
+            assert env.model.geom_group[geom_id] == OPERATOR_MARKER_GROUP
+        for name in (
+                "grasp_target_l", "grasp_target_r", "target_bin_center",
+                "ik_target_l_site", "ik_target_r_site",
+                "virtual_object_marker_site"):
+            site_id = _id(env.model, mujoco.mjtObj.mjOBJ_SITE, name)
+            assert env.model.site_group[site_id] == OPERATOR_MARKER_GROUP
+        assert not env.cameras._scene_option.geomgroup[OPERATOR_MARKER_GROUP]
+        assert not env.cameras._scene_option.sitegroup[OPERATOR_MARKER_GROUP]
 
 
 if __name__ == "__main__":

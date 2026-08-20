@@ -462,7 +462,8 @@
                           <inertial pos="-0.00262263 -0.00168363 0.0622837" mass="0.301852" diaginertia="0.000528544 0.000382320 0.000201250"/>
                           <geom type="mesh" mesh="hx5_l_base" material="black" class="visual"/>
                           <geom name="palm_l_collision" type="box" size="0.02421 0.05536 0.06126" pos="-0.00321 0.00121 0.06126" class="hand_collision"/>
-                          <site name="grasp_target_l" pos="0.065 -0.01 0.105" size="0.006" rgba="0 1 0 1"/>
+                          <site name="grasp_target_l" pos="0.065 -0.01 0.105"
+                            size="0.006" rgba="0 1 0 1" group="5"/>
 
                           <!-- 엄지(관절 4개) -->
                           <body name="finger_l_link1" pos="-0.0125 -0.03493 0.04475">
@@ -662,7 +663,8 @@
                           <inertial pos="-0.00259546 0.00179263 0.0629577" mass="0.301852" diaginertia="0.000542413 0.000389333 0.000210116"/>
                           <geom type="mesh" mesh="hx5_r_base" material="black" class="visual"/>
                           <geom name="palm_r_collision" type="box" size="0.02421 0.05536 0.06126" pos="-0.00321 -0.00121 0.06126" class="hand_collision"/>
-                          <site name="grasp_target_r" pos="0.065 0.01 0.105" size="0.006" rgba="0 1 0 1"/>
+                          <site name="grasp_target_r" pos="0.065 0.01 0.105"
+                            size="0.006" rgba="0 1 0 1" group="5"/>
 
                           <!-- 엄지(관절 4개) -->
                           <body name="finger_r_link1" pos="-0.0125 0.03493 0.04475">
@@ -850,22 +852,25 @@
         size="0.005 0.075 0.08" class="target_bin_collision"
         rgba="0.12 0.38 0.82 0.85"/>
       <site name="target_bin_center" pos="0 0 0.0625" size="0.01"
-        rgba="0.1 1 0.2 0.35"/>
+        rgba="0.1 1 0.2 0.35" group="5"/>
     </body>
     <body name="ik_target_l" mocap="true" pos="0.45 0.25 0.95">
       <geom name="ik_target_l_geom" type="sphere" size="0.025" rgba="0.1 0.9 0.1 0.35"
-        contype="0" conaffinity="0"/>
-      <site name="ik_target_l_site" size="0.012" rgba="0.1 1.0 0.1 1"/>
+        contype="0" conaffinity="0" group="5"/>
+      <site name="ik_target_l_site" size="0.012" rgba="0.1 1.0 0.1 1"
+        group="5"/>
     </body>
     <body name="ik_target_r" mocap="true" pos="0.45 -0.25 0.95">
       <geom name="ik_target_r_geom" type="sphere" size="0.025" rgba="1.0 0.1 0.1 0.35"
-            contype="0" conaffinity="0"/>
-      <site name="ik_target_r_site" size="0.012" rgba="1.0 0.1 0.1 1"/>
+            contype="0" conaffinity="0" group="5"/>
+      <site name="ik_target_r_site" size="0.012" rgba="1.0 0.1 0.1 1"
+        group="5"/>
     </body>
     <body name="virtual_object_marker" mocap="true" pos="0.4055 0 0.95">
       <geom name="virtual_object_marker_geom" type="box" size="0.035 0.035 0.035"
-            rgba="0.2 0.45 1.0 0.30" contype="0" conaffinity="0"/>
-      <site name="virtual_object_marker_site" size="0.018" rgba="0.2 0.45 1.0 1"/>
+            rgba="0.2 0.45 1.0 0.30" contype="0" conaffinity="0" group="5"/>
+      <site name="virtual_object_marker_site" size="0.018"
+        rgba="0.2 0.45 1.0 1" group="5"/>
     </body>
   </worldbody>
 
