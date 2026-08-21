@@ -30,8 +30,7 @@ MODEL_PATH = REPO_ROOT / "models" / "arm_hand.xml"
 
 from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
-import ik  # noqa: E402
-import kinematics  # noqa: E402
+from ffw_sh5_grasp import kinematics  # noqa: E402
 from offline_pose_ik import solve_offline_pose_multistart  # noqa: E402
 
 ARM_JOINTS = [f"arm_r_joint{i}" for i in range(1, 8)]
@@ -162,7 +161,8 @@ def _hold(model, data, controller, q_des, duration, dt, grasp_frac=None, thumb_f
     for _ in range(n):
         controller.apply(data, q_des)
         if grasp_frac is not None:
-            grasp.apply_grasp(model, data, grasp=grasp_frac, thumb=thumb_frac)
+            grasp.apply_grasp(
+                model, data, grasp=grasp_frac, thumb=thumb_frac, side="r")
         mujoco.mj_step(model, data)
 
 
@@ -173,7 +173,8 @@ def _move(model, data, controller, q_from, q_to, duration, dt, grasp_frac=None, 
         frac = i / n
         controller.apply(data, q_from + frac * (q_to - q_from))
         if grasp_frac is not None:
-            grasp.apply_grasp(model, data, grasp=grasp_frac, thumb=thumb_frac)
+            grasp.apply_grasp(
+                model, data, grasp=grasp_frac, thumb=thumb_frac, side="r")
         mujoco.mj_step(model, data)
 
 
@@ -223,11 +224,11 @@ def run_pick_trial(model, data, solver, controller, rng):
     for i in range(n):
         frac = i / n
         controller.apply(data, q_grasp)
-        grasp.apply_grasp(model, data, grasp=frac, thumb=frac)
+        grasp.apply_grasp(model, data, grasp=frac, thumb=frac, side="r")
         mujoco.mj_step(model, data)
     _hold(model, data, controller, q_grasp, SETTLE_TIME, dt, grasp_frac=1.0, thumb_frac=1.0)
 
-    grasped = grasp.is_grasped(model, data)
+    grasped = grasp.is_grasped(model, data, side="r")
     can_z_before_lift = data.qpos[can_qadr + 2]
 
     # 4) IK 목표 자체를 LIFT_HEIGHT만큼 올려 다시 풀고 새 자세로 서보 제어한다.
@@ -263,7 +264,8 @@ def run_pick_test(model, solver, controller, rng):
 def main():
     """자체 FK/Jacobian, 단일 팔 IK와 물리 pick Phase 3 gate를 실행한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
-    solver = ik.InverseKinematics(model, "grasp_target", ARM_JOINTS)
+    solver = kinematics.JointSpaceKinematics(
+        model, "grasp_target", ARM_JOINTS)
     controller = arm_control.ArmTorqueController(model, ARM_JOINTS)
     rng = np.random.default_rng(0)
 

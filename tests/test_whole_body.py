@@ -25,7 +25,7 @@ from ffw_sh5_grasp.control import whole_body as whole_body_ik  # noqa: E402
 from ffw_sh5_grasp.kinematics import optimization as bounded_optimization  # noqa: E402
 from ffw_sh5_grasp.kinematics import rotations as kinematics_math  # noqa: E402
 from ffw_sh5_grasp.kinematics import tasks as pose_tasks  # noqa: E402
-import kinematics  # noqa: E402
+from ffw_sh5_grasp import kinematics  # noqa: E402
 import teleop_app  # noqa: E402
 
 ARMS = {side: [f"arm_{side}_joint{i}" for i in range(1, 8)] for side in ("r", "l")}

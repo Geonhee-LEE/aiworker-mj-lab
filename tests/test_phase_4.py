@@ -35,7 +35,7 @@ MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
 from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
-import ik  # noqa: E402
+from ffw_sh5_grasp.kinematics import JointSpaceKinematics  # noqa: E402
 from offline_pose_ik import solve_offline_pose_multistart  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
@@ -266,7 +266,7 @@ def run_pick_test(model, solver, ctrl_r, ctrl_l, rng):
 def main():
     """양팔 유지·IK·물리 pick을 묶은 Phase 4 통합 gate를 실행한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
-    solver = ik.InverseKinematics(model, "grasp_target_r", ARM_R)
+    solver = JointSpaceKinematics(model, "grasp_target_r", ARM_R)
     ctrl_r = arm_control.ArmTorqueController(model, ARM_R)
     ctrl_l = arm_control.ArmTorqueController(model, ARM_L)
     rng = np.random.default_rng(0)

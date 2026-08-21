@@ -7,10 +7,10 @@ import numpy as np
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from ffw_sh5_grasp.imitation.action import (  # noqa: E402
+from ffw_sh5_grasp.imitation.simulation.action import (  # noqa: E402
     ACTION_DIM, ACTION_NAMES, ActionAdapter)
-from ffw_sh5_grasp.imitation.leader import GizmoLeader  # noqa: E402
-from ffw_sh5_grasp.imitation.mujoco_env import AIWorkerMujocoEnv  # noqa: E402
+from ffw_sh5_grasp.imitation.apps.leader import GizmoLeader  # noqa: E402
+from ffw_sh5_grasp.imitation.simulation.environment import AIWorkerMujocoEnv  # noqa: E402
 
 
 def test_action_contract():

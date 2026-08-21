@@ -8,19 +8,23 @@ import torch
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from ffw_sh5_grasp.imitation.act.policy import (  # noqa: E402
-    ACTPolicy, ACTPolicyConfig)
-from ffw_sh5_grasp.imitation.act.dataset_loader import (  # noqa: E402
-    DatasetStats, save_stats)
-from ffw_sh5_grasp.imitation.policy_runner import (  # noqa: E402
-    ACTPolicyRunner, TemporalAggregator)
+from ffw_sh5_grasp.imitation.act.dataset_loader import (
+    DatasetStats,
+    save_stats,
+)
+from ffw_sh5_grasp.imitation.act.policy import ACTPolicy, ACTPolicyConfig
+from ffw_sh5_grasp.imitation.runtime.runner import (
+    ACTPolicyRunner,
+    TemporalAggregator,
+)
 
 
 def test_act_shapes_and_loss():
     config = ACTPolicyConfig(
         chunk_size=4, hidden_dim=32, latent_dim=8,
-        transformer_layers=1, attention_heads=4, camera_count=3)
-    policy = ACTPolicy(config)
+        encoder_layers=1, decoder_layers=1, feedforward_dim=64,
+        attention_heads=4, camera_count=3, pretrained_backbone=False)
+    policy = ACTPolicy(config, load_backbone_weights=False)
     batch = {
         "qpos": torch.zeros(2, 16),
         "images": torch.rand(2, 3, 3, 32, 32),
@@ -31,7 +35,7 @@ def test_act_shapes_and_loss():
     output = policy(batch["qpos"], batch["images"])
     assert output["actions"].shape == (2, 4, 16)
     losses = policy.loss(batch)
-    assert set(losses) == {"loss", "l1", "kl", "pad"}
+    assert set(losses) == {"loss", "l1", "kl"}
     assert all(torch.isfinite(value) for value in losses.values())
     losses["loss"].backward()
 
@@ -39,8 +43,9 @@ def test_act_shapes_and_loss():
 def test_checkpoint_runner_and_temporal_aggregation():
     config = ACTPolicyConfig(
         chunk_size=3, hidden_dim=32, latent_dim=8,
-        transformer_layers=1, attention_heads=4, camera_count=3)
-    policy = ACTPolicy(config)
+        encoder_layers=1, decoder_layers=1, feedforward_dim=64,
+        attention_heads=4, camera_count=3, pretrained_backbone=False)
+    policy = ACTPolicy(config, load_backbone_weights=False)
     stats = DatasetStats(
         qpos_mean=np.zeros(16, np.float32), qpos_std=np.ones(16, np.float32),
         action_mean=np.zeros(16, np.float32), action_std=np.ones(16, np.float32))
@@ -67,7 +72,17 @@ def test_checkpoint_runner_and_temporal_aggregation():
     assert np.allclose(aggregator.action(1), 2.0)
 
 
+def test_temporal_aggregation_prioritizes_older_predictions():
+    aggregator = TemporalAggregator(decay=1.0)
+    aggregator.add(0, np.stack((np.zeros(16), np.ones(16))))
+    aggregator.add(1, np.stack((np.full(16, 10.0), np.full(16, 20.0))))
+    action = aggregator.action(1)
+    assert np.all(action < 5.0)
+    assert 1 not in aggregator.predictions
+
+
 if __name__ == "__main__":
     test_act_shapes_and_loss()
     test_checkpoint_runner_and_temporal_aggregation()
+    test_temporal_aggregation_prioritizes_older_predictions()
     print("PASS")

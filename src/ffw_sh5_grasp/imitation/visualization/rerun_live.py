@@ -1,6 +1,6 @@
 """Live Rerun stream for interactive demonstration recording."""
 
-from ..action import ACTION_NAMES
+from ..data.schema import ACTION_NAMES
 from .rerun_blueprints import live_recording_blueprint
 
 

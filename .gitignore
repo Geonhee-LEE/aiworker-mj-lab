@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.pytest_cache/
 .venv/
 *.mp4
 *.png
@@ -12,3 +13,4 @@ site/
 datasets/
 outputs/
 *.rrd
+wandb/

@@ -130,12 +130,11 @@ soft barrier 함수는 별도 slack 변수를 반환하지 않는다. 현재 위
 기본 pair는 wheel-floor와 finger-object처럼 의도한 접촉을 제외한다. 거리 gradient의
 유도는 [Collision distance와 gradient](../guide/collision-kinematics.md)에 있다.
 
-## 이전 이름 호환 { #legacy }
+## 선택 관절 FK { #joint-space }
 
-`kinematics.legacy.KinematicsSolver`는 단일 site의 `forward()`와 같은 이름인
-`forward_kinematics()`만 제공한다. `from_mjcf()`로 모델을 읽을 수 있다.
-`InverseKinematics`는 같은 FK adapter 이름이며 반복형 pose solve는 제공하지 않는다.
-새 코드에서는 `KinematicTree`를 사용한다.
+`JointSpaceKinematics`는 offline 검증과 데모에서 선택한 scalar joint 벡터만으로 한
+site의 FK/Jacobian을 계산한다. `forward(q, context_qpos=None)`와 `from_mjcf()`를
+제공한다. 실시간 제어기는 이 adapter 대신 공유 `KinematicTree`를 직접 사용한다.
 
 ## MuJoCo 공통 함수 { #mujoco-utils }
 

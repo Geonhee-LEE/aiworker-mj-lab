@@ -60,18 +60,18 @@ def run_trial(model, data, rng):
     t = 0.0
     while t < RAMP_TIME:
         frac = t / RAMP_TIME
-        grasp.apply_grasp(model, data, grasp=frac, thumb=frac)
+        grasp.apply_grasp(model, data, grasp=frac, thumb=frac, side="r")
         mujoco.mj_step(model, data)
         t += dt
 
     # 2) 닫힌 상태로 정착시킨다.
     t = 0.0
     while t < SETTLE_TIME:
-        grasp.apply_grasp(model, data, grasp=1.0, thumb=1.0)
+        grasp.apply_grasp(model, data, grasp=1.0, thumb=1.0, side="r")
         mujoco.mj_step(model, data)
         t += dt
 
-    grasped_before_lift = grasp.is_grasped(model, data)
+    grasped_before_lift = grasp.is_grasped(model, data, side="r")
     can_z_before_lift = data.qpos[qadr + 2]
 
     # 3) mocap 기준을 LIFT_SPEED로 올린다. 용접 제약이 hx5_r_base와 잡은 물체를 함께
@@ -80,7 +80,7 @@ def run_trial(model, data, rng):
     t = 0.0
     while t < lift_duration:
         data.mocap_pos[mocap_id] = mocap_start + np.array([0, 0, min(t, lift_duration) * LIFT_SPEED])
-        grasp.apply_grasp(model, data, grasp=1.0, thumb=1.0)
+        grasp.apply_grasp(model, data, grasp=1.0, thumb=1.0, side="r")
         mujoco.mj_step(model, data)
         t += dt
     data.mocap_pos[mocap_id] = mocap_start + np.array([0, 0, LIFT_HEIGHT])
@@ -89,7 +89,7 @@ def run_trial(model, data, rng):
     offsets = []
     t = 0.0
     while t < POST_LIFT_HOLD:
-        grasp.apply_grasp(model, data, grasp=1.0, thumb=1.0)
+        grasp.apply_grasp(model, data, grasp=1.0, thumb=1.0, side="r")
         mujoco.mj_step(model, data)
         offsets.append(hand_frame_offset(model, data, qadr).copy())
         t += dt

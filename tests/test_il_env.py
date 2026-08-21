@@ -7,7 +7,9 @@ import mujoco
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from ffw_sh5_grasp.imitation.mujoco_env import AIWorkerMujocoEnv  # noqa: E402
+from ffw_sh5_grasp.imitation.simulation.environment import AIWorkerMujocoEnv  # noqa: E402
+from ffw_sh5_grasp.application.teleop import TeleopApp  # noqa: E402
+from ffw_sh5_grasp.config import SETTINGS  # noqa: E402
 
 
 def test_arm_only_env_reset_and_step():
@@ -106,6 +108,57 @@ def test_arm_only_env_reset_and_step():
         )
 
 
+def test_arm_only_env_can_attach_to_existing_model_and_data():
+    model = mujoco.MjModel.from_xml_path(
+        str(REPO_ROOT / "models/full_scene.xml"))
+    data = mujoco.MjData(model)
+    with AIWorkerMujocoEnv(
+            model=model, data=data, render_images=False, seed=7) as env:
+        assert env.model is model
+        assert env.data is data
+        assert env.get_qpos().shape == (16,)
+
+    # Reattaching must be safe after collision exclusions were configured by
+    # the first policy session.
+    with AIWorkerMujocoEnv(
+            model=model, data=data, render_images=False, seed=8) as env:
+        observation = env.step(env.get_qpos())
+        assert observation["qpos"].shape == (16,)
+
+
+def test_default_teleop_matches_policy_pose_and_can_reset_is_object_only():
+    app = TeleopApp.__new__(TeleopApp)
+    app.act_policy_seed = 1000
+    app._setup_sim()
+
+    expected_left = np.asarray(
+        SETTINGS.get("imitation.left_arm_park_position_rad"))
+    assert np.allclose(
+        app.data.qpos[app.arm_qpos_indices["l"]], expected_left)
+    for name, expected in zip(
+            ("head_joint1", "head_joint2"),
+            SETTINGS.get("imitation.head_fixed_position_rad")):
+        assert np.isclose(app.data.joint(name).qpos[0], expected)
+    target_bin = app.model.body("target_bin").id
+    target_geoms = np.flatnonzero(app.model.geom_bodyid == target_bin)
+    assert np.all(app.model.geom_contype[target_geoms] == 1)
+    assert np.all(app.model.geom_conaffinity[target_geoms] == 1)
+
+    robot_before = app.data.qpos[:app.imitation_task.can_qpos].copy()
+    can_before = app.data.qpos[
+        app.imitation_task.can_qpos:app.imitation_task.can_qpos + 3].copy()
+    app.reset_can()
+    assert np.array_equal(
+        app.data.qpos[:app.imitation_task.can_qpos], robot_before)
+    assert not np.array_equal(
+        app.data.qpos[
+            app.imitation_task.can_qpos:app.imitation_task.can_qpos + 3],
+        can_before,
+    )
+
+
 if __name__ == "__main__":
     test_arm_only_env_reset_and_step()
+    test_arm_only_env_can_attach_to_existing_model_and_data()
+    test_default_teleop_matches_policy_pose_and_can_reset_is_object_only()
     print("PASS")

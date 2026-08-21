@@ -1,4 +1,4 @@
-"""Self-contained ACT-style chunking policy and training utilities."""
+"""Paper-faithful ACT policy and training utilities for FFW-SH5."""
 
 from .policy import ACTPolicy, ACTPolicyConfig
 

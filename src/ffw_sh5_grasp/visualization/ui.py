@@ -27,7 +27,6 @@ JOG_RPY_STEP_DEFAULT = SETTINGS.number("ui.jog_rotation_step_deg", positive=True
 HAND_POS_OFFSET_RANGE = (-0.35, 0.35)
 HAND_RPY_RANGE = (-90.0, 90.0)
 VIRTUAL_POS_RANGE = (-0.2, 1.2)
-MOVE_TIME_RANGE = (0.2, 8.0)
 JOG_POS_STEP_RANGE = (0.001, 0.050)
 JOG_RPY_STEP_RANGE = (0.5, 15.0)
 PSEUDOINVERSE_RCOND_RANGE = (1e-8, 1e-3)
@@ -251,9 +250,6 @@ def _draw_cyclo_control_panel(app):
             if controller == "movel" and app.cyclo_grasp_captured:
                 app.release_grasp()
             app.cyclo_controller = controller
-
-    _, app.cyclo_move_time = _slider_float_clamped(
-        "Move time", app.cyclo_move_time, *MOVE_TIME_RANGE, "%.1f s")
 
     if app.cyclo_controller == "bimanual_movel":
         if imgui.button("Release Grasp" if app.cyclo_grasp_captured else "Capture Grasp"):
@@ -569,8 +565,69 @@ def _draw_ik_solver_panel(app):
             solver.set_qp_weight(name, value)
 
 
-# 기존 UI 공개 경로는 유지하고 구현은 diagnostics 모듈에서 제공한다.
-kinematic_tree_body_ids = diagnostics.kinematic_tree_body_ids
+def _draw_act_policy_panel(app):
+    """Select and launch a trained ACT checkpoint under ``outputs/act``."""
+    imgui.text_wrapped(
+        "Select a training run and checkpoint. ACT will use this teleop "
+        "window and the current MuJoCo model directly.")
+    if imgui.button("Refresh models##act_policy"):
+        app.refresh_act_policies()
+
+    runs = app.act_policy_runs
+    if not runs:
+        imgui.text_wrapped(app.act_policy_status)
+        return
+
+    run_names = [run.name for run in runs]
+    changed, run_index = imgui.combo(
+        "Training run", app.act_policy_run_index, run_names)
+    if changed:
+        app.act_policy_run_index = run_index
+        app.act_policy_checkpoint_index = 0
+
+    selected_run = runs[app.act_policy_run_index]
+    checkpoint_names = [path.name for path in selected_run.checkpoints]
+    changed, checkpoint_index = imgui.combo(
+        "Checkpoint", app.act_policy_checkpoint_index, checkpoint_names)
+    if changed:
+        app.act_policy_checkpoint_index = checkpoint_index
+
+    changed, max_steps = imgui.input_int(
+        "Max steps", app.act_policy_max_steps, 10, 100)
+    if changed:
+        app.act_policy_max_steps = max(1, max_steps)
+        if (app.act_policy_env is not None
+                and app.act_policy_frame >= app.act_policy_max_steps):
+            app.request_finish_act_policy("Max steps reached")
+
+    checkpoint = selected_run.checkpoints[app.act_policy_checkpoint_index]
+    imgui.text_wrapped(f"Selected: {checkpoint.relative_to(selected_run.path)}")
+    if imgui.button("Load + Run ACT Policy"):
+        app.request_act_policy_launch(checkpoint, app.act_policy_max_steps)
+    imgui.text_wrapped(app.act_policy_status)
+
+    if app.act_policy_env is None:
+        return
+    imgui.separator_text("Active rollout")
+    imgui.text_wrapped(f"Model: {app.act_policy_checkpoint.name}")
+    imgui.text(
+        f"Frame: {app.act_policy_frame} / {app.act_policy_max_steps}")
+    placed = app.act_policy_observation["task"]["success"]
+    imgui.text(f"Can settled in box: {'YES' if placed else 'NO'}")
+    if imgui.button("Pause" if app.act_policy_running else "Run policy"):
+        app.toggle_act_policy()
+    imgui.same_line()
+    if imgui.button("Step [N]##act_policy"):
+        app.request_act_policy_step()
+    imgui.same_line()
+    if imgui.button("Reset can [R]##act_policy"):
+        app.reset_act_policy()
+    if imgui.button("Stop + Return to IK"):
+        app.request_finish_act_policy("Stopped by operator")
+    imgui.text("SPACE: run/pause | N: one step | R: reset can")
+    imgui.text_wrapped(
+        "Placing the can does not stop the rollout; the learned home-return "
+        "sequence continues until Max steps.")
 
 
 def _draw_window_visibility(app):
@@ -648,6 +705,7 @@ def _draw_control_center(app, targets):
         lambda: _draw_arm_panel(app, targets, "l"))
     _draw_tab("Pose Graph", lambda: diagnostics.draw_pose_graph_panel(app))
     _draw_tab("IK Solver", lambda: _draw_ik_solver_panel(app))
+    _draw_tab("ACT Policy", lambda: _draw_act_policy_panel(app))
 
     def draw_robot_controls():
         """리프트·유틸리티와 캔 파지 제어를 Robot/Grasp 탭에 묶어 그린다."""

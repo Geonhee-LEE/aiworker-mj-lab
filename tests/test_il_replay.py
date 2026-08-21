@@ -6,9 +6,9 @@ import numpy as np
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from ffw_sh5_grasp.imitation.dataset import EpisodeData  # noqa: E402
-from ffw_sh5_grasp.imitation.mujoco_env import AIWorkerMujocoEnv  # noqa: E402
-from ffw_sh5_grasp.imitation.replay import replay_episode  # noqa: E402
+from ffw_sh5_grasp.imitation.data.episode import EpisodeData  # noqa: E402
+from ffw_sh5_grasp.imitation.simulation.environment import AIWorkerMujocoEnv  # noqa: E402
+from ffw_sh5_grasp.imitation.data.replay import replay_episode  # noqa: E402
 
 
 def test_deterministic_replay():

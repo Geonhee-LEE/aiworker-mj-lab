@@ -15,6 +15,17 @@
 | wheel·수동 주행 | [스워브](base_teleop.md) | Phase 5 + Whole-body |
 | 손가락·파지 | [파지](grasp.md) | Phase 1, 2 |
 | 설정값 변경 | [YAML 설정](../configuration.md) | Config + 해당 Phase |
+| 프로젝트의 파일과 책임 찾기 | [프로젝트 파일 트리](project-tree.md) | 문서 |
+| 모방학습 명령 실행 | [IL 명령어 레퍼런스](../imitation-commands.md) | IL camera/env + training |
+| IL 개념을 처음부터 학습 | [IL 전체 안내](il/index.md) | 문서 |
+| 행동 복제·데이터 계약 이해 | [행동 복제와 데이터](il/foundations.md) | IL data + validation |
+| 시각 encoder 이해 | [CNN과 ResNet18](il/vision-encoder.md) | IL ACT backbone |
+| 시계열 모델 이해 | [RNN과 Transformer](il/sequence-models.md) | IL ACT |
+| 잠재 행동 표현 이해 | [VAE와 CVAE](il/cvae.md) | IL ACT + training |
+| ACT 전체 구조 이해 | [ACT 아키텍처](il/act.md) | IL ACT + runtime |
+| IL 코드 수정·확장 | [IL 코드 구조](imitation-code-structure.md) | `test_il_*.py` 전체 |
+| 전체 소스 배치·정리 | [소스 구조와 정리 원칙](source-layout.md) | 관련 Phase + 전체 import 검사 |
+| ACT 논문·구현 세부 대응 확인 | [ACT 구현](act-implementation.md) | IL ACT + training |
 | 미구현 확장 범위 | [모방학습·실기 전환](imitation-sim2real.md) | 해당 없음 |
 
 ## 알고리즘 학습 순서 { #algorithm-learning-order }
@@ -41,6 +52,20 @@ flowchart LR
 | 4 | 관절 목표에서 torque 계산 | [팔 제어](arm_control.md) |
 | 5 | body twist에서 wheel 명령 계산 | [스워브](base_teleop.md) |
 | 6 | finger synergy와 contact 판정 | [파지](grasp.md) |
+
+## 모방학습 학습 순서
+
+```mermaid
+flowchart LR
+    IL["1 행동 복제"] --> CNN["2 CNN·ResNet"]
+    CNN --> SEQ["3 시계열 모델"]
+    SEQ --> CVAE["4 CVAE"]
+    CVAE --> ACT["5 ACT"]
+    ACT --> IMPL["6 현재 구현"]
+```
+
+모방학습 문서는 [IL 전체 안내](il/index.md)에서 시작한다. ACT는 IL의 하위 알고리즘으로
+분류하며, RNN은 비교를 위한 기반 지식이고 현재 ACT 정책 자체에는 포함되지 않는다.
 
 ## 변경 시 유지할 계약
 

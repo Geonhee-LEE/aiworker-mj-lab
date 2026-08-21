@@ -32,7 +32,7 @@ class TrainingRerunLogger:
             return
         self.recording.set_time("epoch", sequence=int(metrics["epoch"]))
         for split in ("train", "val"):
-            for name in ("loss", "l1", "kl", "pad"):
+            for name in ("loss", "l1", "kl"):
                 key = f"{split}/{name}"
                 if key in metrics:
                     self.recording.log(

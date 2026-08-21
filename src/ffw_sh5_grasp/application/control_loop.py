@@ -76,7 +76,7 @@ def update_manual_drive(app, drive_keys, *, stop_linear_speed, stop_angular_spee
     """키 입력과 실제 차체 속도로 수동 우선권 및 target 운반 상태를 갱신한다."""
     feedback = read_base_feedback(app)
     command = app.base_drive.base.update_body(
-        drive_keys, app.frame_dt, feedback.body_twist)
+        drive_keys, app.frame_dt)
     keys_active = any(drive_keys.values())
     measured_motion_active = (
         math.hypot(feedback.body_twist.vx, feedback.body_twist.vy)

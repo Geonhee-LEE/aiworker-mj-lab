@@ -1,130 +1,218 @@
-"""Compact CVAE transformer that predicts ACT-style future action chunks."""
+"""Paper-faithful Action Chunking Transformer adapted to FFW-SH5 dimensions."""
 
 from dataclasses import asdict, dataclass
-import math
 
 import torch
 from torch import nn
-import torch.nn.functional as functional
+
+from .backbone import (
+    IMAGENET_MEAN,
+    IMAGENET_STD,
+    PositionEmbeddingSine2D,
+    ResNet18Backbone,
+)
+from .transformer import (
+    PositionalDecoder,
+    PositionalDecoderLayer,
+    PositionalEncoder,
+    PositionalEncoderLayer,
+)
+
+ARCHITECTURE_VERSION = 2
 
 
 @dataclass(frozen=True)
 class ACTPolicyConfig:
+    """Serializable ACT architecture configuration.
+
+    Defaults mirror Table III of the ALOHA paper. ``state_dim``,
+    ``action_dim`` and ``camera_count`` remain configurable because FFW-SH5's
+    can-to-box policy uses one arm, a grasp synergy and two cameras.
+    """
+
     state_dim: int = 16
     action_dim: int = 16
-    chunk_size: int = 32
-    camera_count: int = 3
-    hidden_dim: int = 256
+    chunk_size: int = 90
+    camera_count: int = 2
+    hidden_dim: int = 512
     latent_dim: int = 32
-    transformer_layers: int = 4
+    encoder_layers: int = 4
+    decoder_layers: int = 7
+    feedforward_dim: int = 3200
     attention_heads: int = 8
     dropout: float = 0.1
+    backbone: str = "resnet18"
+    pretrained_backbone: bool = True
+    architecture_version: int = ARCHITECTURE_VERSION
+
+    def __post_init__(self):
+        positive = {
+            "state_dim": self.state_dim,
+            "action_dim": self.action_dim,
+            "chunk_size": self.chunk_size,
+            "camera_count": self.camera_count,
+            "hidden_dim": self.hidden_dim,
+            "latent_dim": self.latent_dim,
+            "encoder_layers": self.encoder_layers,
+            "decoder_layers": self.decoder_layers,
+            "feedforward_dim": self.feedforward_dim,
+            "attention_heads": self.attention_heads,
+        }
+        invalid = [name for name, value in positive.items() if int(value) <= 0]
+        if invalid:
+            raise ValueError(f"ACT dimensions must be positive: {invalid}")
+        if self.hidden_dim % self.attention_heads:
+            raise ValueError("hidden_dim must be divisible by attention_heads")
+        if self.hidden_dim % 4:
+            raise ValueError("hidden_dim must be divisible by 4 for 2D positions")
+        if not 0.0 <= self.dropout < 1.0:
+            raise ValueError("dropout must be within [0,1)")
+        if self.backbone != "resnet18":
+            raise ValueError("the paper-faithful ACT backbone must be resnet18")
+        if self.architecture_version != ARCHITECTURE_VERSION:
+            raise ValueError(
+                "checkpoint uses an incompatible ACT architecture version: "
+                f"{self.architecture_version}")
 
     def as_dict(self):
         return asdict(self)
 
 
-class _ImageEncoder(nn.Module):
-    def __init__(self, hidden_dim):
-        super().__init__()
-        self.network = nn.Sequential(
-            nn.Conv2d(3, 32, 5, stride=2, padding=2), nn.ReLU(),
-            nn.Conv2d(32, 64, 3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(64, 128, 3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(128, hidden_dim, 3, stride=2, padding=1), nn.ReLU(),
-            nn.AdaptiveAvgPool2d(1),
-        )
-
-    def forward(self, image):
-        return self.network(image).flatten(1)
+def _sinusoidal_positions(length, hidden_dim):
+    positions = torch.arange(length, dtype=torch.float32)[:, None]
+    dimensions = torch.arange(hidden_dim, dtype=torch.float32)[None, :]
+    angles = positions / torch.pow(
+        10_000.0, 2 * torch.div(dimensions, 2, rounding_mode="floor")
+        / hidden_dim)
+    table = torch.empty_like(angles)
+    table[:, 0::2] = angles[:, 0::2].sin()
+    table[:, 1::2] = angles[:, 1::2].cos()
+    return table
 
 
 class ACTPolicy(nn.Module):
-    """Condition a transformer decoder on qpos, RGB cameras and CVAE latent."""
+    """CVAE policy that predicts a chunk of absolute joint targets.
 
-    def __init__(self, config):
+    Training uses the demonstration action chunk to infer a latent style. At
+    inference the posterior encoder is bypassed and style is fixed to zero, the
+    mean of the unit Gaussian prior. Images retain their spatial feature maps;
+    they are never globally pooled before transformer attention.
+    """
+
+    def __init__(self, config, *, load_backbone_weights=None):
         super().__init__()
         self.config = config
-        if config.hidden_dim % config.attention_heads:
-            raise ValueError("hidden_dim must be divisible by attention_heads")
         hidden = config.hidden_dim
-        self.image_encoder = _ImageEncoder(hidden)
+        if load_backbone_weights is None:
+            load_backbone_weights = config.pretrained_backbone
+        self.image_backbone = ResNet18Backbone(
+            pretrained=bool(load_backbone_weights))
+        self.image_projection = nn.Conv2d(
+            self.image_backbone.output_channels, hidden, kernel_size=1)
+        self.image_position = PositionEmbeddingSine2D(hidden)
+        self.register_buffer(
+            "image_mean", torch.tensor(IMAGENET_MEAN).reshape(1, 1, 3, 1, 1))
+        self.register_buffer(
+            "image_std", torch.tensor(IMAGENET_STD).reshape(1, 1, 3, 1, 1))
+
+        encoder_layer = PositionalEncoderLayer(
+            hidden, config.attention_heads, config.feedforward_dim,
+            config.dropout)
+        self.observation_encoder = PositionalEncoder(
+            encoder_layer, config.encoder_layers)
         self.qpos_projection = nn.Linear(config.state_dim, hidden)
-        self.camera_embedding = nn.Parameter(
-            torch.randn(config.camera_count, hidden) / math.sqrt(hidden))
-        self.source_position = nn.Parameter(
-            torch.randn(config.camera_count + 1, hidden) / math.sqrt(hidden))
-        encoder_layer = nn.TransformerEncoderLayer(
-            hidden, config.attention_heads, hidden * 4, config.dropout,
-            batch_first=True, norm_first=True)
-        self.observation_encoder = nn.TransformerEncoder(
-            encoder_layer, config.transformer_layers, enable_nested_tensor=False)
-
-        self.action_projection = nn.Linear(config.action_dim, hidden)
-        self.posterior_cls = nn.Parameter(torch.zeros(1, 1, hidden))
-        self.posterior_position = nn.Parameter(
-            torch.randn(config.chunk_size + 2, hidden) / math.sqrt(hidden))
-        posterior_layer = nn.TransformerEncoderLayer(
-            hidden, config.attention_heads, hidden * 4, config.dropout,
-            batch_first=True, norm_first=True)
-        self.posterior = nn.TransformerEncoder(
-            posterior_layer, 2, enable_nested_tensor=False)
-        self.latent_stats = nn.Linear(hidden, config.latent_dim * 2)
         self.latent_projection = nn.Linear(config.latent_dim, hidden)
+        self.additional_position = nn.Embedding(2, hidden)
 
-        decoder_layer = nn.TransformerDecoderLayer(
-            hidden, config.attention_heads, hidden * 4, config.dropout,
-            batch_first=True, norm_first=True)
-        self.decoder = nn.TransformerDecoder(
-            decoder_layer, config.transformer_layers)
-        self.action_queries = nn.Parameter(
-            torch.randn(config.chunk_size, hidden) / math.sqrt(hidden))
+        posterior_layer = PositionalEncoderLayer(
+            hidden, config.attention_heads, config.feedforward_dim,
+            config.dropout)
+        self.posterior_encoder = PositionalEncoder(
+            posterior_layer, config.encoder_layers)
+        self.posterior_cls = nn.Embedding(1, hidden)
+        self.posterior_qpos_projection = nn.Linear(config.state_dim, hidden)
+        self.posterior_action_projection = nn.Linear(config.action_dim, hidden)
+        self.latent_stats = nn.Linear(hidden, config.latent_dim * 2)
+        self.register_buffer(
+            "posterior_position",
+            _sinusoidal_positions(config.chunk_size + 2, hidden))
+
+        decoder_layer = PositionalDecoderLayer(
+            hidden, config.attention_heads, config.feedforward_dim,
+            config.dropout)
+        self.action_decoder = PositionalDecoder(
+            decoder_layer, config.decoder_layers, hidden)
+        self.action_queries = nn.Embedding(config.chunk_size, hidden)
         self.action_head = nn.Linear(hidden, config.action_dim)
+        # The released model contains this head, but its loss/inference path does
+        # not consume it. Keep it so the architecture remains directly comparable.
         self.pad_head = nn.Linear(hidden, 1)
 
-    def _posterior(self, qpos_token, actions, is_pad):
-        batch = actions.shape[0]
-        cls = self.posterior_cls.expand(batch, -1, -1)
-        tokens = torch.cat((
-            cls, qpos_token[:, None, :], self.action_projection(actions)), dim=1)
-        tokens = tokens + self.posterior_position[None, :tokens.shape[1]]
-        padding = torch.cat((
-            torch.zeros((batch, 2), dtype=torch.bool, device=actions.device),
-            is_pad), dim=1)
-        encoded = self.posterior(tokens, src_key_padding_mask=padding)
+    def _encode_posterior(self, qpos, actions, is_pad):
+        batch_size = actions.shape[0]
+        cls = self.posterior_cls.weight.expand(batch_size, -1, -1)
+        qpos_token = self.posterior_qpos_projection(qpos)[:, None]
+        action_tokens = self.posterior_action_projection(actions)
+        source = torch.cat((cls, qpos_token, action_tokens), dim=1)
+        position = self.posterior_position[None].expand(batch_size, -1, -1)
+        prefix_mask = torch.zeros(
+            (batch_size, 2), dtype=torch.bool, device=actions.device)
+        padding_mask = torch.cat((prefix_mask, is_pad), dim=1)
+        encoded = self.posterior_encoder(
+            source, position, padding_mask=padding_mask)
         mean, log_variance = self.latent_stats(encoded[:, 0]).chunk(2, dim=-1)
-        latent = mean + torch.exp(0.5 * log_variance) * torch.randn_like(mean)
+        standard_deviation = torch.exp(0.5 * log_variance)
+        latent = mean + standard_deviation * torch.randn_like(mean)
         return latent, mean, log_variance
 
-    def forward(self, qpos, images, actions=None, is_pad=None):
-        if images.ndim != 5:
-            raise ValueError("images must have shape [B,Cameras,3,H,W]")
-        batch, cameras = images.shape[:2]
-        if cameras != self.config.camera_count:
-            raise ValueError(f"expected {self.config.camera_count} cameras")
-        image_tokens = self.image_encoder(
-            images.reshape(batch * cameras, *images.shape[2:]))
-        image_tokens = image_tokens.reshape(batch, cameras, -1)
-        image_tokens = image_tokens + self.camera_embedding[None]
-        qpos_token = self.qpos_projection(qpos)
-        source = torch.cat((qpos_token[:, None], image_tokens), dim=1)
-        source = source + self.source_position[None]
-        memory = self.observation_encoder(source)
+    def _encode_observation(self, qpos, images, latent):
+        batch_size, camera_count = images.shape[:2]
+        normalized = (images - self.image_mean) / self.image_std
+        features = self.image_backbone(normalized.reshape(
+            batch_size * camera_count, *images.shape[2:]))
+        features = self.image_projection(features)
+        positions = self.image_position(features)
+        _, _, height, width = features.shape
+        features = features.reshape(
+            batch_size, camera_count, self.config.hidden_dim,
+            height, width).permute(0, 1, 3, 4, 2)
+        positions = positions.reshape(
+            batch_size, camera_count, height, width,
+            self.config.hidden_dim)
+        image_tokens = features.flatten(1, 3)
+        image_positions = positions.flatten(1, 3)
 
+        prefix = torch.stack((
+            self.latent_projection(latent), self.qpos_projection(qpos)), dim=1)
+        prefix_position = self.additional_position.weight[None].expand(
+            batch_size, -1, -1)
+        source = torch.cat((prefix, image_tokens), dim=1)
+        position = torch.cat((prefix_position, image_positions), dim=1)
+        return self.observation_encoder(source, position), position
+
+    def forward(self, qpos, images, actions=None, is_pad=None):
+        self._validate_inputs(qpos, images, actions, is_pad)
+        batch_size = qpos.shape[0]
         if actions is None:
             latent = torch.zeros(
-                (batch, self.config.latent_dim), device=qpos.device,
+                (batch_size, self.config.latent_dim), device=qpos.device,
                 dtype=qpos.dtype)
             mean = log_variance = None
         else:
             if is_pad is None:
                 is_pad = torch.zeros(
-                    actions.shape[:2], dtype=torch.bool, device=actions.device)
-            latent, mean, log_variance = self._posterior(
-                qpos_token, actions, is_pad)
-        query = self.action_queries[None].expand(batch, -1, -1)
-        query = query + self.latent_projection(latent)[:, None]
-        decoded = self.decoder(query, memory)
+                    actions.shape[:2], dtype=torch.bool,
+                    device=actions.device)
+            latent, mean, log_variance = self._encode_posterior(
+                qpos, actions, is_pad)
+
+        memory, memory_position = self._encode_observation(
+            qpos, images, latent)
+        query_position = self.action_queries.weight[None].expand(
+            batch_size, -1, -1)
+        target = torch.zeros_like(query_position)
+        decoded = self.action_decoder(
+            target, memory, query_position, memory_position)
         return {
             "actions": self.action_head(decoded),
             "is_pad": self.pad_head(decoded).squeeze(-1),
@@ -132,20 +220,45 @@ class ACTPolicy(nn.Module):
             "log_variance": log_variance,
         }
 
+    def _validate_inputs(self, qpos, images, actions, is_pad):
+        batch_size = qpos.shape[0]
+        if qpos.shape != (batch_size, self.config.state_dim):
+            raise ValueError(
+                "qpos must have shape "
+                f"[B,{self.config.state_dim}], got {tuple(qpos.shape)}")
+        expected_image_prefix = (batch_size, self.config.camera_count, 3)
+        if images.ndim != 5 or tuple(images.shape[:3]) != expected_image_prefix:
+            raise ValueError(
+                "images must have shape "
+                f"[B,{self.config.camera_count},3,H,W], "
+                f"got {tuple(images.shape)}")
+        if actions is not None:
+            expected_actions = (
+                batch_size, self.config.chunk_size, self.config.action_dim)
+            if tuple(actions.shape) != expected_actions:
+                raise ValueError(
+                    f"actions must have shape {expected_actions}, "
+                    f"got {tuple(actions.shape)}")
+            if is_pad is not None and tuple(is_pad.shape) != expected_actions[:2]:
+                raise ValueError(
+                    f"is_pad must have shape {expected_actions[:2]}, "
+                    f"got {tuple(is_pad.shape)}")
+
     def loss(self, batch, *, kl_weight=10.0):
+        """Return the released ACT objective: masked L1 plus beta-weighted KL."""
         output = self(
             batch["qpos"], batch["images"],
             batch["actions"], batch["is_pad"])
-        valid = ~batch["is_pad"]
-        l1_per_step = torch.abs(output["actions"] - batch["actions"]).mean(-1)
-        l1 = l1_per_step[valid].mean()
-        pad = functional.binary_cross_entropy_with_logits(
-            output["is_pad"], batch["is_pad"].float())
-        mean, log_variance = output["mean"], output["log_variance"]
-        kl = -0.5 * torch.mean(
-            1.0 + log_variance - mean.square() - log_variance.exp())
-        total = l1 + pad + float(kl_weight) * kl
-        return {"loss": total, "l1": l1, "kl": kl, "pad": pad}
+        valid = (~batch["is_pad"]).unsqueeze(-1)
+        l1 = (torch.abs(
+            output["actions"] - batch["actions"]) * valid).mean()
+        mean = output["mean"]
+        log_variance = output["log_variance"]
+        kl = (-0.5 * (
+            1.0 + log_variance - mean.square() - log_variance.exp()
+        ).sum(dim=-1)).mean()
+        total = l1 + float(kl_weight) * kl
+        return {"loss": total, "l1": l1, "kl": kl}
 
 
-__all__ = ["ACTPolicy", "ACTPolicyConfig"]
+__all__ = ["ARCHITECTURE_VERSION", "ACTPolicy", "ACTPolicyConfig"]

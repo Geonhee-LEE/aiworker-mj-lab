@@ -8,8 +8,8 @@ import yaml
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from ffw_sh5_grasp.imitation.act.trainer import train  # noqa: E402
-from ffw_sh5_grasp.imitation.dataset import EpisodeData, write_episode  # noqa: E402
+from ffw_sh5_grasp.imitation.act.trainer import train
+from ffw_sh5_grasp.imitation.data.episode import EpisodeData, write_episode
 
 
 def test_one_epoch_training_outputs():
@@ -29,8 +29,11 @@ def test_one_epoch_training_outputs():
             "output_dir": str(root / "outputs"),
             "camera_names": list(images), "state_dim": 16, "action_dim": 16,
             "chunk_size": 2, "hidden_dim": 32, "latent_dim": 8,
-            "transformer_layers": 1, "attention_heads": 4, "dropout": 0.0,
+            "encoder_layers": 1, "decoder_layers": 1,
+            "feedforward_dim": 64, "attention_heads": 4, "dropout": 0.0,
+            "pretrained_backbone": False,
             "batch_size": 3, "epochs": 1, "learning_rate": 1e-4,
+            "backbone_learning_rate": 1e-4,
             "weight_decay": 0.0, "kl_weight": 1.0,
             "validation_fraction": 0.1, "split_seed": 1,
             "test_fraction": 0.1,

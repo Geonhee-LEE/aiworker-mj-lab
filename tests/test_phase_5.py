@@ -48,16 +48,25 @@ QACC_LIMIT = 1e5
 IDLE_DRIFT_LIMIT = 0.002  # 정지 상태 허용 표류량 2 mm
 
 
+def _keyboard_commands(
+        drive, keys, dt, steering_positions=None, wheel_velocities=None):
+    """Apply the production key-to-body-to-wheel command path."""
+    twist = drive.base.update_body(keys, dt)
+    return drive.update_twist(
+        twist, dt, steering_positions, wheel_velocities)
+
+
 def run_unit_tests():
     """키 입력 평활화와 스워브 역기구학·반전 FSM의 순수 단위 회귀를 실행한다."""
     ok = True
 
     bt = base_teleop.BaseTeleop()
-    vx = vy = vyaw = 0.0
+    command = base_teleop.BodyTwist()
     for _ in range(2000):
-        vx, vy, vyaw = bt.update({"w": True}, 0.01, yaw=0.0)
-    speed = float(np.hypot(vx, vy))
-    ok_a = abs(speed - base_teleop.K_SPEED) < 0.02 and vy == 0.0 and vyaw == 0.0
+        command = bt.update_body({"w": True}, 0.01)
+    speed = float(np.hypot(command.vx, command.vy))
+    ok_a = (abs(speed - base_teleop.K_SPEED) < 0.02
+            and command.vy == 0.0 and command.wz == 0.0)
     print(f"  (a) BaseTeleop forward hold settles at speed={speed:.4f} "
           f"(target {base_teleop.K_SPEED}): {'OK' if ok_a else 'FAIL'}")
     ok &= ok_a
@@ -80,7 +89,7 @@ def run_unit_tests():
     # 순수 전진에서는 모든 바퀴가 정면을 향하고 같은 속도로 구동되어야 한다.
     sd = base_teleop.SwerveDrive()
     for _ in range(300):
-        cmds = sd.update({"w": True}, 0.01, yaw=0.0)
+        cmds = _keyboard_commands(sd, {"w": True}, 0.01)
     steers = [abs(cmds[w][0]) for w in WHEELS]
     speeds = [cmds[w][1] for w in WHEELS]
     ok_b = all(s < 0.01 for s in steers) and max(speeds) - min(speeds) < 0.01 and speeds[0] > 0
@@ -92,7 +101,7 @@ def run_unit_tests():
     # 원점 주위 회전에 맞게 정렬되어야 한다.
     sd2 = base_teleop.SwerveDrive()
     for _ in range(300):
-        cmds2 = sd2.update({"left": True}, 0.01, yaw=0.0)
+        cmds2 = _keyboard_commands(sd2, {"left": True}, 0.01)
     rear_steer = cmds2["rear_wheel"][0]
     left_steer, right_steer = cmds2["left_wheel"][0], cmds2["right_wheel"][0]
     ok_c = (abs(abs(rear_steer) - np.pi / 2) < 0.02
@@ -106,7 +115,7 @@ def run_unit_tests():
     # 순수 횡이동에서는 모든 바퀴가 전진 방향에 수직인 ±90도를 향해야 한다.
     sd3 = base_teleop.SwerveDrive()
     for _ in range(300):
-        cmds3 = sd3.update({"a": True}, 0.01, yaw=0.0)
+        cmds3 = _keyboard_commands(sd3, {"a": True}, 0.01)
     strafe_steers = [abs(abs(cmds3[w][0]) - np.pi / 2) for w in WHEELS]
     ok_d = all(s < 0.02 for s in strafe_steers)
     print(f"  (d) SwerveDrive strafe: steer angles={[round(np.degrees(cmds3[w][0]),1) for w in WHEELS]}: "
@@ -186,10 +195,10 @@ def _make_rig(model):
 
 def _step(model, data, rig, drive, keys, frame_dt):
     """키 입력에서 wheel 명령을 만들고 한 렌더 프레임 동안 물리를 진행한다."""
-    yaw = data.qpos[rig["base_yaw_qadr"]]
     steering_positions = {w: float(data.qpos[qadr]) for w, qadr in rig["steer_qadrs"].items()}
     wheel_velocities = {w: float(data.qvel[dof]) for w, dof in rig["drive_dofs"].items()}
-    cmds = drive.update(keys, frame_dt, yaw, steering_positions, wheel_velocities)
+    cmds = _keyboard_commands(
+        drive, keys, frame_dt, steering_positions, wheel_velocities)
     dt = model.opt.timestep
     max_qacc = 0.0
     for _ in range(max(1, round(frame_dt / dt))):

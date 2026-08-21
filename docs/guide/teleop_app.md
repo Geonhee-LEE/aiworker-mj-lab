@@ -160,8 +160,8 @@ flowchart LR
 | `capture_grasp()` / `apply_virtual_object_target()` | virtual object 기준 양손 target 저장·복원 |
 | `sync_ik_mocaps_from_targets()` | target pose를 표시용 mocap에 복사 |
 
-`_step_actuators()`만 robot actuator의 `data.ctrl`을 기록한다. `reset_can()`과 legacy
-box 비활성화는 자유물체 초기화를 위해 해당 object의 state/model 속성을 수정한다.
+`_step_actuators()`만 robot actuator의 `data.ctrl`을 기록한다. `reset_can()`은 task
+object인 캔의 free-joint state만 초기화한다. 목표 상자는 고정 body다.
 
 ## 검증
 

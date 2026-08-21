@@ -4,7 +4,7 @@ ROBOTIS AIWORKER(FFW-SH5)를 MuJoCo에서 연구하기 위한 저장소입니다
 텔레오퍼레이션, 직접 구현한 FK/Jacobian과 differential IK, 전신 제어, 스워브 주행,
 접촉 기반 파지와 충돌 회피를 하나의 Python 앱에서 실행합니다.
 
-ALOHA-style 모방학습 경로는 별도의 arm-only 계층으로 제공됩니다. 세 policy camera,
+ALOHA-style 모방학습 경로는 별도의 arm-only 계층으로 제공됩니다. 두 policy camera,
 16D joint action, HDF5 record/replay, ACT 학습·평가와 Rerun 분석을 포함하며 기존
 Whole-body 텔레옵 기능과 분리되어 있습니다.
 
@@ -46,7 +46,7 @@ Linux 데스크톱과 OpenGL 화면 세션이 필요합니다.
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install mujoco numpy glfw imgui-bundle pyyaml h5py torch pillow imageio rerun-sdk
+python -m pip install mujoco numpy glfw imgui-bundle pyyaml h5py torch pillow imageio rerun-sdk wandb
 python3 src/teleop_app.py
 ```
 
@@ -104,20 +104,36 @@ mkdocs build --strict
 ```bash
 # recorder와 live Rerun Viewer가 함께 열린다.
 # R: task pose + random can reset, Q: grab/release, SPACE: record
-python3 src/record_episodes.py --task-name can_to_box
+python3 src/il.py record --task-name can_to_box
 
-python3 src/rerun_episode.py \
+python3 src/il.py rerun \
   --episode datasets/can_to_box/episode_000000.hdf5
-python3 src/replay_episodes.py \
+python3 src/il.py replay \
   --episode datasets/can_to_box/episode_000000.hdf5
 
-python3 src/train_act.py --config config/imitation/act.yaml
-python3 src/eval_act.py \
-  --checkpoint outputs/act/can_to_box_overfit/checkpoints/policy_best.ckpt
+python3 src/il.py validate \
+  --dataset-dir datasets/can_to_box \
+  --camera cam_high --camera cam_right_wrist
+
+python3 src/il.py train --config config/imitation/act.yaml
+python3 src/il.py evaluate \
+  --checkpoint outputs/act/can_to_box_act_v2/checkpoints/policy_best.ckpt
+
+# Control Center의 ACT Policy 탭에서 outputs/act 아래 모델을 선택한다.
+python3 src/teleop_app.py
+```
+
+W&B 학습 대시보드를 사용하려면 한 번 로그인한 후 학습한다. 기본 프로젝트 이름과
+활성화 여부는 `config/imitation/act.yaml`의 `wandb`에서 변경한다.
+
+```bash
+wandb login
+python3 src/il.py train --config config/imitation/act.yaml
 ```
 
 대규모 수집 전에 성공 episode 하나로 overfit gate를 통과시키는 것을 기본 절차로
-삼습니다. 자세한 schema와 산출물은 [모방학습 가이드](docs/guide/imitation-sim2real.md)에
+삼습니다. 자세한 schema와 산출물은 [모방학습 가이드](docs/guide/imitation-sim2real.md),
+논문 구조와 FFW-SH5 적응점은 [ACT 구현 대응표](docs/guide/act-implementation.md)에
 정리되어 있습니다.
 
 전체 Phase 실행 명령과 각 gate의 의미는 [테스트와 검증](docs/testing.md)에 있습니다.
@@ -127,7 +143,9 @@ python3 src/eval_act.py \
 ```text
 config/default.yaml                 실행·제어 기본 설정
 models/                             MuJoCo 모델
-src/teleop_app.py                   실행 진입점
+src/teleop_app.py                   teleop 실행 진입점
+src/il.py                           모방학습 통합 명령 dispatcher
+src/ffw_sh5_grasp/cli/              IL command별 argument parser
 src/ffw_sh5_grasp/application/      앱 loop, 모델 주소, 상태·명령과 목표 좌표
 src/ffw_sh5_grasp/kinematics/       tree, FK/Jacobian, IK와 충돌 거리
 src/ffw_sh5_grasp/control/          팔·전신·스워브·양손·파지 제어

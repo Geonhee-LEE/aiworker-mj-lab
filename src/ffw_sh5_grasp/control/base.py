@@ -120,7 +120,7 @@ class BaseTeleop:
         self.v_local = np.zeros(2)
         self.w = 0.0
 
-    def update_body(self, keys, dt, measured_twist=None):
+    def update_body(self, keys, dt):
         """월드 좌표계나 바퀴 정보 없이 차체 좌표계 명령을 반환한다."""
         fwd = float(bool(keys.get("w"))) - float(bool(keys.get("s")))
         left = float(bool(keys.get("a"))) - float(bool(keys.get("d")))
@@ -155,14 +155,7 @@ class BaseTeleop:
         self.v_local[np.abs(self.v_local) < LINEAR_VEL_DEADBAND] = 0.0
         if abs(self.w) < ANGULAR_VEL_DEADBAND:
             self.w = 0.0
-        del measured_twist  # 오도메트리를 전달하는 기존 호출부와의 호환 인자다.
         return BodyTwist(float(self.v_local[0]), float(self.v_local[1]), float(self.w))
-
-    def update(self, keys, dt, yaw=0.0):
-        """기존 월드 좌표계 ``vx, vy, wz`` 튜플을 반환하는 호환 함수."""
-        cmd = self.update_body(keys, dt)
-        cy, sy = math.cos(yaw), math.sin(yaw)
-        return cy * cmd.vx - sy * cmd.vy, sy * cmd.vx + cy * cmd.vy, cmd.wz
 
     def reset_motion(self):
         """피드백으로 물리 정지를 확인한 뒤 남은 입력 평활화 상태를 지운다."""
@@ -291,17 +284,6 @@ class SwerveDrive:
         self.previous_drive_commands = dict.fromkeys(self.wheels, 0.0)
         self.wheel_saturation_scale = 1.0
         self.last_body_twist = BodyTwist()
-
-    def update(self, keys, dt, yaw=0.0, steering_positions=None, wheel_velocities=None):
-        """기존 테스트와 호출부가 사용하는 키보드 입력 호환 경로."""
-        del yaw  # 바퀴 역기구학은 차체 좌표계 명령을 사용한다.
-        measured_twist = None
-        if (steering_positions is not None and wheel_velocities is not None
-                and all(name in steering_positions and name in wheel_velocities
-                        for name in self.wheels)):
-            measured_twist = self.kinematics.forward(steering_positions, wheel_velocities)
-        twist = self.base.update_body(keys, dt, measured_twist)
-        return self.update_twist(twist, dt, steering_positions, wheel_velocities)
 
     def update_twist(self, twist, dt, steering_positions=None, wheel_velocities=None):
         """임의의 차체 twist를 제어해 전신 IK가 베이스를 구동하게 한다."""

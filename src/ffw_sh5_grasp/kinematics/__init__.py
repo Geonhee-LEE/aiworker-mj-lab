@@ -12,7 +12,7 @@ from .constraints import (
     collision_velocity_barriers,
     joint_velocity_bounds,
 )
-from .legacy import KinematicsSolver
+from .joint_space import JointSpaceKinematics
 from .optimization import (
     bounded_quadratic_program,
     bounded_quadratic_program_with_barriers,
@@ -42,7 +42,7 @@ from .tree import (
 __all__ = list(_solver_exports) + [
     "CollisionConstraint",
     "CollisionPair",
-    "KinematicsSolver",
+    "JointSpaceKinematics",
     "KinematicBody",
     "KinematicJoint",
     "KinematicSite",

@@ -221,14 +221,13 @@ def _command_coefficients(model, side):
     return cached
 
 
-def apply_grasp(model, data, grasp: float, thumb: float, side: str = "r"):
+def apply_grasp(model, data, grasp: float, thumb: float, *, side: str):
     """[0, 1]로 제한한 두 시너지 스칼라를 액추에이터 ctrl 목표로 변환한다.
 
     ``grasp``는 검지와 중지의 PIP/DIP/tip을 각 관절 범위의
     ``[FINGER_OPEN_FRAC, 1.0]`` 구간에서 보간한다. ``thumb``은 엄지 MCP pitch와 IP를
     ``[THUMB_OPEN_FRAC, 1.0]`` 구간에서 보간한다. 엄지 CMC는 고정하고 yaw는 안전한
-    접근 자세와 굽힌 자세 사이를 보간한다. ``side``는 왼손과 오른손을 선택하며
-    기본값 ``r``은 Phase 4 이전 호출부와 호환된다.
+    접근 자세와 굽힌 자세 사이를 보간한다. ``side``는 왼손과 오른손을 선택한다.
     """
     _validate_side(side)
     grasp = float(np.clip(grasp, 0.0, 1.0))
@@ -238,7 +237,7 @@ def apply_grasp(model, data, grasp: float, thumb: float, side: str = "r"):
     data.ctrl[actuator_ids] = offsets + grasp * grasp_slopes + thumb * thumb_slopes
 
 
-def get_finger_can_contacts(model, data, side: str = "r"):
+def get_finger_can_contacts(model, data, *, side: str):
     """현재 캔에 닿은 손가락 그룹별 총 법선력을 사전으로 반환한다.
 
     그룹 이름은 ``thumb``, ``index``, ``middle`` 중 하나다. 법선력은 접촉 좌표계의
@@ -270,7 +269,7 @@ def get_finger_can_contacts(model, data, side: str = "r"):
 
 def is_grasped(model, data, min_fingers=DEFAULT_MIN_FINGERS,
                min_total_force=DEFAULT_MIN_TOTAL_FORCE,
-               require_thumb=DEFAULT_REQUIRE_THUMB, side: str = "r"):
+               require_thumb=DEFAULT_REQUIRE_THUMB, *, side: str):
     """위치나 부착 상태를 이용하지 않고 접촉력만으로 파지를 판정한다.
 
     서로 다른 손가락 그룹이 ``min_fingers``개 이상 캔에 닿고 합산 법선력이

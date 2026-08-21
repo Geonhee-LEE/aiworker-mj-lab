@@ -2,9 +2,13 @@
 
 from pathlib import Path
 
-from ..action import ACTION_NAMES
-from ..dataset import load_episode
+import mujoco
+
+from ..data.episode import load_episode
+from ..data.schema import ACTION_NAMES
+from ..simulation.environment import AIWorkerMujocoEnv
 from .rerun_blueprints import dataset_blueprint
+from .rerun_robot import MujocoRobotRerunLogger
 
 
 def _rerun():
@@ -16,17 +20,22 @@ def _rerun():
     return rr
 
 
-def log_episode(episode_or_path, output_path, *, application_id="aiworker_dataset"):
-    rr = _rerun()
-    episode = (load_episode(episode_or_path)
-               if not hasattr(episode_or_path, "action") else episode_or_path)
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    blueprint = dataset_blueprint(tuple(episode.images))
-    with rr.RecordingStream(application_id) as recording:
-        recording.save(output_path, default_blueprint=blueprint)
+def _record_episode(recording, rr, episode):
+    full_qpos = episode.debug.get("full_qpos")
+    full_qvel = episode.debug.get("full_qvel")
+    with AIWorkerMujocoEnv(render_images=False) as environment:
+        robot = MujocoRobotRerunLogger(
+            recording, environment.model, environment.data)
         for frame in range(episode.length):
             recording.set_time("frame", sequence=frame)
+            if full_qpos is not None:
+                environment.data.qpos[:] = full_qpos[frame]
+                if full_qvel is not None:
+                    environment.data.qvel[:] = full_qvel[frame]
+                mujoco.mj_forward(environment.model, environment.data)
+            if frame == 0:
+                robot.log_geometry()
+            robot.log_poses()
             for name, images in episode.images.items():
                 recording.log(f"cameras/{name}", rr.Image(images[frame]))
             for index, name in enumerate(ACTION_NAMES):
@@ -36,7 +45,38 @@ def log_episode(episode_or_path, output_path, *, application_id="aiworker_datase
                     f"state/qvel/{name}", rr.Scalars(episode.qvel[frame, index]))
                 recording.log(
                     f"expert/action/{name}", rr.Scalars(episode.action[frame, index]))
+
+
+def _episode(episode_or_path):
+    return (load_episode(episode_or_path)
+            if not hasattr(episode_or_path, "action") else episode_or_path)
+
+
+def log_episode(episode_or_path, output_path, *, application_id="aiworker_dataset"):
+    rr = _rerun()
+    episode = _episode(episode_or_path)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with rr.RecordingStream(application_id) as recording:
+        recording.save(
+            output_path, default_blueprint=dataset_blueprint(tuple(episode.images)))
+        _record_episode(recording, rr, episode)
     return output_path
 
 
-__all__ = ["log_episode"]
+def stream_episode(episode_or_path, *, port=9877,
+                   application_id="aiworker_dataset"):
+    """Open Rerun and stream an episode without writing an intermediate file."""
+    rr = _rerun()
+    episode = _episode(episode_or_path)
+    blueprint = dataset_blueprint(tuple(episode.images))
+    with rr.RecordingStream(application_id) as recording:
+        recording.spawn(
+            port=int(port), hide_welcome_screen=True,
+            default_blueprint=blueprint)
+        recording.send_blueprint(blueprint)
+        _record_episode(recording, rr, episode)
+        recording.flush(timeout_sec=5.0)
+
+
+__all__ = ["log_episode", "stream_episode"]

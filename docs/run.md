@@ -48,8 +48,6 @@ ImGui 입력 필드에 focus가 있으면 drive key가 전달되지 않는다. 3
 | Bimanual MoveL | Capture 뒤 virtual object로 양손을 함께 이동 |
 
 선택 marker를 jog 버튼이나 3D gizmo로 움직인다. 기본 step은 위치 0.005 m, 회전 2°다.
-`Move time`은 호환 UI 값이며 실제 응답 속도는 target rate limit과 controller gain이
-결정한다.
 
 ## Task Space
 

@@ -33,5 +33,5 @@ from ffw_sh5_grasp.kinematics.solver import DifferentialIKSolver
 - `WholeBodyIK.solve()`는 명령만 반환한다. `apply()` 계열과 앱의 물리 단계가
   `data.ctrl`을 기록한다.
 
-`src/teleop_app.py`, `src/kinematics.py`, `src/ik.py`는 기존 실행 명령과 import를 위한
-호환 파일이다. 새 코드는 `ffw_sh5_grasp` 패키지에서 import한다.
+`src/teleop_app.py`와 `src/il.py`는 각각 teleop과 IL 명령 dispatcher다. 코드는
+`ffw_sh5_grasp` 패키지의 책임별 모듈에서 import한다.

@@ -11,7 +11,7 @@ def _blueprint_module():
 
 
 def dataset_blueprint(camera_names=(
-        "cam_high", "cam_left_wrist", "cam_right_wrist")):
+    "cam_high", "cam_right_wrist")):
     rrb = _blueprint_module()
     camera_views = [
         rrb.Spatial2DView(origin=f"/cameras/{name}", name=name)
@@ -19,6 +19,7 @@ def dataset_blueprint(camera_names=(
     ]
     return rrb.Blueprint(
         rrb.Vertical(
+            rrb.Spatial3DView(origin="/robot", name="Robot"),
             rrb.Horizontal(*camera_views),
             rrb.Horizontal(
                 rrb.TimeSeriesView(origin="/state", name="Joint state"),
@@ -30,7 +31,7 @@ def dataset_blueprint(camera_names=(
 
 
 def live_recording_blueprint(camera_names=(
-        "cam_high", "cam_left_wrist", "cam_right_wrist")):
+    "cam_high", "cam_right_wrist")):
     rrb = _blueprint_module()
     camera_views = [
         rrb.Spatial2DView(origin=f"/cameras/{name}", name=name)
@@ -67,7 +68,7 @@ def training_blueprint():
 
 
 def rollout_blueprint(camera_names=(
-        "cam_high", "cam_left_wrist", "cam_right_wrist")):
+    "cam_high", "cam_right_wrist")):
     rrb = _blueprint_module()
     camera_views = [
         rrb.Spatial2DView(origin=f"/cameras/{name}", name=name)

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..action import ACTION_NAMES
+from ..data.schema import ACTION_NAMES
 from .rerun_blueprints import rollout_blueprint
 
 

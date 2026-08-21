@@ -1,10 +1,9 @@
-"""ALOHA-style imitation-learning components for the FFW-SH5 simulation.
+"""ALOHA-style imitation-learning components for FFW-SH5.
 
-The package deliberately depends on the arm torque and hand synergy controllers,
-but never on the whole-body IK or mobile-base control path.
+The package root stays dependency-light. Import concrete functionality from
+``data``, ``simulation``, ``act``, ``runtime``, or ``apps``.
 """
 
-from .action import ACTION_DIM, ACTION_NAMES, ActionAdapter
-from .mujoco_env import AIWorkerMujocoEnv
+from .data.schema import ACTION_DIM, ACTION_NAMES
 
-__all__ = ["ACTION_DIM", "ACTION_NAMES", "ActionAdapter", "AIWorkerMujocoEnv"]
+__all__ = ["ACTION_DIM", "ACTION_NAMES"]

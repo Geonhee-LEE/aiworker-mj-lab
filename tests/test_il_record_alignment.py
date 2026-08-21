@@ -6,7 +6,7 @@ import numpy as np
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from ffw_sh5_grasp.imitation.recorder import EpisodeBuffer  # noqa: E402
+from ffw_sh5_grasp.imitation.data.recording import EpisodeBuffer  # noqa: E402
 
 
 def test_obs_action_alignment():

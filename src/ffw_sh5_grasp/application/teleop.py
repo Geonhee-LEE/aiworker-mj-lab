@@ -44,6 +44,14 @@ from ffw_sh5_grasp.control import arm, base  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
 from ffw_sh5_grasp.control import whole_body  # noqa: E402
 from ffw_sh5_grasp.config import CONFIG_ENV_VAR, SETTINGS  # noqa: E402
+from ffw_sh5_grasp.imitation.runtime.catalog import (  # noqa: E402
+    ACT_OUTPUT_DIR,
+    discover_policy_runs,
+)
+from ffw_sh5_grasp.imitation.simulation.environment import (  # noqa: E402
+    enable_can_task_collisions,
+)
+from ffw_sh5_grasp.imitation.simulation.task import CanInBoxTask  # noqa: E402
 from ffw_sh5_grasp.paths import MODEL_PATH  # noqa: E402
 from ffw_sh5_grasp.visualization import render, ui  # noqa: E402
 from . import control_loop, state, targets  # noqa: E402
@@ -81,7 +89,6 @@ MAX_POS_STEP_PER_FRAME = SETTINGS.number(
     "application.max_position_step_per_frame_m", positive=True)
 MAX_RPY_STEP_PER_FRAME_DEG = SETTINGS.number(
     "application.max_rotation_step_per_frame_deg", positive=True)
-CAN_RESET_NOISE = SETTINGS.number("application.can_reset_noise_m", minimum=0.0)
 LIFT_JOG_SPEED = SETTINGS.number("application.lift_jog_speed_m_s", positive=True)
 GRASP_COMMAND_RATE = SETTINGS.number(
     "application.grasp_command_rate_per_s", positive=True)
@@ -107,22 +114,6 @@ def _joint_address(model, name, addresses):
     return int(addresses[joint_id])
 
 
-def _reset_can_random(model, data, rng, can_joint):
-    """초기 키프레임 리셋 외에 이 파일에서 허용하는 유일한 qpos 쓰기다.
-
-    자유 물체의 생성 자세를 재설정하는 명시적 예외이며, 로봇 자체의 기구학 상태를
-    강제로 덮어쓰는 동작은 아니다.
-    """
-    qadr = model.jnt_qposadr[can_joint]
-    key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, HOME_KEYFRAME)
-    home_can_pos = model.key_qpos[key_id][qadr:qadr + 3].copy()
-    data.qpos[qadr:qadr + 3] = home_can_pos + rng.uniform(
-        -CAN_RESET_NOISE, CAN_RESET_NOISE, size=3)
-    data.qpos[qadr + 3:qadr + 7] = [1, 0, 0, 0]
-    dof = model.jnt_dofadr[can_joint]
-    data.qvel[dof:dof + 6] = 0.0
-
-
 class KeyEdge:
     """키를 누른 순간에만 한 번 참을 반환하는 엣지 입력 검사기."""
 
@@ -146,8 +137,15 @@ class TeleopApp:
     순서대로 실행한다: 마우스 카메라 -> 엣지 키(R/G/V/C) -> 연속 키(주행/리프트) ->
     UI 패널 -> 물리 스텝 -> 렌더링. 상태는 전부 인스턴스 속성(self.*)에 있다."""
 
-    def __init__(self):
+    def __init__(self, *, policy_checkpoint=None, policy_stats=None,
+                 policy_device="auto", policy_seed=1000,
+                 policy_max_steps=500):
         """시뮬레이션·렌더링·루프 상태를 순서대로 구성해 실행 가능한 앱을 만든다."""
+        self.act_policy_device = policy_device
+        self.act_policy_stats = policy_stats
+        self.act_policy_seed = int(policy_seed)
+        self._initial_policy_checkpoint = policy_checkpoint
+        self._initial_policy_max_steps = int(policy_max_steps)
         self._setup_sim()
         render.setup_render(self, WINDOW_W, WINDOW_H)
         self._setup_loop_state()
@@ -157,6 +155,9 @@ class TeleopApp:
     def _setup_sim(self):
         """렌더링과 독립적인 모델·제어기·주소·목표 상태를 순서대로 구성한다."""
         self._load_model_state()
+        # WholeBodyIK builds its collision-pair catalog at construction time.
+        # Enable the task bin first so both physics and the CBF include it.
+        enable_can_task_collisions(self.model)
         self._setup_control_systems()
         self._bind_model_entities()
         self._setup_target_state()
@@ -240,7 +241,8 @@ class TeleopApp:
             name: model.jnt_range[joint_id]
             for name, joint_id in monitor_joint_ids.items()
         }
-        self.rng = np.random.default_rng()
+        self.rng = np.random.default_rng(
+            getattr(self, "act_policy_seed", 1000))
 
         hand_mocap_ids = {
             side: model.body_mocapid[
@@ -280,8 +282,38 @@ class TeleopApp:
             can_geom=_named_id(
                 model, mujoco.mjtObj.mjOBJ_GEOM, "can_geom"),
         )
-        self._disable_legacy_box_asset()
+        self.imitation_task = CanInBoxTask(self.model)
+        self._apply_default_imitation_pose()
         targets.set_home_references(self)
+
+    def _apply_default_imitation_pose(self):
+        """Apply the policy collection pose before teleop targets are created."""
+        self.arm_qpos_indices = {
+            side: np.asarray([
+                _joint_address(self.model, name, self.model.jnt_qposadr)
+                for name in ARM_JOINTS[side]
+            ], dtype=int)
+            for side in SIDES
+        }
+        left_park = np.asarray(
+            SETTINGS.get("imitation.left_arm_park_position_rad"), dtype=float)
+        head_fixed = np.asarray(
+            SETTINGS.get("imitation.head_fixed_position_rad"), dtype=float)
+        self.data.qpos[self.arm_qpos_indices["l"]] = left_park
+        for name, value in zip(("head_joint1", "head_joint2"), head_fixed):
+            joint_id = _named_id(
+                self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            qpos = int(self.model.jnt_qposadr[joint_id])
+            dof = int(self.model.jnt_dofadr[joint_id])
+            actuator = _named_id(
+                self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+            self.data.qpos[qpos] = value
+            self.data.qvel[dof] = 0.0
+            self.data.ctrl[actuator] = value
+        self.home_arm_positions = {
+            "r": HOME_Q_R.copy(),
+            "l": left_park.copy(),
+        }
 
     def _setup_target_state(self):
         """UI 목표, 평활화 상태와 실행 중 표시·모드 상태를 초기화한다."""
@@ -326,8 +358,6 @@ class TeleopApp:
         self.camera_preset = 0
         self.grab_state = dict.fromkeys(SIDES)
         self.cyclo_controller = "movel"
-        self.cyclo_move_time = SETTINGS.number(
-            "application.cyclo_move_time_s", positive=True)
         self.cyclo_grasp_captured = False
         self.cyclo_capture_offsets = None
         self.cyclo_status = "ready"
@@ -335,7 +365,11 @@ class TeleopApp:
 
     def _setup_loop_state(self):
         """메인 루프에서만 쓰는 상태(IK 웜스타트 값, 타이밍, 입력 헬퍼)."""
-        self.q_des = {"r": HOME_Q_R.copy(), "l": HOME_Q_L.copy()}
+        self.q_des = {
+            side: np.asarray(
+                self.data.qpos[self.arm_qpos_indices[side]], dtype=float).copy()
+            for side in SIDES
+        }
         # 손별 제어 모드: "ik"(EE 포즈 슬라이더 -> whole-body solver) 또는
         # "fk"(관절각 슬라이더를 그대로 토크 제어기 목표로 사용, IK 자체를 건너뜀).
         # 리프트를 움직이는 동안 IK가 매 프레임에서만 어깨 높이를 다시 읽어들여서
@@ -355,14 +389,310 @@ class TeleopApp:
         self.keys = KeyEdge()
         self.ik_err_mm = {"l": 0.0, "r": 0.0}
         self.gizmo_mouse_active = False
+        self.act_policy_runs = ()
+        self.act_policy_run_index = 0
+        self.act_policy_checkpoint_index = 0
+        self.act_policy_max_steps = max(
+            1, getattr(self, "_initial_policy_max_steps", 500))
+        self.act_policy_status = ""
+        self.act_policy_load_request = None
+        self.act_policy_env = None
+        self.act_policy_runner = None
+        self.act_policy_checkpoint = None
+        self.act_policy_observation = None
+        self.act_policy_info = None
+        self.act_policy_frame = 0
+        self.act_policy_running = False
+        self.act_policy_step_requested = False
+        # ImGui button callbacks run while the current UI frame is being
+        # assembled.  Closing the policy renderer from such a callback can
+        # destroy/switch its OpenGL context underneath ImGui, so handoff is
+        # deferred until the physics phase immediately after UI drawing.
+        self.act_policy_finish_request = None
+        self._act_policy_base_hold_backup = None
+        self.refresh_act_policies()
+        initial_checkpoint = getattr(
+            self, "_initial_policy_checkpoint", None)
+        if initial_checkpoint is not None:
+            self.request_act_policy_launch(
+                initial_checkpoint, self.act_policy_max_steps)
+
+    def refresh_act_policies(self):
+        """Refresh the selectable checkpoints rooted at ``outputs/act``."""
+        selected_run = None
+        selected_checkpoint = None
+        if self.act_policy_runs:
+            run_index = min(
+                self.act_policy_run_index, len(self.act_policy_runs) - 1)
+            selected = self.act_policy_runs[run_index]
+            selected_run = selected.name
+            if selected.checkpoints:
+                checkpoint_index = min(
+                    self.act_policy_checkpoint_index,
+                    len(selected.checkpoints) - 1,
+                )
+                selected_checkpoint = selected.checkpoints[checkpoint_index].name
+
+        self.act_policy_runs = discover_policy_runs()
+        self.act_policy_run_index = next(
+            (index for index, run in enumerate(self.act_policy_runs)
+             if run.name == selected_run),
+            0,
+        )
+        self.act_policy_checkpoint_index = 0
+        if self.act_policy_runs:
+            run = self.act_policy_runs[self.act_policy_run_index]
+            self.act_policy_checkpoint_index = next(
+                (index for index, checkpoint in enumerate(run.checkpoints)
+                 if checkpoint.name == selected_checkpoint),
+                0,
+            )
+            self.act_policy_status = (
+                f"Found {len(self.act_policy_runs)} run(s) in {ACT_OUTPUT_DIR}")
+        else:
+            self.act_policy_status = f"No ACT checkpoints found in {ACT_OUTPUT_DIR}"
+
+    def request_act_policy_launch(self, checkpoint, max_steps):
+        """Validate and queue a checkpoint for loading in the current window."""
+        checkpoint = Path(checkpoint).resolve()
+        output_dir = ACT_OUTPUT_DIR.resolve()
+        try:
+            checkpoint.relative_to(output_dir)
+        except ValueError:
+            self.act_policy_status = "Checkpoint must be inside outputs/act"
+            return False
+        if not checkpoint.is_file() or checkpoint.suffix != ".ckpt":
+            self.act_policy_status = "Selected checkpoint is unavailable"
+            return False
+        if max_steps <= 0:
+            self.act_policy_status = "Max steps must be positive"
+            return False
+        self.act_policy_max_steps = int(max_steps)
+        self.act_policy_load_request = checkpoint
+        self.act_policy_status = f"Loading {checkpoint.name}..."
+        return True
+
+    def _close_act_policy(self):
+        if self.act_policy_env is not None:
+            self.act_policy_env.close()
+        self._restore_base_hold_after_policy()
+        self.act_policy_env = None
+        self.act_policy_runner = None
+        self.act_policy_checkpoint = None
+        self.act_policy_observation = None
+        self.act_policy_info = None
+        self.act_policy_running = False
+        self.act_policy_step_requested = False
+        self.act_policy_finish_request = None
+
+    def _capture_base_hold_before_policy(self):
+        backup = []
+        for name in ("base_x", "base_y", "base_yaw"):
+            joint_id = _named_id(
+                self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            dof = int(self.model.jnt_dofadr[joint_id])
+            backup.append((
+                joint_id, dof,
+                float(self.model.jnt_stiffness[joint_id]),
+                float(self.model.dof_damping[dof]),
+            ))
+        self._act_policy_base_hold_backup = tuple(backup)
+
+    def _restore_base_hold_after_policy(self):
+        if self._act_policy_base_hold_backup is None:
+            return
+        for joint_id, dof, stiffness, damping in (
+                self._act_policy_base_hold_backup):
+            self.model.jnt_stiffness[joint_id] = stiffness
+            self.model.dof_damping[dof] = damping
+        self._act_policy_base_hold_backup = None
+
+    def _load_requested_act_policy(self):
+        checkpoint = getattr(self, "act_policy_load_request", None)
+        if checkpoint is None:
+            return
+        self.act_policy_load_request = None
+        self._close_act_policy()
+        try:
+            from ffw_sh5_grasp.imitation.runtime.runner import ACTPolicyRunner
+            from ffw_sh5_grasp.imitation.simulation.environment import (
+                AIWorkerMujocoEnv,
+            )
+
+            runner = ACTPolicyRunner(
+                checkpoint, self.act_policy_stats,
+                device=self.act_policy_device)
+            self._capture_base_hold_before_policy()
+            environment = AIWorkerMujocoEnv(
+                model_path=MODEL_PATH, model=self.model, data=self.data,
+                camera_names=runner.camera_names, render_images=True,
+                seed=self.act_policy_seed, reset_on_init=False,
+                render_context=self.context,
+                make_context_current=(
+                    lambda: glfw.make_context_current(self.window)))
+            if not np.isclose(
+                    environment.actual_control_hz, 1.0 / self.frame_dt):
+                environment.close()
+                raise ValueError(
+                    "ACT and teleop control frequencies must match")
+        except Exception as error:
+            self._restore_base_hold_after_policy()
+            self.act_policy_status = f"Load failed: {error}"
+            glfw.make_context_current(self.window)
+            return
+
+        self.act_policy_runner = runner
+        self.act_policy_env = environment
+        self.act_policy_checkpoint = checkpoint
+        self.act_policy_observation = environment.get_observation()
+        self.act_policy_info = None
+        self.act_policy_frame = 0
+        self.act_policy_running = True
+        self.act_policy_step_requested = False
+        self.act_policy_finish_request = None
+        self.act_policy_status = "ACT policy running"
+        # Operator-only IK targets are not part of policy observations and are
+        # distracting while the arm-only controller owns the robot.
+        self.opt.geomgroup[5] = 0
+        self.opt.sitegroup[5] = 0
+        glfw.make_context_current(self.window)
+
+    def reset_act_policy(self):
+        if self.act_policy_env is None:
+            return
+        self.act_policy_env.initial_can_position = self.reset_can().copy()
+        self.act_policy_observation = self.act_policy_env.get_observation()
+        self.act_policy_runner.reset()
+        self.act_policy_info = None
+        self.act_policy_frame = 0
+        self.act_policy_running = False
+        self.act_policy_step_requested = False
+        self.act_policy_finish_request = None
+        self.act_policy_status = "Can reset; ACT temporal state reset"
+        glfw.make_context_current(self.window)
+
+    def request_finish_act_policy(self, reason="ACT policy finished"):
+        """Queue a policy-to-IK handoff outside the active ImGui callback."""
+        if self.act_policy_env is None:
+            return
+        self.act_policy_running = False
+        self.act_policy_step_requested = False
+        self.act_policy_finish_request = reason
+        self.act_policy_status = f"{reason}; switching to IK..."
+
+    def finish_act_policy(self, reason="ACT policy finished"):
+        """Release policy ownership and synchronize IK to the measured pose."""
+        if self.act_policy_env is None:
+            return
+        policy_qpos = self.act_policy_env.get_qpos()
+        hand_poses = {
+            side: (
+                measured.position.copy(), measured.quaternion.copy())
+            for side in SIDES
+            for measured in (
+                self.whole_body_solver.site_state(self.data, side),)
+        }
+        self._close_act_policy()
+        # ``mujoco.Renderer.close`` tears down an offscreen render context.
+        # Rebind both the visible GLFW context and MuJoCo's window framebuffer
+        # before the operator view is drawn again.
+        render.restore_window_render_target(self)
+
+        self.whole_body_enabled = True
+        self.cyclo_grasp_captured = False
+        self.cyclo_capture_offsets = None
+        self.cyclo_controller = "movel"
+        self.whole_body_solver.set_rigid_grasp(self.data, False)
+        for side in SIDES:
+            self.arm_mode[side] = "ik"
+            position, quaternion = hand_poses[side]
+            self.targets[f"pos_{side}"] = targets.world_to_target_pos(
+                self, side, position)
+            self.targets[f"rpy_{side}"] = list(
+                targets.world_quat_to_target_rpy(
+                    self, side, quaternion))
+            self.smoothed_pos[side] = np.asarray(
+                self.targets[f"pos_{side}"], dtype=float).copy()
+            self.smoothed_rpy[side] = np.asarray(
+                self.targets[f"rpy_{side}"], dtype=float).copy()
+            measured_arm = np.asarray(
+                self.data.qpos[self.arm_qpos_indices[side]],
+                dtype=float).copy()
+            self.q_des[side] = measured_arm
+            self.fk_q_deg[side] = np.degrees(measured_arm).tolist()
+        self.targets["grasp_l"] = float(policy_qpos[7])
+        self.targets["thumb_l"] = float(policy_qpos[7])
+        self.targets["grasp_r"] = float(policy_qpos[15])
+        self.targets["thumb_r"] = float(policy_qpos[15])
+        self.grab_state = dict.fromkeys(SIDES)
+        self.targets["lift"] = float(
+            self.data.qpos[self.bindings.lift_qpos])
+        self.lift_cmd = self.targets["lift"]
+        self.whole_body_solver.rebase(self.data, hand_poses)
+        self.whole_body_base_twist = base.BodyTwist()
+        self.commanded_base_twist = base.BodyTwist()
+        targets.sync_ik_mocaps_from_targets(self)
+        self.opt.geomgroup[5] = 1
+        self.opt.sitegroup[5] = 1
+        self.act_policy_status = f"{reason}; IK control restored"
+
+    def toggle_act_policy(self):
+        if self.act_policy_env is None:
+            return
+        if self.act_policy_frame >= self.act_policy_max_steps:
+            self.reset_act_policy()
+        self.act_policy_running = not self.act_policy_running
+        self.act_policy_status = (
+            "ACT policy running" if self.act_policy_running
+            else "ACT policy paused")
+
+    def request_act_policy_step(self):
+        if (self.act_policy_env is not None
+                and self.act_policy_frame < self.act_policy_max_steps):
+            self.act_policy_step_requested = True
+
+    def _step_act_policy(self):
+        """Run one embedded ACT frame and report whether policy owns physics."""
+        if not hasattr(self, "act_policy_load_request"):
+            return False
+        self._load_requested_act_policy()
+        if self.act_policy_env is None:
+            return False
+        if self.act_policy_finish_request is not None:
+            reason = self.act_policy_finish_request
+            self.act_policy_finish_request = None
+            self.finish_act_policy(reason)
+            # Keep ownership of this transition frame. Normal IK begins on
+            # the next frame, after renderer teardown and target rebasing.
+            return True
+        should_step = self.act_policy_running or self.act_policy_step_requested
+        self.act_policy_step_requested = False
+        if not should_step:
+            return True
+        if self.act_policy_frame >= self.act_policy_max_steps:
+            self.finish_act_policy("Max steps reached")
+            return True
+        try:
+            action, self.act_policy_info = self.act_policy_runner.get_action(
+                self.act_policy_observation)
+            self.act_policy_observation = self.act_policy_env.step(action)
+        finally:
+            # Policy cameras temporarily select the shared offscreen buffer.
+            # Restore both visible context and window buffer on every path.
+            render.restore_window_render_target(self)
+        self.act_policy_frame += 1
+        if self.act_policy_frame >= self.act_policy_max_steps:
+            self.finish_act_policy("Max steps reached")
+        return True
 
     # R/G/V/C 동작 -- 키보드(_handle_edge_keys)와 패널 버튼
     # (ui.draw_panel) 양쪽에서 똑같이 호출하는 공용 메서드.
 
     def reset_can(self):
-        """캔을 홈 주변의 작은 무작위 위치와 단위 자세로 재배치한다."""
-        _reset_can_random(
-            self.model, self.data, self.rng, self.bindings.can_joint)
+        """학습과 같은 분포에서 캔만 재배치하고 로봇 자세는 유지한다."""
+        self.initial_can_position = self.imitation_task.reset(
+            self.data, self.rng)
+        return self.initial_can_position
 
     def observe(self):
         """현재 로봇 상태를 live MuJoCo 배열과 분리된 스냅샷으로 반환한다."""
@@ -377,21 +707,6 @@ class TeleopApp:
         self.whole_body_solver.set_rigid_grasp(self.data, False)
         self.cyclo_controller = "movel"
         self.cyclo_status = "ready"
-
-    def _disable_legacy_box_asset(self):
-        """캔 전용 흐름을 실행하는 동안 XML에 남은 이전 상자 물체를 비활성화한다."""
-        jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "box_free")
-        gid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "box_geom")
-        if jid == -1 or gid == -1:
-            return
-        qadr = self.model.jnt_qposadr[jid]
-        dof = self.model.jnt_dofadr[jid]
-        self.data.qpos[qadr:qadr + 3] = [2.0, 2.0, 0.1]
-        self.data.qpos[qadr + 3:qadr + 7] = [1.0, 0.0, 0.0, 0.0]
-        self.data.qvel[dof:dof + 6] = 0.0
-        self.model.geom_contype[gid] = 0
-        self.model.geom_conaffinity[gid] = 0
-        self.model.geom_rgba[gid][3] = 0.0
 
     def cycle_camera(self):
         """두 개의 사전 정의 카메라 프리셋을 번갈아 선택하고 렌더 카메라에 적용한다."""
@@ -522,23 +837,38 @@ class TeleopApp:
         """
         # 매 프레임 (1) 입력 처리 (2) IK 풀기 (3) 물리 스텝 (4) 렌더링을 전부 한
         # 스레드/한 루프 안에서 순서대로 실행한다.
-        while not glfw.window_should_close(self.window):
-            t0 = time.perf_counter()
-            io = render.begin_frame(self)
+        try:
+            while not glfw.window_should_close(self.window):
+                t0 = time.perf_counter()
+                io = render.begin_frame(self)
 
-            render.handle_camera_mouse(self, io)
-            self._handle_edge_keys(io)
-            drive_keys = self._read_drive_and_lift_keys(io)
-            ui.draw_panel(self)
-            self._step_physics(drive_keys)
-            render.render_scene(self)
-            render.end_frame(self, t0)
-
-        render.shutdown(self)
+                render.handle_camera_mouse(self, io)
+                self._handle_edge_keys(io)
+                drive_keys = self._read_drive_and_lift_keys(io)
+                ui.draw_panel(self)
+                self._step_physics(drive_keys)
+                render.render_scene(self)
+                render.end_frame(self, t0)
+        finally:
+            self._close_act_policy()
+            glfw.make_context_current(self.window)
+            render.shutdown(self)
 
     def _handle_edge_keys(self, io):
         """눌렀다 뗄 때 한 번만 반응하는 R/G/V/C 유틸리티 키."""
         if io.want_capture_keyboard:
+            return
+        if self.act_policy_env is not None:
+            if self.keys.pressed(self.window, glfw.KEY_R):
+                self.reset_act_policy()
+            if self.keys.pressed(self.window, glfw.KEY_SPACE):
+                self.toggle_act_policy()
+            if self.keys.pressed(self.window, glfw.KEY_N):
+                self.request_act_policy_step()
+            if self.keys.pressed(self.window, glfw.KEY_G):
+                self.contact_viz = not self.contact_viz
+            if self.keys.pressed(self.window, glfw.KEY_C):
+                self.cycle_camera()
             return
         if self.keys.pressed(self.window, glfw.KEY_R):
             self.reset_active_object()
@@ -651,6 +981,10 @@ class TeleopApp:
         """실제 물리 반영: target rate-limit -> world-fixed pose -> whole-body solve ->
         팔 torque/lift position/swerve/grasp actuator ctrl -> ``mj_step``. Solver는 live
         qpos를 읽기만 하며, robot qpos를 직접 쓰는 kinematic override는 없다."""
+        if self._step_act_policy():
+            self.last_observation = self.observe()
+            return
+
         manual_state = control_loop.update_manual_drive(
             self,
             drive_keys,
@@ -686,7 +1020,7 @@ class TeleopApp:
             self,
             task_command,
             sides=SIDES,
-            arm_nominal={"r": HOME_Q_R, "l": HOME_Q_L},
+            arm_nominal=self.home_arm_positions,
         )
         wheel_cmds = control_loop.select_base_command(self, manual_state)
         control_command = control_loop.build_control_command(
@@ -702,6 +1036,21 @@ def _parse_args(argv):
         "--config", metavar="YAML",
         help=(f"설정 파일 경로. 실행 전에 {CONFIG_ENV_VAR} 환경 변수로 적용되며 "
               "src/teleop_app.py 진입점을 사용할 때 지원됩니다."))
+    parser.add_argument(
+        "--policy-checkpoint", metavar="CKPT",
+        help="ACT checkpoint를 현재 teleop 창에 바로 로드합니다.")
+    parser.add_argument(
+        "--policy-stats", metavar="PKL",
+        help="선택적인 ACT dataset_stats.pkl 경로입니다.")
+    parser.add_argument(
+        "--policy-device", default="auto",
+        help="ACT 추론 장치입니다 (기본값: auto).")
+    parser.add_argument(
+        "--policy-seed", type=int, default=1000,
+        help="ACT policy UI reset seed입니다.")
+    parser.add_argument(
+        "--policy-max-steps", type=int, default=500,
+        help="ACT policy UI rollout 최대 step입니다 (기본값: 500).")
     args = parser.parse_args(argv)
     if args.config:
         requested = str(Path(args.config).expanduser().resolve())
@@ -709,12 +1058,19 @@ def _parse_args(argv):
             raise RuntimeError(
                 "--config는 모듈 import 전에 적용해야 합니다. "
                 "python3 src/teleop_app.py --config <파일>로 실행하세요.")
+    return args
 
 
 def main(argv=None):
     """명령행 인자를 검사한 뒤 :class:`TeleopApp`을 생성하고 메인 루프를 시작한다."""
-    _parse_args(sys.argv[1:] if argv is None else argv)
-    TeleopApp().run()
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
+    TeleopApp(
+        policy_checkpoint=args.policy_checkpoint,
+        policy_stats=args.policy_stats,
+        policy_device=args.policy_device,
+        policy_seed=args.policy_seed,
+        policy_max_steps=args.policy_max_steps,
+    ).run()
 
 
 if __name__ == "__main__":

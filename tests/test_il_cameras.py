@@ -10,9 +10,9 @@ import numpy as np
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from ffw_sh5_grasp.imitation.cameras import (  # noqa: E402
+from ffw_sh5_grasp.imitation.simulation.cameras import (  # noqa: E402
     OPERATOR_MARKER_GROUP)
-from ffw_sh5_grasp.imitation.mujoco_env import AIWorkerMujocoEnv  # noqa: E402
+from ffw_sh5_grasp.imitation.simulation.environment import AIWorkerMujocoEnv  # noqa: E402
 
 
 def _id(model, kind, name):
@@ -67,16 +67,17 @@ def test_camera_bracket_extrinsics():
 def test_policy_cameras():
     with AIWorkerMujocoEnv(camera_width=160, camera_height=120, seed=3) as env:
         images = env.get_images()
-        assert set(images) == {
-            "cam_high", "cam_left_wrist", "cam_right_wrist"}
+        assert set(images) == {"cam_high", "cam_right_wrist"}
+        assert np.allclose(
+            env.data.qpos[env.head_qpos], env.head_fixed_position)
         for image in images.values():
             assert image.shape == (120, 160, 3)
             assert image.dtype == np.uint8 and float(image.std()) > 5.0
         camera_id = mujoco.mj_name2id(
-            env.model, mujoco.mjtObj.mjOBJ_CAMERA, "cam_left_wrist")
+            env.model, mujoco.mjtObj.mjOBJ_CAMERA, "cam_right_wrist")
         before = env.data.cam_xpos[camera_id].copy()
         joint_id = mujoco.mj_name2id(
-            env.model, mujoco.mjtObj.mjOBJ_JOINT, "arm_l_joint2")
+            env.model, mujoco.mjtObj.mjOBJ_JOINT, "arm_r_joint2")
         env.data.qpos[env.model.jnt_qposadr[joint_id]] += 0.2
         mujoco.mj_forward(env.model, env.data)
         after = env.data.cam_xpos[camera_id].copy()

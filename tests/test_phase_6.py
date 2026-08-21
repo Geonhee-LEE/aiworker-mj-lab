@@ -400,7 +400,9 @@ def run_collision_visualization_gate():
     mujoco.mj_forward(app.model, app.data)
     constraints = teleop_render.collision_visualization_data(app)
     data_ok = (
-        len(constraints) >= 2
+        # The default IL pose parks the left arm outside the workspace, so a
+        # lowered lift may expose only the right-hand/table constraint.
+        len(constraints) >= 1
         and all(constraint.distance <= app.whole_body_solver.collision_buffer + 1e-12
                 for constraint in constraints)
         and all(np.isfinite(constraint.point_a).all()

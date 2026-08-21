@@ -95,7 +95,7 @@ def setup_render(app, window_w, window_h):
     set_camera_preset(app.cam, 0)
     app.opt = mujoco.MjvOption()
     mujoco.mjv_defaultOption(app.opt)
-    # Group 4 is hidden only from policy-camera rendering because the legacy
+    # Group 4 is hidden only from policy-camera rendering because the imported
     # head mesh encloses the calibrated optical origin. The operator view must
     # continue to display the physical head housing.
     app.opt.geomgroup[4] = 1
@@ -114,6 +114,19 @@ def begin_frame(app):
     imgui.backends.glfw_new_frame()
     imgui.new_frame()
     return imgui.get_io()
+
+
+def restore_window_render_target(app):
+    """Restore the visible GLFW context and MuJoCo window framebuffer.
+
+    Policy cameras use ``mujoco.Renderer``, which makes a hidden offscreen GL
+    context current. Restoring only the GLFW context can leave subsequent
+    MuJoCo drawing associated with an offscreen render target on some drivers,
+    producing a dark or partially cleared operator window.
+    """
+    glfw.make_context_current(app.window)
+    mujoco.mjr_setBuffer(
+        mujoco.mjtFramebuffer.mjFB_WINDOW, app.context)
 
 
 def shutdown(app):
@@ -323,6 +336,7 @@ def _append_collision_overlay(app, constraints):
 
 def render_scene(app):
     """목표 마커·충돌 오버레이·MuJoCo scene·ImGui 다중 창을 한 프레임 렌더링한다."""
+    restore_window_render_target(app)
     targets.sync_ik_mocaps_from_targets(app)
     app.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = app.contact_viz
     app.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = app.contact_viz

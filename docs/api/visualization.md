@@ -34,8 +34,6 @@ UI와 renderer는 target·표시 상태만 변경한다. IK, actuator 기록과 
 | `draw_kinematic_tree(app)` | 선택한 손 또는 전체 MJCF tree 표시 |
 | `kinematic_tree_body_ids(app, scope=None, show_full=None)` | 표시할 body id의 `frozenset` 반환 |
 
-기존 `ui.kinematic_tree_body_ids()`는 호환을 위해 같은 함수를 가리킨다.
-
 ## 렌더링 { #render }
 
 모듈은 `visualization.render`다.

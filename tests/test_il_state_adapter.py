@@ -8,7 +8,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from ffw_sh5_grasp.control import grasp  # noqa: E402
-from ffw_sh5_grasp.imitation.state_adapter import PolicyStateAdapter  # noqa: E402
+from ffw_sh5_grasp.imitation.simulation.state import PolicyStateAdapter  # noqa: E402
 
 
 def test_policy_state_adapter():

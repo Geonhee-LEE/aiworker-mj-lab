@@ -128,11 +128,8 @@ actuator가 없으면 `ValueError`를 발생시킨다.
 |---|---|
 | `BodyTwist(vx=0, vy=0, wz=0)` | 차체 좌표계 평면 속도 |
 | `BodyTwist.is_zero()` | 설정 deadband 안이면 `True` |
-| `BaseTeleop.update_body(keys, dt, measured_twist=None)` | 평활화된 `BodyTwist` |
-| `BaseTeleop.update(keys, dt, yaw=0.0)` | 호환용 월드 좌표계 `(vx, vy, wz)` tuple |
+| `BaseTeleop.update_body(keys, dt)` | 평활화된 `BodyTwist` |
 | `BaseTeleop.reset_motion()` | 입력 평활화 값 초기화 |
-
-`measured_twist`는 기존 호출부를 위한 호환 인자이며 현재 계산에는 사용하지 않는다.
 
 ### 스워브 기구학과 제어
 
@@ -141,7 +138,6 @@ actuator가 없으면 `ValueError`를 발생시킨다.
 | `SwerveKinematics.inverse(...)` | `({wheel: (steer, drive)}, saturation_scale)` |
 | `SwerveKinematics.forward(steering_positions, wheel_velocities)` | 최소제곱 `BodyTwist` |
 | `SwerveDrive.update_twist(...)` | 최종 `{wheel: (steer, drive)}` 명령 |
-| `SwerveDrive.update(...)` | 키 입력과 `update_twist()`를 연결한 호환 경로 |
 
 전체 시그니처:
 

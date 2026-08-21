@@ -83,6 +83,7 @@ nav:
     - 홈: index.md
     - 처음 사용하기:
         - 빠른 시작: getting-started.md
+        - 모방학습 명령어: imitation-commands.md
         - YAML 파라미터 설정: configuration.md
         - 화면과 조작: run.md
         - 모드 선택: control-modes.md
@@ -91,6 +92,8 @@ nav:
         - 전체 안내: guide/index.md
         - 시스템 기초:
             - 시스템 구조와 데이터 흐름: overview.md
+            - 프로젝트 파일 트리와 역할: guide/project-tree.md
+            - 소스 구조와 정리 원칙: guide/source-layout.md
         - 애플리케이션:
             - 앱 실행과 목표 좌표: guide/teleop_app.md
         - 시각화:
@@ -109,10 +112,21 @@ nav:
             - 팔 토크 제어: guide/arm_control.md
             - 모바일 스워브 제어: guide/base_teleop.md
             - 손 파지와 접촉 판정: guide/grasp.md
+        - 모방학습 (IL):
+            - 전체 안내: guide/il/index.md
+            - 기반 지식:
+                - 행동 복제와 데이터: guide/il/foundations.md
+                - CNN과 ResNet18: guide/il/vision-encoder.md
+                - RNN과 Transformer: guide/il/sequence-models.md
+                - VAE와 CVAE: guide/il/cvae.md
+            - ACT:
+                - ACT 아키텍처: guide/il/act.md
+                - 논문과 현재 구현 대응: guide/act-implementation.md
+                - 코드 구조: guide/imitation-code-structure.md
+                - 데이터와 실기 전환: guide/imitation-sim2real.md
         - 검증과 확장:
             - 테스트와 검증: testing.md
             - 개발 체크리스트: guide/pitfalls.md
-            - 모방학습 데이터와 실기 전환: guide/imitation-sim2real.md
     - API 레퍼런스:
         - 전체 안내: api/index.md
         - 설정: api/config.md

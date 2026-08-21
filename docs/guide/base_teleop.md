@@ -200,7 +200,7 @@ flowchart TD
 | API | 반환·역할 |
 |---|---|
 | `BodyTwist(vx, vy, wz)` | body-frame 속도 값 |
-| `BaseTeleop.update_body(keys, dt, measured_twist=None)` | 평활화된 `BodyTwist`; `measured_twist`는 호환 인자 |
+| `BaseTeleop.update_body(keys, dt)` | 평활화된 `BodyTwist` |
 | `BaseTeleop.reset_motion()` | 병진·yaw smoothing 상태 초기화 |
 | `SwerveKinematics.inverse(...)` | wheel state 사전과 saturation scale |
 | `SwerveKinematics.forward(...)` | feedback으로 추정한 `BodyTwist` |
