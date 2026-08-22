@@ -23,6 +23,11 @@ jobs:
             requirements-imitation.txt
             requirements-dev.txt
 
+      - name: Install headless OpenGL runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgl1 libosmesa6
+
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt
 
@@ -31,5 +36,5 @@ jobs:
 
       - name: Unit and headless integration tests
         env:
-          MUJOCO_GL: egl
+          MUJOCO_GL: osmesa
         run: python -m pytest -q

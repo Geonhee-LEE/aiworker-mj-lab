@@ -21,7 +21,7 @@
 
 ```bash
 python -m ruff check src scripts tests
-MUJOCO_GL=egl python -m pytest -q
+MUJOCO_GL=osmesa python -m pytest -q
 python -m mkdocs build --strict
 ```
 
@@ -54,7 +54,8 @@ mkdocs build --strict
 
 pytest는 단위·통합 테스트를 한 번에 실행하는 기본 gate다. Phase 스크립트는 독립 실행도
 지원하며 마지막 `PASS`와 exit code 0이 성공 기준이다. ROS launch test와 display
-server는 필요하지 않고 카메라는 headless EGL로 검증한다.
+server는 필요하지 않고 CI 카메라는 headless OSMesa로 검증한다. NVIDIA/EGL이 준비된
+로컬·서버 환경에서는 `MUJOCO_GL=egl`도 사용할 수 있다.
 
 ## Phase별 의미
 

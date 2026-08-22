@@ -100,7 +100,7 @@ Task Space 숫자 입력, marker, IK/FK, 파지와 진단 패널은 [화면과 �
 ```bash
 python -m pip install -r requirements-dev.txt -r requirements-docs.txt
 python -m ruff check src scripts tests
-MUJOCO_GL=egl python -m pytest -q
+MUJOCO_GL=osmesa python -m pytest -q
 python -m mkdocs build --strict
 ```
 
