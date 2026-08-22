@@ -3,6 +3,8 @@
 from ..data.schema import ACTION_NAMES
 from .rerun_blueprints import live_recording_blueprint
 
+_POSE_COMPONENTS = ("x", "y", "z", "qw", "qx", "qy", "qz")
+
 
 class LiveRecordingRerunLogger:
     """Stream synchronized recorder frames to a detached Rerun Viewer."""
@@ -29,11 +31,16 @@ class LiveRecordingRerunLogger:
         self.recording = rr.RecordingStream(self.application_id)
         self.recording.__enter__()
         try:
+            blueprint = live_recording_blueprint(self.camera_names)
             self.recording.spawn(
                 port=self.port,
                 hide_welcome_screen=True,
-                default_blueprint=live_recording_blueprint(self.camera_names),
+                default_blueprint=blueprint,
             )
+            # Explicitly activate the layout after connecting. This is more
+            # reliable than relying only on the spawn-time default when a
+            # viewer process on the same port is reused.
+            self.recording.send_blueprint(blueprint)
         except Exception:
             self.recording.__exit__(None, None, None)
             self.recording = None
@@ -56,6 +63,12 @@ class LiveRecordingRerunLogger:
             )
             self.recording.log(
                 f"expert/action/{name}", self.rr.Scalars(action[index]))
+        for side, pose in observation["ee_pose"].items():
+            for component, value in zip(_POSE_COMPONENTS, pose):
+                self.recording.log(
+                    f"state/ee_pose/{side}/{component}",
+                    self.rr.Scalars(float(value)),
+                )
         task = observation["task"]
         self.recording.log(
             "task/success", self.rr.Scalars(float(task["success"])))
@@ -67,6 +80,10 @@ class LiveRecordingRerunLogger:
             "task/recording_active", self.rr.Scalars(float(recording)))
         self.recording.log(
             "task/episode_frame", self.rr.Scalars(float(episode_frame)))
+        if self.frame == 0:
+            # Surface connection failures immediately and make the first
+            # camera frame visible before asynchronous batching begins.
+            self.recording.flush(timeout_sec=2.0)
         self.frame += 1
 
     def close(self):

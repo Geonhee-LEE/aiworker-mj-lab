@@ -6,7 +6,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from .episode import SCHEMA_VERSION
+from .episode import SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS
 from .schema import ACTION_DIM
 
 
@@ -90,9 +90,27 @@ def inspect_episode(path, *, required_cameras=()):
                         f"camera {name} must be uint8 [T,H,W,3], "
                         f"got {image.shape} {image.dtype}")
             schema = str(root.attrs.get("schema_version", "missing"))
-            if schema != SCHEMA_VERSION:
+            if schema not in SUPPORTED_SCHEMA_VERSIONS:
                 errors.append(
-                    f"schema_version is {schema}, expected {SCHEMA_VERSION}")
+                    f"schema_version is {schema}, expected one of "
+                    f"{SUPPORTED_SCHEMA_VERSIONS}")
+            ee_pose_path = "observations/ee_pose"
+            if schema == SCHEMA_VERSION and ee_pose_path not in root:
+                errors.append(
+                    f"schema {SCHEMA_VERSION} requires {ee_pose_path}")
+            elif ee_pose_path in root:
+                ee_pose = root[ee_pose_path]
+                if set(ee_pose) != {"left", "right"}:
+                    errors.append(
+                        "ee_pose must contain exactly left and right")
+                for name, pose in ee_pose.items():
+                    if pose.shape != (frames, 7):
+                        errors.append(
+                            f"ee_pose/{name} shape {pose.shape}, "
+                            f"expected {(frames, 7)}")
+                    elif not _finite(pose):
+                        errors.append(
+                            f"ee_pose/{name} contains NaN or infinity")
     except (OSError, KeyError, ValueError) as error:
         errors.append(str(error))
     return EpisodeInspection(

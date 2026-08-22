@@ -6,7 +6,6 @@ active-set 계산만 담당한다.
 
 import numpy as np
 
-
 # 반복 상한과 허용 오차는 사용자 제어 이득이 아니라 수치 구현의 안전장치다.
 TOLERANCE = 1e-10
 ITERATION_MULTIPLIER = 4

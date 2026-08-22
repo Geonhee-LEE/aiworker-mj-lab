@@ -8,8 +8,8 @@ Headless 실행: ``python3 tests/test_phase_1.py``
 """
 
 import pathlib
-import time
 import sys
+import time
 
 import mujoco
 import numpy as np

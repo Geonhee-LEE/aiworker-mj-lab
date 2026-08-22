@@ -8,8 +8,8 @@
 """
 
 import pathlib
+
 import trimesh
-import numpy as np
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 MESH_DIR = REPO_ROOT / "assets" / "robotis_ffw" / "assets" / "hx5_d20" / "hx5_d20_right"

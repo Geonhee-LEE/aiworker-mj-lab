@@ -3,7 +3,6 @@
 import mujoco
 import numpy as np
 
-
 ROBOT_ROOT_BODY = "base_link"
 MAX_RERUN_COLOR_INTENSITY = 0.99
 

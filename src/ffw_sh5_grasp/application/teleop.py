@@ -29,31 +29,42 @@ CBF 표시, C는 카메라 프리셋 전환이다. R/G/V/C 기능은 화면 도�
 
 import argparse
 import math
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 import glfw
+
 # 호환되는 GLX 문맥을 선택하려면 ``glfw.init()``보다 먼저 호출해야 한다.
 glfw.init_hint(glfw.PLATFORM, glfw.PLATFORM_X11)
 
 import mujoco
 import numpy as np
 
-from ffw_sh5_grasp.control import arm, base  # noqa: E402
-from ffw_sh5_grasp.control import grasp  # noqa: E402
-from ffw_sh5_grasp.control import whole_body  # noqa: E402
 from ffw_sh5_grasp.config import CONFIG_ENV_VAR, SETTINGS  # noqa: E402
+from ffw_sh5_grasp.control import (  # noqa: E402
+    arm,
+    base,
+    grasp,  # noqa: E402
+    whole_body,  # noqa: E402
+)
 from ffw_sh5_grasp.imitation.runtime.catalog import (  # noqa: E402
-    ACT_OUTPUT_DIR,
+    ACT_OUTPUT_DIRS,
     discover_policy_runs,
 )
-from ffw_sh5_grasp.imitation.simulation.environment import (  # noqa: E402
-    enable_can_task_collisions,
+from ffw_sh5_grasp.imitation.runtime.task_space import (  # noqa: E402
+    task_action_to_joint,
 )
-from ffw_sh5_grasp.imitation.simulation.task import CanInBoxTask  # noqa: E402
+from ffw_sh5_grasp.imitation.simulation.environment import (  # noqa: E402
+    enable_task_collisions,
+)
+from ffw_sh5_grasp.imitation.simulation.task import (  # noqa: E402
+    TASK_NAMES,
+    create_task,
+)
 from ffw_sh5_grasp.paths import MODEL_PATH  # noqa: E402
 from ffw_sh5_grasp.visualization import render, ui  # noqa: E402
+
 from . import control_loop, state, targets  # noqa: E402
 
 # 양팔 관절 이름 목록 (IK solver / 토크 제어기에 그대로 넘겨진다).
@@ -82,6 +93,14 @@ MONITOR_JOINTS = (
 WINDOW_W = SETTINGS.integer("application.window.width", minimum=1)
 WINDOW_H = SETTINGS.integer("application.window.height", minimum=1)
 LOOP_HZ = SETTINGS.number("application.loop_hz", positive=True)
+ENV_TASK_NAMES = {0: "can_to_box", 1: "can_color_sort"}
+POLICY_REPRESENTATION_NAMES = ("auto", "joint", "task")
+DEFAULT_TASK_POLICY_IK_SPEED_SCALE = SETTINGS.number(
+    "imitation.policy.task_ik_speed_scale", positive=True)
+DEFAULT_POLICY_PTE_STEPS = SETTINGS.integer(
+    "imitation.policy.pte_steps", minimum=0)
+DEFAULT_POLICY_RERUN_LOG_HZ = SETTINGS.number(
+    "imitation.policy.rerun_log_hz", positive=True)
 # 목표 변화율 제한은 원시 슬라이더 값의 급격한 변화와 무관하게 실제 IK 목표가
 # 렌더링 한 프레임에서 이동할 수 있는 거리를 제한한다. 25 Hz에서 프레임당 0.03 m는
 # 0.75 m/s, 프레임당 8도는 200 deg/s에 해당해 빠르지만 추종 가능한 범위다.
@@ -114,6 +133,15 @@ def _joint_address(model, name, addresses):
     return int(addresses[joint_id])
 
 
+def _is_relative_to(path, root):
+    """Return whether a resolved path is contained by a resolved root."""
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
 class KeyEdge:
     """키를 누른 순간에만 한 번 참을 반환하는 엣지 입력 검사기."""
 
@@ -139,11 +167,38 @@ class TeleopApp:
 
     def __init__(self, *, policy_checkpoint=None, policy_stats=None,
                  policy_device="auto", policy_seed=1000,
-                 policy_max_steps=500):
+                 policy_max_steps=500, task_name="can_to_box",
+                 policy_representation="auto", policy_rerun=False,
+                 policy_rerun_port=9877,
+                 policy_ik_speed_scale=DEFAULT_TASK_POLICY_IK_SPEED_SCALE,
+                 policy_pte_steps=DEFAULT_POLICY_PTE_STEPS,
+                 policy_rerun_hz=DEFAULT_POLICY_RERUN_LOG_HZ):
         """시뮬레이션·렌더링·루프 상태를 순서대로 구성해 실행 가능한 앱을 만든다."""
         self.act_policy_device = policy_device
         self.act_policy_stats = policy_stats
         self.act_policy_seed = int(policy_seed)
+        self.act_policy_representation = str(policy_representation).lower()
+        if self.act_policy_representation not in POLICY_REPRESENTATION_NAMES:
+            raise ValueError(
+                "policy representation must be auto, joint, or task")
+        self.act_policy_rerun_enabled = bool(policy_rerun)
+        self.act_policy_rerun_port = int(policy_rerun_port)
+        self.act_policy_rerun_hz = float(policy_rerun_hz)
+        if (not np.isfinite(self.act_policy_rerun_hz)
+                or self.act_policy_rerun_hz <= 0.0):
+            raise ValueError("policy Rerun frequency must be finite and positive")
+        self.act_policy_ik_speed_scale = float(policy_ik_speed_scale)
+        if (not np.isfinite(self.act_policy_ik_speed_scale)
+                or self.act_policy_ik_speed_scale <= 0.0):
+            raise ValueError("policy IK speed scale must be finite and positive")
+        self.act_policy_pte_steps = int(policy_pte_steps)
+        if (isinstance(policy_pte_steps, bool)
+                or self.act_policy_pte_steps != policy_pte_steps
+                or self.act_policy_pte_steps < 0):
+            raise ValueError("policy PTE steps must be a non-negative integer")
+        if task_name not in TASK_NAMES:
+            raise ValueError(f"unsupported teleop environment: {task_name}")
+        self.task_name = task_name
         self._initial_policy_checkpoint = policy_checkpoint
         self._initial_policy_max_steps = int(policy_max_steps)
         self._setup_sim()
@@ -155,9 +210,12 @@ class TeleopApp:
     def _setup_sim(self):
         """렌더링과 독립적인 모델·제어기·주소·목표 상태를 순서대로 구성한다."""
         self._load_model_state()
+        self.task_name = getattr(self, "task_name", "can_to_box")
+        self.imitation_task = create_task(self.model, self.task_name)
         # WholeBodyIK builds its collision-pair catalog at construction time.
         # Enable the task bin first so both physics and the CBF include it.
-        enable_can_task_collisions(self.model)
+        enable_task_collisions(
+            self.model, self.imitation_task.bin_body_names)
         self._setup_control_systems()
         self._bind_model_entities()
         self._setup_target_state()
@@ -282,7 +340,6 @@ class TeleopApp:
             can_geom=_named_id(
                 model, mujoco.mjtObj.mjOBJ_GEOM, "can_geom"),
         )
-        self.imitation_task = CanInBoxTask(self.model)
         self._apply_default_imitation_pose()
         targets.set_home_references(self)
 
@@ -300,6 +357,9 @@ class TeleopApp:
         head_fixed = np.asarray(
             SETTINGS.get("imitation.head_fixed_position_rad"), dtype=float)
         self.data.qpos[self.arm_qpos_indices["l"]] = left_park
+        right_start = self.imitation_task.scenario.right_arm_start_position
+        if right_start is not None:
+            self.data.qpos[self.arm_qpos_indices["r"]] = right_start
         for name, value in zip(("head_joint1", "head_joint2"), head_fixed):
             joint_id = _named_id(
                 self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
@@ -311,7 +371,9 @@ class TeleopApp:
             self.data.qvel[dof] = 0.0
             self.data.ctrl[actuator] = value
         self.home_arm_positions = {
-            "r": HOME_Q_R.copy(),
+            "r": np.asarray(
+                self.data.qpos[self.arm_qpos_indices["r"]],
+                dtype=float).copy(),
             "l": left_park.copy(),
         }
 
@@ -398,6 +460,9 @@ class TeleopApp:
         self.act_policy_load_request = None
         self.act_policy_env = None
         self.act_policy_runner = None
+        self.act_policy_rerun_logger = None
+        self.act_policy_rerun_frame = 0
+        self.act_policy_rerun_path = None
         self.act_policy_checkpoint = None
         self.act_policy_observation = None
         self.act_policy_info = None
@@ -418,7 +483,7 @@ class TeleopApp:
                 initial_checkpoint, self.act_policy_max_steps)
 
     def refresh_act_policies(self):
-        """Refresh the selectable checkpoints rooted at ``outputs/act``."""
+        """Refresh checkpoints and apply the selected representation filter."""
         selected_run = None
         selected_checkpoint = None
         if self.act_policy_runs:
@@ -433,7 +498,14 @@ class TeleopApp:
                 )
                 selected_checkpoint = selected.checkpoints[checkpoint_index].name
 
-        self.act_policy_runs = discover_policy_runs()
+        discovered_runs = discover_policy_runs()
+        requested_representation = getattr(
+            self, "act_policy_representation", "auto")
+        self.act_policy_runs = tuple(
+            run for run in discovered_runs
+            if (requested_representation == "auto"
+                or run.representation == requested_representation)
+        )
         self.act_policy_run_index = next(
             (index for index, run in enumerate(self.act_policy_runs)
              if run.name == selected_run),
@@ -448,18 +520,55 @@ class TeleopApp:
                 0,
             )
             self.act_policy_status = (
-                f"Found {len(self.act_policy_runs)} run(s) in {ACT_OUTPUT_DIR}")
+                f"Found {len(self.act_policy_runs)} "
+                f"{requested_representation.upper()} policy run(s)")
         else:
-            self.act_policy_status = f"No ACT checkpoints found in {ACT_OUTPUT_DIR}"
+            roots = ", ".join(str(path) for path in ACT_OUTPUT_DIRS)
+            self.act_policy_status = f"No ACT checkpoints found in {roots}"
+
+    def set_act_policy_representation(self, representation):
+        """Change the checkpoint-list filter and next-load representation."""
+        representation = str(representation).lower()
+        if representation not in POLICY_REPRESENTATION_NAMES:
+            raise ValueError(
+                "policy representation must be auto, joint, or task")
+        if representation == self.act_policy_representation:
+            return False
+        self.act_policy_representation = representation
+        self.act_policy_run_index = 0
+        self.act_policy_checkpoint_index = 0
+        self.refresh_act_policies()
+        return True
+
+    def set_act_policy_pte_steps(self, steps):
+        """Apply a PTE look-ahead now, resetting incompatible temporal state."""
+        if isinstance(steps, bool) or int(steps) != steps or int(steps) < 0:
+            self.act_policy_status = "PTE steps must be a non-negative integer"
+            return False
+        steps = int(steps)
+        runner = getattr(self, "act_policy_runner", None)
+        if runner is not None:
+            try:
+                runner.set_proleptic_steps(steps)
+            except ValueError as error:
+                self.act_policy_status = str(error)
+                return False
+        self.act_policy_pte_steps = steps
+        if runner is not None:
+            seconds = steps / self.act_policy_env.actual_control_hz
+            self.act_policy_status = (
+                f"PTE f={steps} ({seconds:.3f}s); temporal buffer reset")
+        return True
 
     def request_act_policy_launch(self, checkpoint, max_steps):
         """Validate and queue a checkpoint for loading in the current window."""
         checkpoint = Path(checkpoint).resolve()
-        output_dir = ACT_OUTPUT_DIR.resolve()
-        try:
-            checkpoint.relative_to(output_dir)
-        except ValueError:
-            self.act_policy_status = "Checkpoint must be inside outputs/act"
+        if not any(
+                _is_relative_to(checkpoint, root.resolve())
+                for root in ACT_OUTPUT_DIRS):
+            self.act_policy_status = (
+                "Checkpoint must be inside outputs/act or "
+                "outputs/act_modular")
             return False
         if not checkpoint.is_file() or checkpoint.suffix != ".ckpt":
             self.act_policy_status = "Selected checkpoint is unavailable"
@@ -473,11 +582,18 @@ class TeleopApp:
         return True
 
     def _close_act_policy(self):
+        rerun_logger = getattr(self, "act_policy_rerun_logger", None)
+        # Make cleanup idempotent even when the optional Rerun sink fails.
+        self.act_policy_rerun_logger = None
+        if rerun_logger is not None:
+            rerun_logger.__exit__(None, None, None)
         if self.act_policy_env is not None:
             self.act_policy_env.close()
         self._restore_base_hold_after_policy()
         self.act_policy_env = None
         self.act_policy_runner = None
+        self.act_policy_rerun_frame = 0
+        self.act_policy_rerun_path = None
         self.act_policy_checkpoint = None
         self.act_policy_observation = None
         self.act_policy_info = None
@@ -513,29 +629,60 @@ class TeleopApp:
             return
         self.act_policy_load_request = None
         self._close_act_policy()
+        environment = None
+        rerun_logger = None
         try:
             from ffw_sh5_grasp.imitation.runtime.runner import ACTPolicyRunner
             from ffw_sh5_grasp.imitation.simulation.environment import (
                 AIWorkerMujocoEnv,
             )
+            from ffw_sh5_grasp.imitation.visualization.rerun_rollout import (
+                RolloutRerunLogger,
+            )
 
             runner = ACTPolicyRunner(
                 checkpoint, self.act_policy_stats,
-                device=self.act_policy_device)
+                device=self.act_policy_device,
+                representation=getattr(
+                    self, "act_policy_representation", "auto"),
+                proleptic_steps=getattr(
+                    self, "act_policy_pte_steps", DEFAULT_POLICY_PTE_STEPS))
             self._capture_base_hold_before_policy()
             environment = AIWorkerMujocoEnv(
                 model_path=MODEL_PATH, model=self.model, data=self.data,
                 camera_names=runner.camera_names, render_images=True,
                 seed=self.act_policy_seed, reset_on_init=False,
+                task=self.imitation_task,
                 render_context=self.context,
                 make_context_current=(
                     lambda: glfw.make_context_current(self.window)))
             if not np.isclose(
                     environment.actual_control_hz, 1.0 / self.frame_dt):
-                environment.close()
                 raise ValueError(
                     "ACT and teleop control frequencies must match")
+            if getattr(self, "act_policy_rerun_enabled", False):
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                suffix = time.time_ns() % 1_000_000_000
+                rerun_path = (
+                    checkpoint.parent.parent / "rerun"
+                    / (f"teleop_{runner.representation}_{timestamp}_"
+                       f"{suffix:09d}.rrd"))
+                rerun_logger = RolloutRerunLogger(
+                    rerun_path, runner.camera_names,
+                    application_id="aiworker_teleop_policy",
+                    live=True,
+                    port=getattr(self, "act_policy_rerun_port", 9877),
+                    frame_stride=max(
+                        1, round(environment.actual_control_hz /
+                                 getattr(
+                                     self, "act_policy_rerun_hz",
+                                     DEFAULT_POLICY_RERUN_LOG_HZ))))
+                rerun_logger.__enter__()
         except Exception as error:
+            if rerun_logger is not None:
+                rerun_logger.__exit__(None, None, None)
+            if environment is not None:
+                environment.close()
             self._restore_base_hold_after_policy()
             self.act_policy_status = f"Load failed: {error}"
             glfw.make_context_current(self.window)
@@ -543,6 +690,10 @@ class TeleopApp:
 
         self.act_policy_runner = runner
         self.act_policy_env = environment
+        self.act_policy_rerun_logger = rerun_logger
+        self.act_policy_rerun_frame = 0
+        self.act_policy_rerun_path = (
+            None if rerun_logger is None else rerun_logger.path)
         self.act_policy_checkpoint = checkpoint
         self.act_policy_observation = environment.get_observation()
         self.act_policy_info = None
@@ -550,7 +701,17 @@ class TeleopApp:
         self.act_policy_running = True
         self.act_policy_step_requested = False
         self.act_policy_finish_request = None
-        self.act_policy_status = "ACT policy running"
+        self.act_policy_status = (
+            f"ACT {runner.representation}-space policy running; "
+            f"PTE f={runner.proleptic_steps}")
+        if runner.representation == "task":
+            self.act_policy_status += (
+                f"; IK speed {self.act_policy_ik_speed_scale:.2f}x")
+        if rerun_logger is not None:
+            self.act_policy_status += (
+                f"; Rerun :{self.act_policy_rerun_port} -> "
+                f"{rerun_logger.path.name} "
+                f"(~{environment.actual_control_hz / rerun_logger.frame_stride:.1f}Hz)")
         # Operator-only IK targets are not part of policy observations and are
         # distracting while the arm-only controller owns the robot.
         self.opt.geomgroup[5] = 0
@@ -651,6 +812,22 @@ class TeleopApp:
                 and self.act_policy_frame < self.act_policy_max_steps):
             self.act_policy_step_requested = True
 
+    def _task_policy_action_to_joint(self, task_action):
+        """Convert one world-frame right EE pose action through arm-only IK."""
+        speed_scale = float(getattr(
+            self, "act_policy_ik_speed_scale",
+            DEFAULT_TASK_POLICY_IK_SPEED_SCALE))
+        joint_action, diagnostics = task_action_to_joint(
+            self.act_policy_env, self.whole_body_solver, task_action,
+            speed_scale=speed_scale)
+        self.ik_err_mm["r"] = diagnostics.position_error_mm
+        self.collision_min_distance = (
+            diagnostics.minimum_collision_distance_m)
+        self.collision_constraint_violation = (
+            diagnostics.collision_constraint_violation)
+        self.collision_active_pairs = diagnostics.active_collision_pairs
+        return joint_action
+
     def _step_act_policy(self):
         """Run one embedded ACT frame and report whether policy owns physics."""
         if not hasattr(self, "act_policy_load_request"):
@@ -675,6 +852,55 @@ class TeleopApp:
         try:
             action, self.act_policy_info = self.act_policy_runner.get_action(
                 self.act_policy_observation)
+            if self.act_policy_runner.representation == "task":
+                task_action = action.copy()
+                action = self._task_policy_action_to_joint(task_action)
+                self.act_policy_info["task_action"] = task_action
+            action = self.act_policy_env.prepare_action(action)
+            if self.act_policy_runner.representation == "task":
+                self.act_policy_info["executed_joint_action"] = action.copy()
+            rerun_logger = self.act_policy_rerun_logger
+            if rerun_logger is not None:
+                ik_metrics = None
+                if self.act_policy_runner.representation == "task":
+                    ik_metrics = {
+                        "position_error_mm": self.ik_err_mm["r"],
+                        "speed_scale": self.act_policy_ik_speed_scale,
+                        "collision_constraint_violation": (
+                            self.collision_constraint_violation),
+                    }
+                    if np.isfinite(self.collision_min_distance):
+                        ik_metrics["minimum_collision_distance_m"] = (
+                            self.collision_min_distance)
+                try:
+                    rerun_logger.log(
+                        self.act_policy_rerun_frame,
+                        self.act_policy_observation,
+                        action,
+                        predicted_chunk=self.act_policy_info[
+                            "predicted_chunk"],
+                        task_action=self.act_policy_info.get("task_action"),
+                        representation=self.act_policy_runner.representation,
+                        temporal_metrics={
+                            "proleptic_steps": self.act_policy_info[
+                                "proleptic_steps"],
+                            "target_timestep": self.act_policy_info[
+                                "target_timestep"],
+                            "ensemble_candidate_count": self.act_policy_info[
+                                "ensemble_candidate_count"],
+                        },
+                        ik_metrics=ik_metrics,
+                    )
+                except Exception as error:
+                    # Live visualization is optional. If its viewer/proxy is
+                    # closed, keep control running and detach only Rerun.
+                    self.act_policy_rerun_logger = None
+                    rerun_logger.__exit__(None, None, None)
+                    self.act_policy_status = (
+                        "Rerun disconnected; policy continues without live "
+                        f"logging ({type(error).__name__})")
+                else:
+                    self.act_policy_rerun_frame += 1
             self.act_policy_observation = self.act_policy_env.step(action)
         finally:
             # Policy cameras temporarily select the shared offscreen buffer.
@@ -691,7 +917,8 @@ class TeleopApp:
     def reset_can(self):
         """학습과 같은 분포에서 캔만 재배치하고 로봇 자세는 유지한다."""
         self.initial_can_position = self.imitation_task.reset(
-            self.data, self.rng)
+            self.data, self.rng,
+            randomize_bin_colors=self.task_name == "can_color_sort")
         return self.initial_can_position
 
     def observe(self):
@@ -1037,6 +1264,10 @@ def _parse_args(argv):
         help=(f"설정 파일 경로. 실행 전에 {CONFIG_ENV_VAR} 환경 변수로 적용되며 "
               "src/teleop_app.py 진입점을 사용할 때 지원됩니다."))
     parser.add_argument(
+        "--env", type=int, choices=sorted(ENV_TASK_NAMES), default=0,
+        help=("실행 환경 번호입니다: 0=기존 초록 캔→파랑 상자, "
+              "1=네 색 캔 분류 (기본값: 0)."))
+    parser.add_argument(
         "--policy-checkpoint", metavar="CKPT",
         help="ACT checkpoint를 현재 teleop 창에 바로 로드합니다.")
     parser.add_argument(
@@ -1045,6 +1276,33 @@ def _parse_args(argv):
     parser.add_argument(
         "--policy-device", default="auto",
         help="ACT 추론 장치입니다 (기본값: auto).")
+    parser.add_argument(
+        "--policy-representation", choices=("auto", "joint", "task"),
+        default="auto",
+        help=("정책 입출력 표현입니다. auto는 checkpoint metadata에서 "
+              "자동 판별합니다 (기본값: auto)."))
+    parser.add_argument(
+        "--policy-rerun", action="store_true",
+        help="정책 rollout을 Rerun Viewer로 열고 .rrd 파일로 저장합니다.")
+    parser.add_argument(
+        "--policy-rerun-port", type=int, default=9877,
+        help="정책 Rerun Viewer 포트입니다 (기본값: 9877).")
+    parser.add_argument(
+        "--policy-rerun-hz", type=float,
+        default=DEFAULT_POLICY_RERUN_LOG_HZ,
+        help=("정책 제어 주기와 독립적인 Rerun 기록 주기입니다 "
+              f"(기본값: {DEFAULT_POLICY_RERUN_LOG_HZ:g} Hz)."))
+    parser.add_argument(
+        "--policy-ik-speed-scale", type=float,
+        default=DEFAULT_TASK_POLICY_IK_SPEED_SCALE,
+        help=("task-space 정책의 오른팔 IK pose 추종 속도 배율입니다. "
+              "관절/충돌 안전 상한은 유지됩니다 (기본값: "
+              f"{DEFAULT_TASK_POLICY_IK_SPEED_SCALE:g})."))
+    parser.add_argument(
+        "--policy-pte-steps", type=int, default=DEFAULT_POLICY_PTE_STEPS,
+        help=("현재보다 몇 control step 미래의 ACT action을 실행할지 정합니다. "
+              "0은 기존 temporal ensemble입니다 (기본값: "
+              f"{DEFAULT_POLICY_PTE_STEPS})."))
     parser.add_argument(
         "--policy-seed", type=int, default=1000,
         help="ACT policy UI reset seed입니다.")
@@ -1068,8 +1326,15 @@ def main(argv=None):
         policy_checkpoint=args.policy_checkpoint,
         policy_stats=args.policy_stats,
         policy_device=args.policy_device,
+        policy_representation=args.policy_representation,
+        policy_rerun=args.policy_rerun,
+        policy_rerun_port=args.policy_rerun_port,
+        policy_rerun_hz=args.policy_rerun_hz,
+        policy_ik_speed_scale=args.policy_ik_speed_scale,
+        policy_pte_steps=args.policy_pte_steps,
         policy_seed=args.policy_seed,
         policy_max_steps=args.policy_max_steps,
+        task_name=ENV_TASK_NAMES[args.env],
     ).run()
 
 

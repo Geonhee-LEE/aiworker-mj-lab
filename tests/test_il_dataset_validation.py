@@ -20,6 +20,10 @@ def test_dataset_inspection_reports_valid_episode():
             action=np.zeros((2, 16), np.float32),
             images={"cam_high": np.zeros((2, 4, 5, 3), np.uint8)},
             debug={}, attrs={"success": True},
+            ee_pose={
+                "left": np.zeros((2, 7), np.float32),
+                "right": np.zeros((2, 7), np.float32),
+            },
         ))
         report = inspect_dataset(root, required_cameras=("cam_high",))
     assert report.valid

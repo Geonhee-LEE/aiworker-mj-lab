@@ -14,15 +14,13 @@ import glfw
 # 호환되는 GLX 문맥을 선택하려면 ``glfw.init()``보다 먼저 호출해야 한다.
 glfw.init_hint(glfw.PLATFORM, glfw.PLATFORM_X11)
 
-from imgui_bundle import imgui
-from imgui_bundle import imguizmo
 import mujoco
 import numpy as np
+from imgui_bundle import imgui, imguizmo
 
 from ..application import targets
 from ..config import SETTINGS
 from ..kinematics import rotations
-
 
 CAMERA_PRESETS = (
     SETTINGS.get("render.camera_presets.overview"),

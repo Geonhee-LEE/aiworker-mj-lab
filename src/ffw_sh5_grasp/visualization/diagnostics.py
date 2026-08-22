@@ -2,11 +2,10 @@
 
 import math
 
-from imgui_bundle import imgui
 import numpy as np
+from imgui_bundle import imgui
 
 from ..application import targets
-
 
 POSE_GRAPH_HISTORY_SECONDS = 10.0
 POSE_GRAPH_SERIES_HEIGHT = 55.0

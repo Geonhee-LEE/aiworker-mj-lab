@@ -11,7 +11,7 @@ def _blueprint_module():
 
 
 def dataset_blueprint(camera_names=(
-    "cam_high", "cam_right_wrist")):
+    "cam_high", "cam_left_wrist", "cam_right_wrist")):
     rrb = _blueprint_module()
     camera_views = [
         rrb.Spatial2DView(origin=f"/cameras/{name}", name=name)
@@ -31,7 +31,7 @@ def dataset_blueprint(camera_names=(
 
 
 def live_recording_blueprint(camera_names=(
-    "cam_high", "cam_right_wrist")):
+    "cam_high", "cam_left_wrist", "cam_right_wrist")):
     rrb = _blueprint_module()
     camera_views = [
         rrb.Spatial2DView(origin=f"/cameras/{name}", name=name)

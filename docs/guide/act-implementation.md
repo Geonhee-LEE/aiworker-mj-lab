@@ -1,6 +1,6 @@
 # ACT 구현과 논문 대응
 
-이 구현은 ALOHA 논문의 ACT 알고리즘을 FFW-SH5 can-to-box 환경에 맞춘 것이다.
+이 구현은 ALOHA 논문의 ACT 알고리즘을 FFW-SH5 can-to-box와 color-sort 환경에 맞춘 것이다.
 모델 구조와 학습 목적은 논문 및 공개 구현을 따르지만, 로봇 자유도·카메라 수·제어
 주기는 하드웨어와 현재 task에 맞게 다르다. 따라서 "ALOHA와 같은 ACT"와 "ALOHA
 하드웨어를 그대로 복제"하는 것은 구분해야 한다.
@@ -24,14 +24,15 @@ ACT를 처음 학습한다면 먼저 [IL 전체 안내](il/index.md)와
 | loss | masked L1 + `beta * KL`, `beta=10` | 동일 |
 | action chunk | 기본 90 step | 동일 |
 | temporal ensemble | 매 step query, 같은 target 시점 예측만 가중 평균 | 동일 |
-| policy state/action | 양팔 14D | 오른팔 7축 + grasp synergy, 8D |
+| policy state/action | 양팔 14D | 오른팔 joint 또는 EE pose + grasp, 8D |
 | 저장 schema | ALOHA HDF5 | left-first 16D 호환 schema |
 | 카메라 | RGB 4개, 480×640 | `cam_high`, `cam_right_wrist`, 240×320 |
 | 제어 주기 | 50 Hz | 25 Hz |
 
-16D 파일에서 오른쪽 index `8..15`만 정책에 넣는다. 왼팔 값은 기록·replay 계약을
-위해 남기고, 환경이 실행 직전에 주차 자세로 강제한다. grasp 하나가 실제 손가락
-관절들의 선형 synergy로 확장되므로 ALOHA의 평행 gripper 좌표와 같은 역할을 한다.
+Joint 정책은 16D 파일의 오른쪽 index `8..15`만 사용한다. Task 정책은 저장된 오른손
+EE pose와 grasp를 입력으로 쓰고, joint action을 같은 MuJoCo 모델의 FK로 변환한 EE
+target을 학습한다. 왼팔 값은 기록·replay 계약을 위해 남기고 환경이 실행 직전에 주차
+자세로 강제한다. grasp 하나는 실제 손가락 관절들의 선형 synergy로 확장된다.
 
 !!! note "90 step의 시간 길이"
 
@@ -84,9 +85,10 @@ L = \operatorname{mean}(|\hat a-a|\,M)
 padding 여부를 예측하는 head는 공개 ACT 모델과 checkpoint 구조를 맞추기 위해 있지만
 별도 BCE loss로 학습하지 않는다.
 
-추론은 매 timestep 새 chunk를 예측한다. 현재 시점에 도착한 후보를 생성 시점이 오래된
-순서로 놓고 `exp(-m*i)`로 평균한다. 기본 `m=0.01`이다. 이는 인접 timestep의 action을
-섞는 일반 smoothing과 달리, 모두 같은 실행 timestep을 대상으로 했던 예측만 합친다.
+추론은 매 timestep 새 chunk를 예측한다. `f=0`에서는 현재 시점에 도착한 후보를,
+PTE `f>0`에서는 `t+f`의 후보를 최신 예측부터 놓고 `exp(-m*i)`로 평균한다. 기본
+`m=0.05`이다. 이는 인접 timestep의 action을 섞는 일반 smoothing과
+달리, 모두 같은 target timestep을 대상으로 했던 예측만 합친다.
 
 ## 코드 책임
 
@@ -98,8 +100,10 @@ padding 여부를 예측하는 head는 공개 ACT 모델과 checkpoint 구조를
 | `act/training_config.py` | YAML 파싱·검증과 policy 차원 선택 |
 | `act/dataset_loader.py` | episode split, train 통계, lazy chunk sampling |
 | `act/trainer.py` | seed, DataLoader, optimizer, checkpoint lifecycle |
+| `act/modular_*.py` | Joint/Task 표현, 모델 검증, 공통 설정과 학습 lifecycle |
 | `act/training_output.py` | CSV/JSONL과 PNG metric 출력 |
-| `runtime/runner.py` | checkpoint 복원, 역정규화, temporal ensemble |
+| `runtime/runner.py` | checkpoint 복원, 역정규화, temporal ensemble/PTE |
+| `runtime/task_space.py` | task 출력 quaternion 처리와 오른팔 IK adapter |
 
 전체 데이터·시뮬레이션·앱 계층의 책임과 정식 import 경로는
 [모방학습 코드 구조](imitation-code-structure.md)에 정리되어 있다.

@@ -12,7 +12,7 @@ from ...paths import MODEL_PATH
 from .action import ARM_JOINTS, SIDES, ActionAdapter
 from .cameras import MujocoCameraManager
 from .state import PolicyStateAdapter
-from .task import CanInBoxTask
+from .task import create_task
 
 
 def _required_id(model, kind, name):
@@ -22,18 +22,22 @@ def _required_id(model, kind, name):
     return object_id
 
 
-def enable_can_task_collisions(model):
-    """Enable the target bin and task-relevant right-hand world contacts."""
-    body_id = _required_id(model, mujoco.mjtObj.mjOBJ_BODY, "target_bin")
-    target_bin_geom_ids = np.flatnonzero(
-        model.geom_bodyid == body_id).astype(int)
-    if target_bin_geom_ids.size != 5:
-        raise ValueError(
-            "target_bin must contain one floor and four collision walls")
-    model.geom_contype[target_bin_geom_ids] = 1
-    model.geom_conaffinity[target_bin_geom_ids] = 1
-    model.body_contype[body_id] = 1
-    model.body_conaffinity[body_id] = 1
+def enable_task_collisions(model, bin_body_names):
+    """Enable selected bins and task-relevant right-hand world contacts."""
+    active_geom_ids = []
+    for body_name in bin_body_names:
+        body_id = _required_id(
+            model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+        bin_geom_ids = np.flatnonzero(
+            model.geom_bodyid == body_id).astype(int)
+        if bin_geom_ids.size != 5:
+            raise ValueError(
+                f"{body_name} must contain one floor and four collision walls")
+        model.geom_contype[bin_geom_ids] = 1
+        model.geom_conaffinity[bin_geom_ids] = 1
+        model.body_contype[body_id] = 1
+        model.body_conaffinity[body_id] = 1
+        active_geom_ids.extend(bin_geom_ids.tolist())
 
     disabled_signature = np.iinfo(model.exclude_signature.dtype).max
     for index in range(13, 21):
@@ -47,7 +51,12 @@ def enable_can_task_collisions(model):
                 f"expected one world exclusion for finger_r_link{index}")
         model.exclude_signature[matches[0]] = disabled_signature
     model.exclude_signature.sort()
-    return target_bin_geom_ids
+    return np.asarray(active_geom_ids, dtype=int)
+
+
+def enable_can_task_collisions(model):
+    """Backward-compatible collision setup for the legacy blue-bin task."""
+    return enable_task_collisions(model, ("target_bin",))
 
 
 class AIWorkerMujocoEnv:
@@ -64,7 +73,8 @@ class AIWorkerMujocoEnv:
                  control_hz=None, camera_width=None, camera_height=None,
                  camera_names=None, render_images=True, seed=None,
                  reset_on_init=True, render_context=None,
-                 make_context_current=None):
+                 make_context_current=None, task_name="can_to_box", task=None,
+                 object_variants=None, randomize_bin_colors=False):
         if (model is None) != (data is None):
             raise ValueError("model and data must be provided together")
         self.model_path = Path(MODEL_PATH if model_path is None else model_path)
@@ -125,7 +135,33 @@ class AIWorkerMujocoEnv:
             side: arm.ArmTorqueController(self.model, ARM_JOINTS[side])
             for side in SIDES
         }
-        self.task = CanInBoxTask(self.model)
+        if task is not None and getattr(task, "model", None) is not self.model:
+            raise ValueError("shared task must belong to the supplied model")
+        self.task = create_task(self.model, task_name) if task is None else task
+        self.object_variants = (
+            None if object_variants is None else tuple(object_variants))
+        if self.object_variants is not None:
+            unknown = set(self.object_variants) - set(self.task.variant_names)
+            if unknown:
+                raise ValueError(
+                    f"unknown variants for {self.task.name}: "
+                    f"{sorted(unknown)}")
+            if not self.object_variants:
+                raise ValueError("object_variants must not be empty")
+        self.randomize_bin_colors = bool(randomize_bin_colors)
+        self.right_arm_start_position = (
+            None if self.task.scenario.right_arm_start_position is None else
+            np.asarray(
+                self.task.scenario.right_arm_start_position, dtype=float))
+        if self.right_arm_start_position is not None:
+            right_ranges = self.action_adapter.arm_ranges["r"]
+            below_range = np.any(
+                self.right_arm_start_position < right_ranges[:, 0])
+            above_range = np.any(
+                self.right_arm_start_position > right_ranges[:, 1])
+            if below_range or above_range:
+                raise ValueError(
+                    "configured right-arm start position exceeds joint limits")
         self._enable_target_bin_collisions()
         self._bind_fixed_actuators()
         self._configure_passive_base_hold()
@@ -190,7 +226,8 @@ class AIWorkerMujocoEnv:
         regression tasks are unchanged. Policy mode promotes the bin
         geoms to the normal contact group on its active model.
         """
-        self.target_bin_geom_ids = enable_can_task_collisions(self.model)
+        self.target_bin_geom_ids = enable_task_collisions(
+            self.model, self.task.bin_body_names)
 
     def _configure_passive_base_hold(self):
         """Hold unactuated planar base joints with physical spring/damping forces."""
@@ -217,10 +254,17 @@ class AIWorkerMujocoEnv:
             self.data.qpos[self.state_adapter.arm_qpos["l"]] = (
                 self.left_arm_park_position)
             self.data.qvel[self.state_adapter.arm_dofs["l"]] = 0.0
+        if self.right_arm_start_position is not None:
+            self.data.qpos[self.state_adapter.arm_qpos["r"]] = (
+                self.right_arm_start_position)
+            self.data.qvel[self.state_adapter.arm_dofs["r"]] = 0.0
         # CanInBoxTask derives its spawn anchor from the target site's world
         # position, so refresh kinematics after restoring the robot keyframe.
         mujoco.mj_forward(self.model, self.data)
-        self.initial_can_position = self.task.reset(self.data, self.rng)
+        self.initial_can_position = self.task.reset(
+            self.data, self.rng,
+            allowed_variants=self.object_variants,
+            randomize_bin_colors=self.randomize_bin_colors)
         self.data.ctrl[self.fixed_actuators] = self.fixed_ctrl
         mujoco.mj_forward(self.model, self.data)
         self.last_action = self.prepare_action(self.get_qpos())
@@ -266,14 +310,22 @@ class AIWorkerMujocoEnv:
 
     def get_observation(self):
         metrics = self.task.metrics(self.data)
+        ee_pose = {
+            "left": self._site_pose("grasp_target_l"),
+            "right": self._site_pose("grasp_target_r"),
+        }
         return {
             "qpos": self.get_qpos(),
             "qvel": self.get_qvel(),
+            "ee_pose": ee_pose,
             "images": self.get_images(),
             "task": {
                 "success": metrics.success,
                 "object_position_error": metrics.object_position_error,
                 "object_speed": metrics.object_speed,
+                "scenario_name": self.task.name,
+                "object_variant": metrics.object_variant,
+                "target_label": metrics.target_label,
             },
             "debug": {
                 "full_qpos": np.asarray(self.data.qpos).copy(),
@@ -284,8 +336,6 @@ class AIWorkerMujocoEnv:
                         self.task.can_qpos + 3:self.task.can_qpos + 7],
                 )).copy(),
                 "target_position": metrics.target_position.copy(),
-                "ee_pose_left": self._site_pose("grasp_target_l"),
-                "ee_pose_right": self._site_pose("grasp_target_r"),
             },
         }
 
@@ -306,4 +356,7 @@ class AIWorkerMujocoEnv:
         self.close()
 
 
-__all__ = ["AIWorkerMujocoEnv", "enable_can_task_collisions"]
+__all__ = [
+    "AIWorkerMujocoEnv", "enable_can_task_collisions",
+    "enable_task_collisions",
+]

@@ -13,7 +13,7 @@ GizmoLeader 또는 ACT
   → absolute 16D joint action
   → ArmTorqueController + grasp synergy
   → MuJoCo physics
-  → 16D recorded state + RGB 2개 policy observation
+  → 양팔 16D joint + 양쪽 7D EE pose + RGB 3개 수집 observation
 ```
 
 ## Can-to-box task와 reset

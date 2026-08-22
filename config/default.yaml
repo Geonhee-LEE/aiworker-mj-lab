@@ -189,6 +189,14 @@ render:
 # ROS/whole-body 경로와 분리된 ALOHA-style imitation 환경 설정이다.
 imitation:
   control_hz: 25.0
+  policy:
+    # task-space ACT 출력을 오른팔 IK로 변환할 때만 pose 서보 gain에 곱한다.
+    # 관절 속도·관절 범위·충돌 CBF 상한은 바꾸지 않는다.
+    task_ik_speed_scale: 3.0
+    # 0은 기존 ACT temporal ensemble, 양수는 그만큼 미래 action을 당겨 쓰는 PTE다.
+    pte_steps: 0
+    # 정책 제어는 25 Hz를 유지하고 Rerun만 이 주기로 샘플링해 Viewer 병목을 막는다.
+    rerun_log_hz: 5.0
   teleop:
     # DLS IK의 task-space 추종 감도와 최대 속도다. 관절 속도는
     # FFW-SH5 follower URDF의 arm joint 한계인 4.8 rad/s를 넘지 않는다.
@@ -206,7 +214,8 @@ imitation:
   left_arm_park_position_rad: [1.1637, 0.0578, -0.1048, -2.3003, 1.544, -0.1166, -0.4358]
   left_grasp_fixed: 0.0
   camera:
-    names: [cam_high, cam_right_wrist]
+    # 수집은 세 시점을 모두 저장하고 ACT config의 camera_names에서 필요한 것만 고른다.
+    names: [cam_high, cam_left_wrist, cam_right_wrist]
     width: 320
     height: 240
   reset:
@@ -221,3 +230,36 @@ imitation:
     inner_half_extents_m: [0.075, 0.075]
     success_height_range_m: [0.76, 0.86]
     settle_speed_m_s: 0.08
+  scenarios:
+    can_color_sort:
+      # 캔 색과 무관한 공통 영역에서 respawn하여 시작 위치가 정답 상자를 누설하지 않는다.
+      # 기준점은 최초 배치보다 상자 쪽으로 10 cm 밀어 두 상자 사이에 둔다.
+      spawn_site: can_color_sort_spawn
+      spawn_jitter_radius_m: 0.05
+      can_z_m: 0.7866
+      # 차가운 green/blue 캔은 파랑 상자, 따뜻한 red/orange 캔은 빨강 상자로 분류한다.
+      variant_names: [green, red, orange, blue]
+      # 전용 material 두 개의 RGBA만 runtime에서 바꿔 MJCF/model_hash는 유지한다.
+      variant_materials: [can_green_sort_mat, can_red_sort_mat, can_red_sort_mat, can_green_sort_mat]
+      variant_cap_materials: [can_green_sort_mat, can_red_sort_mat, can_red_sort_mat, can_green_sort_mat]
+      target_sites: [target_bin_center, target_bin_red_center, target_bin_red_center, target_bin_center]
+      target_labels: [blue, red, red, blue]
+      variant_rgba:
+        - [0.08, 0.62, 0.14, 1.0]
+        - [0.82, 0.08, 0.08, 1.0]
+        - [0.95, 0.38, 0.03, 1.0]
+        - [0.05, 0.30, 0.90, 1.0]
+      bin_bodies: [target_bin, target_bin_red]
+      # 로봇 정면에서 파랑은 왼쪽(-Y), 빨강은 오른쪽(+Y)에 같은 깊이로 둔다.
+      # 두 상자의 중점은 Y=-0.05다. 로봇 베이스는 기존 제어 기준을 유지하면서
+      # 작업공간 중앙의 반대편(+Y, 화면 기준 왼쪽)에 위치한다.
+      # 순서는 위 bin_bodies와 같으므로 blue, red 순서다.
+      bin_positions_m: [[0.5355, -0.27, 0.7391], [0.5355, 0.17, 0.7391]]
+      # 테이블을 좌우로 20 cm, 깊이로 8 cm 넓혀 planning 여유를 확보한다.
+      table_position_y_m: -0.05
+      table_half_width_x_m: 0.30
+      table_half_width_y_m: 0.35
+      # 기존 벽 half-height 0.08 m의 2/3. floor와 맞닿는 벽 하단은 유지한다.
+      bin_wall_half_height_m: 0.05333333333333334
+      # 기존 home pose와 자세(quaternion)는 유지하고 오른쪽 EE만 +Z 10 cm 올린 IK 해다.
+      right_arm_start_position_rad: [-0.0381287163, -0.2902937754, 0.1700398805, -1.9341540186, -0.3104451628, 0.3364858776, -0.2716638607]

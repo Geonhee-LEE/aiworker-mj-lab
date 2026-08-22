@@ -6,8 +6,8 @@
 변경의 영향을 받지 않는다.
 """
 
-from dataclasses import dataclass, field
 import math
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping
 

@@ -1,17 +1,24 @@
 """Single command dispatcher for imitation-learning workflows."""
 
-from importlib import import_module
 import sys
-
+from importlib import import_module
 
 COMMANDS = {
     "compare": ("compare", "compare expert and ACT actions in Rerun"),
     "evaluate": ("evaluate", "evaluate an ACT checkpoint in MuJoCo"),
+    "evaluate-color-sort": (
+        "evaluate_color_sort",
+        "run the color-sort Joint/Task/PTE matrix",
+    ),
     "policy": ("policy", "open the standalone ACT policy UI"),
     "record": ("record", "record demonstration episodes"),
     "replay": ("replay", "replay an episode through MuJoCo physics"),
     "rerun": ("rerun", "write or stream a Rerun episode"),
     "train": ("train", "train ACT from a YAML configuration"),
+    "train-modular": (
+        "train_modular",
+        "train a joint- or task-space ACT policy",
+    ),
     "validate": ("validate", "validate an HDF5 episode dataset"),
     "visualize": ("visualize", "create an RGB episode video"),
 }

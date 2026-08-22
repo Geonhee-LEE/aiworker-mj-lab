@@ -114,13 +114,6 @@ class ACTTrainingConfig:
             raise ValueError("camera_names must be non-empty")
         if len(set(self.camera_names)) != len(self.camera_names):
             raise ValueError("camera_names must be unique")
-        if self.policy_side == "right":
-            left_cameras = [
-                name for name in self.camera_names if "left" in name]
-            if left_cameras:
-                raise ValueError(
-                    "right-arm policy cannot use left cameras: "
-                    f"{left_cameras}")
         policy_dim = len(self.policy_indices)
         if self.state_dim != policy_dim or self.action_dim != policy_dim:
             raise ValueError(

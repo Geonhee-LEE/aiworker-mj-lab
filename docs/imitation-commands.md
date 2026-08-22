@@ -25,12 +25,16 @@ W&B를 사용하지 않으면 `config/imitation/act.yaml`의 `wandb.enabled`를 
 | 단계 | 명령 | 결과 |
 |---|---|---|
 | demonstration 기록 | `python3 src/il.py record --task-name can_to_box` | `datasets/can_to_box/episode_*.hdf5` |
+| 색상 분류 demonstration 기록 | `python3 src/il.py record --task-name can_color_sort` | `datasets/can_color_sort/episode_*.hdf5` |
+| 주황/파랑만 추가 기록 | `python3 src/il.py record --task-name can_color_sort --variant orange --variant blue` | 기존 color-sort dataset에 연속 저장 |
 | dataset 검증 | `python3 src/il.py validate --dataset-dir datasets/can_to_box --camera cam_high --camera cam_right_wrist` | schema/alignment 요약 |
 | RGB video 확인 | `python3 src/il.py visualize --dataset-dir datasets/can_to_box --episode-idx 0` | episode 옆 `.mp4` |
 | Rerun dataset 보기 | `python3 src/il.py rerun --episode datasets/can_to_box/episode_000000.hdf5` | `.rrd` |
 | physics replay | `python3 src/il.py replay --dataset-dir datasets/can_to_box --episode-idx 0` | qpos 재현 결과 |
 | ACT 학습 | `python3 src/il.py train --config config/imitation/act.yaml` | checkpoint, metric, W&B run |
+| Joint/Task ACT 학습 | `python3 src/il.py train-modular --config config/imitation/act_color_sort_joint.yaml` | 표현별 독립 checkpoint |
 | closed-loop 평가 | `python3 src/il.py evaluate --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt` | `evaluation.json` |
+| 색상 분류 평가 행렬 | `python3 src/il.py evaluate-color-sort` | 4 정책 × 5 PTE × 100회 CSV/JSON |
 | expert/policy 비교 | `python3 src/il.py compare --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt --episode datasets/can_to_box/episode_000000.hdf5` | comparison `.rrd` |
 | interactive policy UI | `python3 src/teleop_app.py` | UI에서 `outputs/act`의 ACT 모델 선택 |
 
@@ -49,6 +53,16 @@ python3 src/il.py record \
 
 기록 UI 조작은 `SPACE`(기록 시작/완료), `R`(reset), `BACKSPACE`(폐기), `Q`(오른손
 grasp), `E`(오른팔 home)다.
+
+색상별 데이터 수를 보충할 때는 `--variant`를 반복해서 지정한다. 아래 명령은 주황과
+파랑만 균등하게 선택하고, 좌우 상자 색 배치는 reset마다 별도로 무작위 선택한다.
+
+```bash
+python3 src/il.py record \
+  --task-name can_color_sort \
+  --variant orange \
+  --variant blue
+```
 
 ## Inspect and Replay Episodes
 
@@ -102,6 +116,26 @@ metrics를 포함한다.
 
 새 데이터를 추가했다면 새 `run_name`을 지정하고 다시 학습한다. 현재 trainer는
 checkpoint resume을 제공하지 않으므로 새 전체 dataset으로 stats와 split을 다시 만든다.
+
+Joint/Task 표현 비교와 150 episode 설정은 별도의 modular 명령을 사용한다.
+
+```bash
+python3 src/il.py train-modular \
+  --config config/imitation/act_color_sort_joint.yaml
+python3 src/il.py train-modular \
+  --config config/imitation/act_color_sort_task.yaml
+python3 src/il.py train-modular \
+  --config config/imitation/act_color_sort_joint_aug150.yaml
+python3 src/il.py train-modular \
+  --config config/imitation/act_color_sort_task_aug150.yaml
+```
+
+같은 seed와 PTE 조건으로 2,000 rollout 계획을 먼저 확인한 뒤 실행한다.
+
+```bash
+python3 src/il.py evaluate-color-sort --dry-run
+MUJOCO_GL=egl python3 src/il.py evaluate-color-sort --num-episodes 100
+```
 
 ## Evaluate and Compare
 
@@ -177,7 +211,9 @@ index를 사용한다.
 | `rerun` | `ffw_sh5_grasp.cli.rerun` | episode Rerun recording/stream |
 | `replay` | `ffw_sh5_grasp.cli.replay` | expert action physics replay |
 | `train` | `ffw_sh5_grasp.cli.train` | ACT train |
+| `train-modular` | `ffw_sh5_grasp.cli.train_modular` | Joint/Task ACT train |
 | `evaluate` | `ffw_sh5_grasp.cli.evaluate` | closed-loop evaluation |
+| `evaluate-color-sort` | `ffw_sh5_grasp.cli.evaluate_color_sort` | 데이터/표현/PTE 평가 행렬 |
 | `compare` | `ffw_sh5_grasp.cli.compare` | expert와 policy action 비교 |
 | `policy` | `ffw_sh5_grasp.cli.policy` | 독립 ACT policy UI |
 

@@ -21,6 +21,5 @@ _select_config_before_import(sys.argv[1:])
 
 from ffw_sh5_grasp.application.teleop import *  # noqa: E402,F401,F403
 
-
 if __name__ == "__main__":
     main()

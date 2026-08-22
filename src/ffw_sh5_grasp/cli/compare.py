@@ -19,6 +19,9 @@ def main(argv=None):
     episode = load_episode(args.episode)
     runner = ACTPolicyRunner(
         args.checkpoint, args.stats, device=args.device)
+    if runner.representation != "joint":
+        raise ValueError(
+            "task-space offline comparison requires task-space expert labels")
     output = args.output or args.episode.with_name(
         args.episode.stem + "_policy_compare.rrd")
     runner.reset()

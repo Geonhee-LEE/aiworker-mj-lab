@@ -7,7 +7,8 @@ Whole-body solver의 weight나 actuator 상태는 알지 않는다. 두 손의 �
 
 import numpy as np
 
-from ..kinematics import rotations, tasks as pose_tasks
+from ..kinematics import rotations
+from ..kinematics import tasks as pose_tasks
 
 
 def capture_reference(right, left):

@@ -3,8 +3,8 @@
 import mujoco
 import numpy as np
 
-
-DEFAULT_CAMERA_NAMES = ("cam_high", "cam_right_wrist")
+DEFAULT_CAMERA_NAMES = (
+    "cam_high", "cam_left_wrist", "cam_right_wrist")
 POLICY_SELF_OCCLUDER_GROUP = 4
 OPERATOR_MARKER_GROUP = 5
 

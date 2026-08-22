@@ -16,14 +16,13 @@
 의존성이나 qpos 직접 쓰기가 없다.
 """
 
+import math
 from dataclasses import dataclass
 from enum import Enum
-import math
 
 import numpy as np
 
 from ..config import SETTINGS
-
 
 # 키보드 명령 평활화 값이다. 하드웨어 상수가 아니라 시뮬레이션과 조작감 기준이다.
 K_SPEED = SETTINGS.number("base.teleop.cruise_speed_m_s", minimum=0.0)

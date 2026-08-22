@@ -19,10 +19,11 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
+from offline_pose_ik import solve_offline_pose_multistart  # noqa: E402
+
 from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
 from ffw_sh5_grasp.control import grasp  # noqa: E402
 from ffw_sh5_grasp.kinematics import JointSpaceKinematics  # noqa: E402
-from offline_pose_ik import solve_offline_pose_multistart  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]
 ARM_L = [f"arm_l_joint{i}" for i in range(1, 8)]

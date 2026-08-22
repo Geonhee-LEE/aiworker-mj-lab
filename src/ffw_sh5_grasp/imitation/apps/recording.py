@@ -3,9 +3,9 @@
 import time
 
 import glfw
-from imgui_bundle import imgui, imguizmo
 import mujoco
 import numpy as np
+from imgui_bundle import imgui, imguizmo
 
 from ...visualization import render
 from ..data.recording import EpisodeRecorder
@@ -19,8 +19,14 @@ class RecordEpisodesApp:
     """GLFW/ImGui app whose only motion source is an arm-only GizmoLeader."""
 
     def __init__(self, dataset_dir, *, task_name="can_to_box", seed=None,
-                 width=1440, height=900, live_rerun=True, rerun_port=9876):
-        self.env = AIWorkerMujocoEnv(seed=seed)
+                 width=1440, height=900, live_rerun=True, rerun_port=9876,
+                 object_variants=None):
+        self.object_variants = (
+            None if object_variants is None else tuple(object_variants))
+        self.env = AIWorkerMujocoEnv(
+            seed=seed, task_name=task_name,
+            object_variants=self.object_variants,
+            randomize_bin_colors=task_name == "can_color_sort")
         self.model, self.data = self.env.model, self.env.data
         self.leader = GizmoLeader(self.env)
         self.recorder = EpisodeRecorder(dataset_dir, self.env, task_name=task_name)
@@ -78,7 +84,14 @@ class RecordEpisodesApp:
         imgui.set_next_window_pos((10, 10), imgui.Cond_.first_use_ever)
         imgui.set_next_window_size((355, 465), imgui.Cond_.first_use_ever)
         imgui.begin("ALOHA Dataset Recorder")
-        imgui.text("Task: random can -> fixed blue box")
+        imgui.text(f"Task: {self.env.task.description}")
+        if self.object_variants is not None:
+            imgui.text(
+                "Collection filter: "
+                + ", ".join(name.upper() for name in self.object_variants))
+        imgui.text(
+            f"Object: {self.env.task.object_variant.upper()} can -> "
+            f"{self.env.task.target_label.upper()} box")
         imgui.text("Control: arm-only (whole-body disabled)")
         imgui.separator()
         imgui.text(f"Recording: {'YES' if self.recorder.recording else 'NO'}")

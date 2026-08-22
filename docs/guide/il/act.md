@@ -39,7 +39,7 @@ ALOHA 논문의 50 Hz 기준 90 step은 1.8초이므로, step 수가 같아도 �
 ```mermaid
 flowchart TB
     subgraph Observation["현재 관측"]
-        RGB["2개 RGB camera"]
+        RGB["선택한 RGB camera"]
         Q["8D qpos"]
     end
     RGB --> R["공유 ResNet18"]
@@ -77,7 +77,7 @@ sequenceDiagram
         E->>P: 현재 qpos + RGB
         P->>P: z=0으로 K-step chunk 예측
         P->>T: 미래 시점별 action 후보 등록
-        T->>E: 현재 시점 후보들의 가중 평균 실행
+        T->>E: 선택한 t+f 시점 후보들의 가중 평균 실행
     end
 ```
 
@@ -85,6 +85,10 @@ sequenceDiagram
 예측한 두 번째 값, 시점 12에서 예측한 첫 번째 값이 모두 후보가 될 수 있다. temporal
 ensemble은 **동일한 실행 시점**을 대상으로 한 후보만 지수 가중 평균한다. 서로 다른
 실행 시점의 행동을 단순 smoothing하는 것과는 다르다.
+
+Teleop의 `PTE future steps`가 `f=0`이면 위의 기존 ACT 동작을 그대로 사용한다.
+`f>0`이면 현재 시점 후보 대신 이미 예측한 `t+f` 후보를 실행한다. 값 변경 시 기존
+history를 비우고 즉시 새 chunk를 질의하므로 서로 다른 `f`의 후보는 섞이지 않는다.
 
 policy가 끝나거나 사용자가 중단하면 runner의 chunk history를 비우고 teleop의 IK
 제어권으로 돌아가야 한다. 이전 rollout의 temporal state가 다음 rollout에 남으면

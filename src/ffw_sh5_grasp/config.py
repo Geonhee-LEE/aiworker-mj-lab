@@ -1,8 +1,8 @@
 """한국어 주석 YAML에서 실행·제어 설정을 읽고 검증한다."""
 
-from copy import deepcopy
 import math
 import os
+from copy import deepcopy
 from pathlib import Path
 
 try:

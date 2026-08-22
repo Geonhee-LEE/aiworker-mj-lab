@@ -3,8 +3,8 @@
 import time
 
 import glfw
-from imgui_bundle import imgui
 import numpy as np
+from imgui_bundle import imgui
 
 from ...visualization import render
 from ..runtime.runner import ACTPolicyRunner
@@ -20,6 +20,9 @@ class ACTPolicyApp:
         if max_steps <= 0:
             raise ValueError("max_steps must be positive")
         self.runner = ACTPolicyRunner(checkpoint, stats_path, device=device)
+        if self.runner.representation != "joint":
+            raise ValueError(
+                "task-space checkpoints require the teleop_app arm-only IK bridge")
         self.env = AIWorkerMujocoEnv(
             camera_names=self.runner.camera_names, render_images=True, seed=seed)
         self.model, self.data = self.env.model, self.env.data

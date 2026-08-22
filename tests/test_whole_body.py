@@ -16,17 +16,19 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
+import teleop_app  # noqa: E402
+from ffw_sh5_grasp import kinematics  # noqa: E402
 from ffw_sh5_grasp.application import targets as teleop_targets  # noqa: E402
 from ffw_sh5_grasp.control import arm as arm_control  # noqa: E402
 from ffw_sh5_grasp.control import base as base_teleop  # noqa: E402
-from ffw_sh5_grasp.control import bimanual  # noqa: E402
-from ffw_sh5_grasp.control import grasp  # noqa: E402
+from ffw_sh5_grasp.control import (
+    bimanual,  # noqa: E402
+    grasp,  # noqa: E402
+)
 from ffw_sh5_grasp.control import whole_body as whole_body_ik  # noqa: E402
 from ffw_sh5_grasp.kinematics import optimization as bounded_optimization  # noqa: E402
 from ffw_sh5_grasp.kinematics import rotations as kinematics_math  # noqa: E402
 from ffw_sh5_grasp.kinematics import tasks as pose_tasks  # noqa: E402
-from ffw_sh5_grasp import kinematics  # noqa: E402
-import teleop_app  # noqa: E402
 
 ARMS = {side: [f"arm_{side}_joint{i}" for i in range(1, 8)] for side in ("r", "l")}
 HOME = np.array([0.0, 0.0, 0.0, -np.pi / 2, 0.0, 0.0, 0.0])
@@ -421,8 +423,11 @@ def run_selectable_ik_methods_gate():
             reference = bounded_optimization.bounded_quadratic_program(
                 reference_hessian, reference_linear,
                 active_lower, active_upper)
-            objective = lambda value: np.linalg.norm(
-                reference_matrix @ value - reference_vector) ** 2
+            def objective(value):
+                return np.linalg.norm(
+                    reference_matrix @ value - reference_vector
+                ) ** 2
+
             worst_active_set_gap = max(
                 worst_active_set_gap,
                 float(objective(active_solution) - objective(reference)))

@@ -8,7 +8,7 @@ import numpy as np
 from ...config import SETTINGS
 from ...kinematics import DifferentialIKSolver, KinematicTree
 from ...kinematics.tasks import pose_error, pose_velocity_command
-from ..simulation.action import ARM_JOINTS, ActionAdapter, SIDES
+from ..simulation.action import ARM_JOINTS, SIDES, ActionAdapter
 
 
 class Leader(ABC):
@@ -92,6 +92,8 @@ class GizmoLeader(Leader):
         }
         if self.env.left_arm_fixed:
             self.home_arms["l"] = self.env.left_arm_park_position.copy()
+        if self.env.right_arm_start_position is not None:
+            self.home_arms["r"] = self.env.right_arm_start_position.copy()
         self.targets = {}
         self.grasp = {"l": 0.0, "r": 0.0}
         self.returning_home = {side: False for side in SIDES}

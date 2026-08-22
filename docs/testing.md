@@ -20,10 +20,9 @@
 ## 빠른 핵심 검증
 
 ```bash
-python3 tests/test_config.py
-python3 tests/test_phase_6.py
-python3 tests/test_whole_body.py
-mkdocs build --strict
+python -m ruff check src scripts tests
+MUJOCO_GL=egl python -m pytest -q
+python -m mkdocs build --strict
 ```
 
 Arm-only imitation 전체 gate:
@@ -53,8 +52,9 @@ python3 tests/test_whole_body.py
 mkdocs build --strict
 ```
 
-각 스크립트는 독립 프로세스이며 마지막 `PASS`와 exit code 0이 성공 기준이다.
-`pytest`, ROS launch test, display server가 필요하지 않다.
+pytest는 단위·통합 테스트를 한 번에 실행하는 기본 gate다. Phase 스크립트는 독립 실행도
+지원하며 마지막 `PASS`와 exit code 0이 성공 기준이다. ROS launch test와 display
+server는 필요하지 않고 카메라는 headless EGL로 검증한다.
 
 ## Phase별 의미
 
@@ -69,7 +69,17 @@ mkdocs build --strict
 | Phase 6 | marker, gizmo, 숫자 task-space 입력, Bimanual, mode toggle | pose round-trip·IK 추종과 ON/OFF 불변성 |
 | Whole-body | 명시적 box-QP, DLS 비용 변환, joint/collision CBF, rigid grasp, mobile WBIK | 수치/물리/latency 통합 gate |
 
-## 2.0.0 핵심 회귀가 증명하는 것
+## 3.0.0 모방학습 gate
+
+- HDF5 schema 1.1의 16D qpos/qvel/action, 양쪽 EE pose, 세 카메라 길이 정렬
+- reset마다 캔 색과 좌우 상자 색 배치를 독립 무작위화하고 올바른 target을 선택
+- 같은 원본 episode를 Joint/Task 8D tensor로 변환하며 quaternion/frame 계약 검사
+- checkpoint representation metadata와 UI `AUTO`/`JOINT`/`TASK` 필터 일치
+- PTE 후보가 같은 미래 target timestep만 모으고 최신 예측에 가장 큰 가중치 적용
+- Rerun Viewer가 종료되어도 flush 예외가 policy/teleop 종료를 다시 중단하지 않음
+- Hugging Face manifest가 150 episode와 네 best checkpoint의 SHA-256을 기록
+
+## 핵심 제어 회귀가 증명하는 것
 
 ### Custom kinematics hard gate
 

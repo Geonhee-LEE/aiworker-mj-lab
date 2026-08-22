@@ -1,7 +1,7 @@
 task_name: can_to_box
 dataset_dir: datasets/can_to_box
 control_hz: 25.0
-camera_names: [cam_high, cam_right_wrist]
+camera_names: [cam_high, cam_left_wrist, cam_right_wrist]
 # HDF5는 양팔 left-first canonical schema를 유지하고, ACT loader가 오른팔 8D를 선택한다.
 state_dim: 16
 action_dim: 16

@@ -1,0 +1,39 @@
+run_name: can_color_sort_act_joint
+dataset_dir: datasets/can_color_sort
+output_dir: outputs/act_modular
+representation: joint
+camera_names: [cam_high, cam_right_wrist]
+policy_side: right
+state_dim: 8
+action_dim: 8
+chunk_size: 90
+hidden_dim: 512
+latent_dim: 32
+encoder_layers: 4
+decoder_layers: 7
+feedforward_dim: 3200
+attention_heads: 8
+dropout: 0.1
+backbone: resnet18
+pretrained_backbone: true
+batch_size: 8
+epochs: 2000
+learning_rate: 0.00001
+backbone_learning_rate: 0.00001
+weight_decay: 0.0001
+kl_weight: 10.0
+validation_fraction: 0.1
+test_fraction: 0.1
+split_seed: 42
+training_seed: 1
+num_workers: 1
+prefetch_factor: 1
+device: auto
+# 공식 ACT처럼 validation은 매 epoch 수행하고 무거운 저장/plot만 100 epoch마다 한다.
+checkpoint_interval: 100
+plot_interval: 100
+rerun: true
+wandb:
+  enabled: true
+  project: aiworker-act
+  entity: null

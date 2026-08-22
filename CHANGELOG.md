@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.0.0 — 2026-08-23
+
+- 초록·빨강·주황·파랑 캔과 좌우 목표 상자 배치를 reset마다 독립적으로 무작위화하는
+  색상 분류 환경 및 물리 contact 기반 성공 판정 추가
+- 양팔 joint/qvel/action, 양쪽 EE pose와 `cam_high`·양쪽 wrist RGB를 함께 저장하는
+  HDF5 schema 1.1 수집·검증·replay 경로 완성
+- 동일한 ACT 하이퍼파라미터로 오른팔 8D joint-space와 task-space 정책을 학습하고,
+  task 출력은 bounded differential IK로 실행하는 modular 학습 경로 추가
+- 기존 ACT temporal ensemble과 미래 offset을 사용하는 PTE를 UI/CLI에서 전환하고,
+  97/150 episode × Joint/Task × PTE 0/5/10/15/20의 2,000 rollout 평가 지원
+- Rerun 이미지 기록 주기·압축을 제어 loop와 분리하고 Viewer 연결 종료가 정책 실행을
+  중단하지 않도록 종료 경로 보강
+- 데이터셋과 네 정책을 공개 Hugging Face Hub 저장소로 검증·배포하는 manifest 및
+  SHA-256 기반 release 도구 추가
+- Ruff/pytest GitHub Actions, 재현 가능한 docs/Hugging Face/presentation 의존성 파일과
+  strict MkDocs 배포 workflow 추가
+
+## 2.1.0 — 2026-08-20
+
+- 저장소 이름을 `aiworker-mj-lab`으로 확장하고 Python 패키지 호환성을 유지
+- IL command dispatcher와 arm-only ACT record/train/evaluate/Rerun 파이프라인 정리
+- 사용자·개발자 문서와 GitHub Pages 배포 경로 갱신
+
 ## 2.0.0 — 2026-08-07
 
 - 18-DOF whole-body differential IK를 명시적 box-QP active-set 해법으로 확장하고,

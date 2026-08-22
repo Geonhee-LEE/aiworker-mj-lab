@@ -9,7 +9,6 @@ import numpy as np
 from ..application import targets
 from ..kinematics import rotations
 
-
 SIDES = (("r", "Right hand"), ("l", "Left hand"))
 SIDE_LABELS = dict(SIDES)
 

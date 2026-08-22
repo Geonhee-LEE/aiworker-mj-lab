@@ -4,7 +4,9 @@ import argparse
 from pathlib import Path
 
 from ffw_sh5_grasp.imitation.visualization.rerun_dataset import (
-    log_episode, stream_episode)
+    log_episode,
+    stream_episode,
+)
 
 
 def main(argv=None):

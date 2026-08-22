@@ -3,7 +3,7 @@
 모방학습(Imitation Learning, IL)은 전문가가 수행한 관측과 행동을 데이터로 모아
 정책(policy)이 같은 행동을 재현하도록 학습하는 방법이다. 이 프로젝트의 목표는
 ALOHA 로봇 자체를 복제하는 것이 아니라, ALOHA 논문에서 제안한 ACT 학습 구조를
-FFW-SH5와 `can_to_box` 작업에 적용하는 것이다.
+FFW-SH5와 `can_to_box` 및 `can_color_sort` 작업에 적용하는 것이다.
 
 문서 계층은 다음처럼 이해하면 된다.
 
@@ -39,25 +39,27 @@ RNN은 ACT의 구성 요소는 아니지만, 로봇 시계열 정책에서 Trans
 | 5 | [ACT 아키텍처](act.md) | 위 요소가 어떻게 하나의 action-chunk 정책이 되는가? |
 | 6 | [논문과 현재 구현 대응](../act-implementation.md) | 논문과 FFW-SH5 구현에서 같은 점과 다른 점은 무엇인가? |
 | 7 | [IL 코드 구조](../imitation-code-structure.md) | 수정하려는 책임이 어느 Python 모듈에 있는가? |
+| 8 | [Joint/Task 학습과 PTE 평가](../../modular-act-training.md) | 같은 조건의 정책을 어떻게 재현하고 비교하는가? |
 
 ## 이 프로젝트의 학습 문제
 
-한 timestep의 관측은 로봇 관절 상태와 두 카메라 영상이다. 학습 target은 현재부터
+한 timestep의 수집 관측은 양팔 관절 상태, 양쪽 EE pose와 세 카메라 영상이다.
+ACT 설정의 `camera_names`에서 학습에 사용할 시점만 고른다. 학습 target은 현재부터
 미래까지의 오른팔 행동 묶음이다.
 
 | 구분 | 현재 구현 |
 |---|---|
-| 관측 상태 | 오른팔 7축 + grasp synergy, 총 8차원 qpos |
-| 시각 관측 | `cam_high`, `cam_right_wrist` RGB |
-| 학습 target | 현재 시점부터 최대 `chunk_size`개의 8차원 절대 관절 target |
+| 관측 상태 | Joint: 오른팔 7축 + grasp, Task: 오른손 EE pose 7 + grasp |
+| 시각 관측 | 기본 `cam_high`, `cam_right_wrist`; HDF5에는 left wrist도 저장 |
+| 학습 target | `chunk_size`개의 8D 절대 joint target 또는 EE pose target |
 | 기본 chunk | 90 step |
 | 제어 주기 | 25 Hz |
 | 정책 출력 | `[batch, 90, 8]` action chunk |
-| 실행 | 역정규화 후 환경 action으로 변환하고 temporal ensemble 적용 |
+| 실행 | Joint는 actuator target, Task는 오른팔 IK로 변환 후 ensemble/PTE 적용 |
 
-HDF5에는 ALOHA 호환을 위해 양팔 16차원이 저장되지만, 현재 정책은 오른팔에 해당하는
-index `8..15`만 사용한다. 데이터 파일의 저장 차원과 정책이 실제로 학습하는 차원을
-혼동하지 않아야 한다.
+HDF5에는 ALOHA 호환 양팔 16차원과 양쪽 EE pose를 모두 저장한다. Joint 정책은 오른팔
+index `8..15`, Task 정책은 오른손 pose와 grasp만 선택한다. 하나의 원본 데이터셋에서
+표현만 바꾸므로 데이터 수와 split을 고정한 공정한 비교가 가능하다.
 
 ## 학습과 추론의 차이
 

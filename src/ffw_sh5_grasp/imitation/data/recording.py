@@ -25,6 +25,7 @@ def _git_commit(repository):
 class EpisodeBuffer:
     qpos: list = field(default_factory=list)
     qvel: list = field(default_factory=list)
+    ee_pose: dict[str, list] = field(default_factory=dict)
     images: dict[str, list] = field(default_factory=dict)
     actions: list = field(default_factory=list)
     debug: dict[str, list] = field(default_factory=dict)
@@ -38,11 +39,22 @@ class EpisodeBuffer:
         qvel = np.asarray(observation["qvel"], dtype=np.float32)
         if qpos.shape != (ACTION_DIM,) or qvel.shape != (ACTION_DIM,):
             raise ValueError("observation policy state must be 16D")
+        ee_pose = {
+            name: np.asarray(values, dtype=np.float32)
+            for name, values in observation["ee_pose"].items()
+        }
+        if set(ee_pose) != {"left", "right"} or any(
+                values.shape != (7,) or not np.all(np.isfinite(values))
+                for values in ee_pose.values()):
+            raise ValueError(
+                "observation ee_pose must contain finite left/right 7D poses")
         image_names = tuple(observation["images"])
         if self.images and set(image_names) != set(self.images):
             raise ValueError("camera set changed during the episode")
         self.qpos.append(qpos.copy())
         self.qvel.append(qvel.copy())
+        for name, values in ee_pose.items():
+            self.ee_pose.setdefault(name, []).append(values.copy())
         self.actions.append(action.copy())
         for name, image in observation["images"].items():
             self.images.setdefault(name, []).append(np.asarray(image).copy())
@@ -58,6 +70,8 @@ class EpisodeBuffer:
             raise ValueError("cannot save an empty episode")
         return EpisodeData(
             qpos=np.stack(self.qpos), qvel=np.stack(self.qvel),
+            ee_pose={name: np.stack(values)
+                     for name, values in self.ee_pose.items()},
             images={name: np.stack(values)
                     for name, values in self.images.items()},
             action=np.stack(self.actions),
@@ -112,10 +126,16 @@ class EpisodeRecorder:
             "model_hash": self.env.model_hash,
             "git_commit": _git_commit(REPO_ROOT),
             "camera_names": list(self.env.camera_names),
+            "ee_pose_names": ["left", "right"],
+            "ee_pose_frame": "world",
+            "ee_pose_quaternion_order": "wxyz",
             "task_name": self.task_name,
             "success": metrics.success if success is None else bool(success),
             "initial_can_position": self.env.initial_can_position.tolist(),
         }
+        metadata = getattr(self.env.task, "episode_metadata", None)
+        if metadata is not None:
+            attrs.update(metadata())
         if extra_attrs:
             attrs.update(extra_attrs)
         path = next_episode_path(self.dataset_dir)

@@ -1,0 +1,37 @@
+run_name: can_to_box_act_ep080_100
+dataset_dir: datasets/can_to_box_ep080_100
+output_dir: outputs/act
+# can-to-box v1은 16D HDF5 중 오른팔 8D만 학습한다.
+camera_names: [cam_high, cam_right_wrist]
+policy_side: right
+state_dim: 8
+action_dim: 8
+# 아래 모델 크기와 optimizer 값은 ALOHA 논문 Table III 기준이다.
+chunk_size: 90
+hidden_dim: 512
+latent_dim: 32
+encoder_layers: 4
+decoder_layers: 7
+feedforward_dim: 3200
+attention_heads: 8
+dropout: 0.1
+backbone: resnet18
+pretrained_backbone: true
+batch_size: 8
+epochs: 2000
+learning_rate: 0.00001
+backbone_learning_rate: 0.00001
+weight_decay: 0.0001
+kl_weight: 10.0
+validation_fraction: 0.1
+test_fraction: 0.1
+split_seed: 42
+training_seed: 1
+num_workers: 0
+device: auto
+rerun: true
+wandb:
+  # 인증 정보는 YAML에 넣지 않고 `wandb login`으로 로컬에 저장한다.
+  enabled: true
+  project: aiworker-act
+  entity: null

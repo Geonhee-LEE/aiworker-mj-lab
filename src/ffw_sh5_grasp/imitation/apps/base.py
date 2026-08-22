@@ -1,8 +1,8 @@
 """Shared GLFW/ImGui mechanics for imitation-learning applications."""
 
 import glfw
-from imgui_bundle import imgui
 import mujoco
+from imgui_bundle import imgui
 
 from ...visualization import render
 

@@ -10,12 +10,12 @@ from enum import Enum
 import numpy as np
 
 from ..config import SETTINGS
-
 from .optimization import (
     bounded_quadratic_program,
     bounded_quadratic_program_with_barriers,
     least_squares_to_qp,
 )
+
 DEFAULT_DIFFERENTIAL_IK_METHOD = SETTINGS.get("whole_body_ik.solver.method")
 DEFAULT_PSEUDOINVERSE_RCOND = SETTINGS.number(
     "whole_body_ik.solver.pseudoinverse_rcond", positive=True)

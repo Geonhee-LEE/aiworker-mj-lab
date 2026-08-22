@@ -1,5 +1,43 @@
 # 릴리스 기록
 
+## 3.0.0 — Modular ACT Color Sorting
+
+2026-08-23 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v3.0.0)
+
+### 환경과 데이터
+
+- 초록·빨강·주황·파랑 캔과 좌우 상자 색 배치를 reset마다 독립 무작위화
+- 상자 wall/floor contact, 오른팔 작업 공간과 물리 기반 성공 판정 정리
+- 150개 성공 HDF5 episode에 58,676 frame, 양팔 상태/action, 양쪽 EE pose와 세 RGB 저장
+- 공개 [Hugging Face 데이터셋](https://huggingface.co/datasets/ggh-png/ffw-sh5-can-color-sort) 배포
+
+### 학습과 추론
+
+- 오른팔 Joint/Task 8D 표현을 같은 ACT 구조·seed·split 조건으로 학습
+- Task-space 출력의 quaternion 정규화 및 bounded differential IK 실행
+- UI/CLI에서 representation과 PTE 미래 step을 선택하고 Rerun 기록 주기 제어
+- D97/D150 × Joint/Task × PTE 0/5/10/15/20을 조건당 100회, 총 2,000 rollout 평가
+- 네 best checkpoint와 평가 CSV를 공개
+  [Hugging Face 모델 저장소](https://huggingface.co/ggh-png/ffw-sh5-act-color-sort)에 배포
+
+### 품질과 문서
+
+- Ruff/pytest CI, strict MkDocs build/deploy와 용도별 requirements 추가
+- Hub release manifest와 SHA-256 검증, 공개 다운로드·재배포 절차 문서화
+- PTE/Rerun 종료 회귀와 modular Joint/Task 학습 테스트 보강
+
+전체 diff: [v2.1.0...v3.0.0](https://github.com/ggh-png/aiworker-mj-lab/compare/v2.1.0...v3.0.0)
+
+## 2.1.0 — Repository & IL Workflow Refresh
+
+2026-08-20 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v2.1.0)
+
+- 저장소 이름을 `aiworker-mj-lab`으로 확장하고 기존 Python package import 유지
+- arm-only HDF5 record/replay, ACT train/evaluate와 Rerun command 경계 정리
+- GitHub Pages의 사용자·개발자 문서 구조 갱신
+
+전체 diff: [v2.0.0...v2.1.0](https://github.com/ggh-png/aiworker-mj-lab/compare/v2.0.0...v2.1.0)
+
 ## 2.0.0 — Explicit Whole-body QP & Safety Projection
 
 2026-08-07 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v2.0.0)

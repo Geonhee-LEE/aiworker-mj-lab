@@ -13,9 +13,7 @@ import math
 import time
 
 from imgui_bundle import imgui
-import numpy as np
 
-from ..application import targets
 from ..config import SETTINGS
 from ..kinematics import rotations
 from . import diagnostics, task_space
@@ -450,6 +448,15 @@ def _draw_can_grasp_panel(app, targets):
 
 def _draw_lift_utils_panel(app, targets):
     """전신 제어 전환, 리프트 목표, reset·진단·카메라 유틸리티를 그린다."""
+    task = getattr(app, "imitation_task", None)
+    if task is not None:
+        imgui.text(f"Environment: {task.name}")
+        if task.name == "can_color_sort":
+            layout = task.bin_color_layout
+            imgui.text(
+                f"Can: {task.object_variant.upper()} -> "
+                f"{task.target_label.upper()} box "
+                f"({layout[task.target_label]})")
     whole_body_enabled = getattr(app, "whole_body_enabled", True)
     button_label = ("Whole-body Control: ON##wholebody"
                     if whole_body_enabled else "Whole-body Control: OFF (arm-only)##wholebody")
@@ -566,10 +573,36 @@ def _draw_ik_solver_panel(app):
 
 
 def _draw_act_policy_panel(app):
-    """Select and launch a trained ACT checkpoint under ``outputs/act``."""
+    """Select and launch a trained standard or modular ACT checkpoint."""
     imgui.text_wrapped(
         "Select a training run and checkpoint. ACT will use this teleop "
         "window and the current MuJoCo model directly.")
+    representation_names = ("auto", "joint", "task")
+    representation_index = representation_names.index(
+        app.act_policy_representation)
+    changed, representation_index = imgui.combo(
+        "Policy representation", representation_index,
+        [name.upper() for name in representation_names])
+    if changed:
+        app.set_act_policy_representation(
+            representation_names[representation_index])
+
+    changed, pte_steps = imgui.input_int(
+        "PTE future steps", app.act_policy_pte_steps, 1, 5)
+    if changed:
+        app.set_act_policy_pte_steps(pte_steps)
+    if app.act_policy_env is None:
+        imgui.text_wrapped(
+            "PTE f=0 is the original ACT ensemble. Positive f executes "
+            "a future action predicted by the same checkpoint.")
+    else:
+        pte_seconds = (
+            app.act_policy_pte_steps
+            / app.act_policy_env.actual_control_hz)
+        imgui.text(
+            f"PTE look-ahead: {pte_seconds:.3f} s "
+            f"(max {app.act_policy_runner.max_proleptic_steps} steps)")
+
     if imgui.button("Refresh models##act_policy"):
         app.refresh_act_policies()
 
@@ -578,7 +611,8 @@ def _draw_act_policy_panel(app):
         imgui.text_wrapped(app.act_policy_status)
         return
 
-    run_names = [run.name for run in runs]
+    run_names = [
+        f"[{run.representation.upper()}] {run.name}" for run in runs]
     changed, run_index = imgui.combo(
         "Training run", app.act_policy_run_index, run_names)
     if changed:
@@ -610,6 +644,21 @@ def _draw_act_policy_panel(app):
         return
     imgui.separator_text("Active rollout")
     imgui.text_wrapped(f"Model: {app.act_policy_checkpoint.name}")
+    imgui.text(
+        f"Representation: {app.act_policy_runner.representation.upper()}")
+    imgui.text(
+        f"Temporal mode: "
+        f"{'ACT' if app.act_policy_runner.proleptic_steps == 0 else 'PTE'} "
+        f"(f={app.act_policy_runner.proleptic_steps})")
+    if app.act_policy_runner.representation == "task":
+        imgui.text(
+            f"IK speed scale: {app.act_policy_ik_speed_scale:.2f}x")
+    if getattr(app, "act_policy_rerun_path", None) is not None:
+        imgui.text_wrapped(f"Rerun: {app.act_policy_rerun_path}")
+        imgui.text(
+            "Rerun logging: "
+            f"~{app.act_policy_env.actual_control_hz / app.act_policy_rerun_logger.frame_stride:.1f} Hz "
+            "(control remains 25 Hz)")
     imgui.text(
         f"Frame: {app.act_policy_frame} / {app.act_policy_max_steps}")
     placed = app.act_policy_observation["task"]["success"]

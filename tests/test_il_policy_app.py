@@ -103,10 +103,19 @@ def test_policy_catalog_discovers_only_standard_run_checkpoints():
         (copied / "ignored.ckpt").touch()
         (output_dir / "not_a_run.ckpt").touch()
 
+        task_checkpoints = output_dir / "run_task" / "checkpoints"
+        task_checkpoints.mkdir(parents=True)
+        (task_checkpoints / "policy_best.ckpt").touch()
+        (output_dir / "run_task" / "config.yaml").write_text(
+            "representation: task\n", encoding="utf-8")
+
         runs = discover_policy_runs(output_dir)
 
-    assert [run.name for run in runs] == ["run_a"]
-    assert [path.name for path in runs[0].checkpoints] == [
+    runs_by_name = {run.name: run for run in runs}
+    assert set(runs_by_name) == {"run_a", "run_task"}
+    assert runs_by_name["run_a"].representation == "joint"
+    assert runs_by_name["run_task"].representation == "task"
+    assert [path.name for path in runs_by_name["run_a"].checkpoints] == [
         "policy_best.ckpt", "policy_last.ckpt", "first_policy.ckpt",
     ]
 

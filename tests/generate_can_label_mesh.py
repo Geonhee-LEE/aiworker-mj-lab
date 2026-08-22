@@ -39,11 +39,10 @@ SIDE_Z_FRAC_HI = 0.92
 
 def write_obj(path, verts, faces, uvs_per_face_corner=None):
     """정점·삼각형 면과 선택적 면 꼭짓점 UV를 OBJ 형식으로 기록한다."""
-    lines = [f"# tests/generate_can_label_mesh.py가 생성한 파일이므로 직접 수정하지 않는다.\n"]
+    lines = ["# tests/generate_can_label_mesh.py가 생성한 파일이므로 직접 수정하지 않는다.\n"]
     for v in verts:
         lines.append(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
     if uvs_per_face_corner is not None:
-        vt_idx = 1
         for face_uvs in uvs_per_face_corner:
             for u, v in face_uvs:
                 lines.append(f"vt {u:.6f} {v:.6f}\n")

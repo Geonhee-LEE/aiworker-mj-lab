@@ -1,15 +1,27 @@
 import pathlib
 import sys
 
-import numpy as np
 import mujoco
+import numpy as np
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from ffw_sh5_grasp.imitation.simulation.environment import AIWorkerMujocoEnv  # noqa: E402
-from ffw_sh5_grasp.application.teleop import TeleopApp  # noqa: E402
+from ffw_sh5_grasp.application.teleop import (  # noqa: E402
+    ENV_TASK_NAMES,
+    TeleopApp,
+    _parse_args,
+)
 from ffw_sh5_grasp.config import SETTINGS  # noqa: E402
+from ffw_sh5_grasp.imitation.simulation.environment import (
+    AIWorkerMujocoEnv,  # noqa: E402
+)
+
+
+def _geom_ids(model, body_name):
+    body_id = mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+    return np.flatnonzero(model.geom_bodyid == body_id)
 
 
 def test_arm_only_env_reset_and_step():
@@ -22,6 +34,8 @@ def test_arm_only_env_reset_and_step():
             env.task.spawn_jitter_radius + 1e-12)
         robot_home = first["debug"]["full_qpos"][:env.task.can_qpos].copy()
         assert first["qpos"].shape == (16,)
+        assert set(first["ee_pose"]) == {"left", "right"}
+        assert all(pose.shape == (7,) for pose in first["ee_pose"].values())
         assert first["images"] == {}
         assert np.allclose(
             first["debug"]["full_qpos"][env.head_qpos],
@@ -157,8 +171,95 @@ def test_default_teleop_matches_policy_pose_and_can_reset_is_object_only():
     )
 
 
+def test_teleop_env_argument_randomizes_color_and_target_side_independently():
+    args = _parse_args([
+        "--env", "1", "--policy-representation", "task",
+        "--policy-rerun", "--policy-rerun-port", "9888",
+        "--policy-rerun-hz", "10",
+        "--policy-ik-speed-scale", "1.5",
+        "--policy-pte-steps", "5",
+    ])
+    assert ENV_TASK_NAMES[args.env] == "can_color_sort"
+    assert args.policy_representation == "task"
+    assert args.policy_rerun
+    assert args.policy_rerun_port == 9888
+    assert args.policy_rerun_hz == 10.0
+    assert args.policy_ik_speed_scale == 1.5
+    assert args.policy_pte_steps == 5
+
+    app = TeleopApp.__new__(TeleopApp)
+    app.act_policy_seed = 1000
+    app.task_name = ENV_TASK_NAMES[args.env]
+    app._setup_sim()
+
+    task = app.imitation_task
+    can_visual = mujoco.mj_name2id(
+        app.model, mujoco.mjtObj.mjOBJ_GEOM, "can_side_visual")
+    variants = set()
+    layouts = set()
+    target_bodies = set()
+    colors = {}
+    for _ in range(128):
+        app.reset_can()
+        variants.add(task.object_variant)
+        layouts.add(tuple(sorted(task.bin_color_layout.items())))
+        material_id = int(app.model.geom_matid[can_visual])
+        colors[task.object_variant] = tuple(
+            app.model.mat_rgba[material_id])
+        target_body = mujoco.mj_id2name(
+            app.model, mujoco.mjtObj.mjOBJ_BODY,
+            int(app.model.site_bodyid[task.target_site]))
+        target_bodies.add(target_body)
+        assert target_body == task.bin_color_layout[task.target_label]
+
+    assert variants == {"green", "red", "orange", "blue"}
+    assert len(layouts) == 2
+    assert target_bodies == {"target_bin", "target_bin_red"}
+    assert len(set(colors.values())) == 4
+
+
+def test_teleop_task_policy_pose_is_converted_by_arm_only_ik():
+    app = TeleopApp.__new__(TeleopApp)
+    app.act_policy_seed = 1000
+    app.task_name = "can_color_sort"
+    app._setup_sim()
+    app.ik_err_mm = {"l": 0.0, "r": 0.0}
+
+    with AIWorkerMujocoEnv(
+            model=app.model, data=app.data, render_images=False,
+            reset_on_init=False, task=app.imitation_task) as env:
+        app.act_policy_env = env
+        observation = env.get_observation()
+        task_action = np.concatenate((
+            observation["ee_pose"]["right"], [0.75],
+        ))
+        task_action[0] += 0.01
+        before = env.get_qpos()
+
+        original_position_gain = app.whole_body_solver.position_gain
+        original_orientation_gain = app.whole_body_solver.orientation_gain
+        app.act_policy_ik_speed_scale = 1.0
+        slow_action = app._task_policy_action_to_joint(task_action)
+        app.act_policy_ik_speed_scale = 2.0
+        joint_action = app._task_policy_action_to_joint(task_action)
+
+        assert joint_action.shape == (16,)
+        assert np.all(np.isfinite(joint_action))
+        assert np.array_equal(joint_action[:8], before[:8])
+        assert not np.array_equal(joint_action[8:15], before[8:15])
+        slow_delta = np.linalg.norm(slow_action[8:15] - before[8:15])
+        fast_delta = np.linalg.norm(joint_action[8:15] - before[8:15])
+        assert fast_delta > 1.5 * slow_delta
+        assert np.isclose(joint_action[15], 0.75)
+        assert app.ik_err_mm["r"] > 0.0
+        assert app.whole_body_solver.position_gain == original_position_gain
+        assert app.whole_body_solver.orientation_gain == original_orientation_gain
+
+
 if __name__ == "__main__":
     test_arm_only_env_reset_and_step()
     test_arm_only_env_can_attach_to_existing_model_and_data()
     test_default_teleop_matches_policy_pose_and_can_reset_is_object_only()
+    test_teleop_env_argument_randomizes_color_and_target_side_independently()
+    test_teleop_task_policy_pose_is_converted_by_arm_only_ik()
     print("PASS")

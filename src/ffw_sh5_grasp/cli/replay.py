@@ -2,8 +2,8 @@
 
 import argparse
 import json
-from pathlib import Path
 import time
+from pathlib import Path
 
 from ffw_sh5_grasp.imitation.data.paths import resolve_episode_path
 
@@ -19,10 +19,15 @@ def main(argv=None):
     args = parser.parse_args(argv)
     path = resolve_episode_path(
         args.episode, args.dataset_dir, args.episode_idx)
+    from ffw_sh5_grasp.imitation.data.episode import load_episode
     from ffw_sh5_grasp.imitation.data.replay import replay_episode
     from ffw_sh5_grasp.imitation.simulation.environment import AIWorkerMujocoEnv
 
-    with AIWorkerMujocoEnv(render_images=False) as env:
+    episode = load_episode(path)
+    task_name = episode.attrs.get(
+        "scenario_name", episode.attrs.get("task_name", "can_to_box"))
+    with AIWorkerMujocoEnv(
+            render_images=False, task_name=task_name) as env:
         if args.viewer:
             import mujoco.viewer
             with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
@@ -36,10 +41,10 @@ def main(argv=None):
                     return True
 
                 result = replay_episode(
-                    env, path, atol=args.atol, step_callback=show_frame)
+                    env, episode, atol=args.atol, step_callback=show_frame)
                 viewer.sync()
         else:
-            result = replay_episode(env, path, atol=args.atol)
+            result = replay_episode(env, episode, atol=args.atol)
     printable = {key: value for key, value in result.items() if key != "qpos"}
     print(json.dumps(printable, indent=2))
     if not result["reproduced"]:

@@ -10,6 +10,8 @@ from ..simulation.environment import AIWorkerMujocoEnv
 from .rerun_blueprints import dataset_blueprint
 from .rerun_robot import MujocoRobotRerunLogger
 
+_POSE_COMPONENTS = ("x", "y", "z", "qw", "qx", "qy", "qz")
+
 
 def _rerun():
     try:
@@ -23,7 +25,12 @@ def _rerun():
 def _record_episode(recording, rr, episode):
     full_qpos = episode.debug.get("full_qpos")
     full_qvel = episode.debug.get("full_qvel")
-    with AIWorkerMujocoEnv(render_images=False) as environment:
+    task_name = episode.attrs.get(
+        "scenario_name", episode.attrs.get("task_name", "can_to_box"))
+    with AIWorkerMujocoEnv(
+            render_images=False, task_name=task_name) as environment:
+        seed = int(episode.attrs.get("seed", -1))
+        environment.reset(seed=None if seed < 0 else seed)
         robot = MujocoRobotRerunLogger(
             recording, environment.model, environment.data)
         for frame in range(episode.length):
@@ -45,6 +52,12 @@ def _record_episode(recording, rr, episode):
                     f"state/qvel/{name}", rr.Scalars(episode.qvel[frame, index]))
                 recording.log(
                     f"expert/action/{name}", rr.Scalars(episode.action[frame, index]))
+            for side, poses in episode.ee_pose.items():
+                for component, value in zip(
+                        _POSE_COMPONENTS, poses[frame]):
+                    recording.log(
+                        f"state/ee_pose/{side}/{component}",
+                        rr.Scalars(float(value)))
 
 
 def _episode(episode_or_path):

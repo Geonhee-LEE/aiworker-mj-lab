@@ -4,13 +4,13 @@ ROBOTIS AIWORKER(FFW-SH5)를 MuJoCo에서 연구하기 위한 저장소입니다
 텔레오퍼레이션, 직접 구현한 FK/Jacobian과 differential IK, 전신 제어, 스워브 주행,
 접촉 기반 파지와 충돌 회피를 하나의 Python 앱에서 실행합니다.
 
-ALOHA-style 모방학습 경로는 별도의 arm-only 계층으로 제공됩니다. 두 policy camera,
-16D joint action, HDF5 record/replay, ACT 학습·평가와 Rerun 분석을 포함하며 기존
-Whole-body 텔레옵 기능과 분리되어 있습니다.
+ALOHA-style 모방학습 경로는 별도의 arm-only 계층으로 제공됩니다. 세 policy camera와
+joint/task-space ACT, HDF5 record/replay, 선행 앙상블(PTE), 색상 분류 평가와 Rerun
+분석을 포함하며 기존 Whole-body 텔레옵 기능과 분리되어 있습니다.
 
 [문서 사이트](https://ggh-png.github.io/aiworker-mj-lab/) ·
 [빠른 시작](docs/getting-started.md) ·
-[2.0.0 릴리스](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v2.0.0)
+[3.0.0 릴리스](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v3.0.0)
 
 ## 데모
 
@@ -32,7 +32,8 @@ Whole-body 텔레옵 기능과 분리되어 있습니다.
 | 모바일 제어 | base x/y/yaw와 lift를 포함한 전신 IK, 3모듈 steer/drive actuator |
 | 파지 | 양손 relative-pose constraint, finger contact force와 마찰 기반 파지 |
 | 충돌 대응 | 팔-팔·팔-몸체·팔/손-table 거리 gradient와 velocity CBF |
-| 검증 | Phase 0–6, Whole-body 및 YAML 설정 headless 회귀 |
+| 모방학습 | 4색 can sorting, joint/task ACT, PTE, 2,000-rollout 평가 |
+| 검증 | Ruff, pytest, Phase 0–6, Whole-body 및 strict 문서 빌드 |
 
 로봇 관절이나 베이스 pose를 순간 이동시켜 결과를 만들지 않습니다. IK와 controller가
 명령을 계산하고, 실제 actuator와 MuJoCo contact가 다음 상태를 만듭니다. ROS, MoveIt,
@@ -48,6 +49,15 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install mujoco numpy glfw imgui-bundle pyyaml h5py torch pillow imageio rerun-sdk wandb
 python3 src/teleop_app.py
+```
+
+환경 번호를 명시하면 기존 단일 상자와 색상 분류 환경을 구분해 실행할 수 있습니다.
+색상 분류 환경에서는 `R`을 누를 때마다 캔 색과 좌·우 상자 색 배치를 서로 독립적으로
+무작위 선택합니다.
+
+```bash
+python3 src/teleop_app.py --env 0  # 기존 초록 캔 -> 파랑 상자
+python3 src/teleop_app.py --env 1  # 초록/빨강/주황/파랑 캔 색상 분류
 ```
 
 일부 설정만 덮어쓴 YAML 파일은 다음처럼 적용합니다.
@@ -88,10 +98,10 @@ Task Space 숫자 입력, marker, IK/FK, 파지와 진단 패널은 [화면과 �
 핵심 회귀와 문서 검증:
 
 ```bash
-python3 tests/test_config.py
-python3 tests/test_phase_6.py
-python3 tests/test_whole_body.py
-mkdocs build --strict
+python -m pip install -r requirements-dev.txt -r requirements-docs.txt
+python -m ruff check src scripts tests
+MUJOCO_GL=egl python -m pytest -q
+python -m mkdocs build --strict
 ```
 
 ## Arm-only ACT 파이프라인
@@ -105,6 +115,13 @@ mkdocs build --strict
 # recorder와 live Rerun Viewer가 함께 열린다.
 # R: task pose + random can reset, Q: grab/release, SPACE: record
 python3 src/il.py record --task-name can_to_box
+
+# 네 색 전체를 무작위로 수집
+python3 src/il.py record --task-name can_color_sort
+
+# 부족한 주황/파랑 캔만 수집 (기존 can_color_sort dataset에 이어서 저장)
+python3 src/il.py record --task-name can_color_sort \
+  --variant orange --variant blue
 
 python3 src/il.py rerun \
   --episode datasets/can_to_box/episode_000000.hdf5
@@ -121,7 +138,21 @@ python3 src/il.py evaluate \
 
 # Control Center의 ACT Policy 탭에서 outputs/act 아래 모델을 선택한다.
 python3 src/teleop_app.py
+
+# Modular joint/task checkpoint는 metadata로 입력 표현을 자동 판별한다.
+python3 src/teleop_app.py --env 1 \
+  --policy-checkpoint outputs/act_modular/can_color_sort_act_task/checkpoints/policy_best.ckpt \
+  --policy-representation auto \
+  --policy-ik-speed-scale 3.0 \
+  --policy-pte-steps 0 \
+  --policy-rerun
 ```
+
+ACT Policy 패널에서 `AUTO`/`JOINT`/`TASK`로 checkpoint 목록을 필터링하고,
+`PTE future steps`를 실행 중에도 바꿀 수 있다. `0`은 기존 ACT temporal ensemble이고
+양수는 같은 checkpoint가 예측한 해당 step만큼 미래 action을 현재 실행한다.
+정책 제어는 25 Hz로 유지하면서 Rerun은 기본 5 Hz와 JPEG 압축으로 기록해 Viewer가
+제어 loop를 막지 않게 한다. 기록 주기는 `--policy-rerun-hz`로 바꿀 수 있다.
 
 W&B 학습 대시보드를 사용하려면 한 번 로그인한 후 학습한다. 기본 프로젝트 이름과
 활성화 여부는 `config/imitation/act.yaml`의 `wandb`에서 변경한다.
@@ -137,6 +168,35 @@ python3 src/il.py train --config config/imitation/act.yaml
 정리되어 있습니다.
 
 전체 Phase 실행 명령과 각 gate의 의미는 [테스트와 검증](docs/testing.md)에 있습니다.
+
+## Hugging Face 배포
+
+색상 분류 HDF5 데이터셋과 네 ACT 정책을 서로 다른 Hub 저장소로 배포합니다.
+배포 전 manifest를 생성하면서 episode schema, 카메라, 성공 여부와 모델 산출물을
+검증합니다. `policy_last.ckpt`, Rerun과 W&B 로그는 배포 대상에서 제외됩니다.
+
+- [FFW-SH5 Can Color Sort 데이터셋](https://huggingface.co/datasets/ggh-png/ffw-sh5-can-color-sort)
+- [FFW-SH5 ACT Color Sort 정책](https://huggingface.co/ggh-png/ffw-sh5-act-color-sort)
+
+```bash
+python -m pip install -r requirements-huggingface.txt
+hf auth login
+
+# 파일 목록·용량·metadata만 점검하며 업로드하지 않는다.
+python3 scripts/publish_huggingface.py \
+  --dataset-repo-id ggh-png/ffw-sh5-can-color-sort \
+  --model-repo-id ggh-png/ffw-sh5-act-color-sort \
+  --dry-run
+
+# 기본값은 private 저장소다. 검증 후 공개 저장소로 업로드한다.
+HF_XET_HIGH_PERFORMANCE=1 python3 scripts/publish_huggingface.py \
+  --dataset-repo-id ggh-png/ffw-sh5-can-color-sort \
+  --model-repo-id ggh-png/ffw-sh5-act-color-sort \
+  --public
+```
+
+Hub에서 받는 명령과 파일 구성은 [Hugging Face 배포 문서](docs/huggingface.md), 카드
+원본은 `huggingface/dataset`과 `huggingface/model`에 있습니다.
 
 ## 코드 구조
 

@@ -11,8 +11,11 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from ffw_sh5_grasp.imitation.simulation.cameras import (  # noqa: E402
-    OPERATOR_MARKER_GROUP)
-from ffw_sh5_grasp.imitation.simulation.environment import AIWorkerMujocoEnv  # noqa: E402
+    OPERATOR_MARKER_GROUP,
+)
+from ffw_sh5_grasp.imitation.simulation.environment import (
+    AIWorkerMujocoEnv,  # noqa: E402
+)
 
 
 def _id(model, kind, name):
@@ -67,7 +70,8 @@ def test_camera_bracket_extrinsics():
 def test_policy_cameras():
     with AIWorkerMujocoEnv(camera_width=160, camera_height=120, seed=3) as env:
         images = env.get_images()
-        assert set(images) == {"cam_high", "cam_right_wrist"}
+        assert set(images) == {
+            "cam_high", "cam_left_wrist", "cam_right_wrist"}
         assert np.allclose(
             env.data.qpos[env.head_qpos], env.head_fixed_position)
         for image in images.values():

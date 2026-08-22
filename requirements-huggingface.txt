@@ -1,0 +1,3 @@
+-r requirements-imitation.txt
+
+huggingface-hub>=1.4,<2

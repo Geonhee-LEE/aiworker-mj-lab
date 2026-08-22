@@ -24,11 +24,15 @@ ffw_sh5_grasp/imitation/
 │   ├── transformer.py     # positional encoder/decoder
 │   ├── policy.py          # CVAE ACT forward와 loss
 │   ├── dataset_loader.py  # lazy action-chunk sampling과 normalization
-│   └── trainer.py         # optimizer, epoch, checkpoint lifecycle
+│   ├── trainer.py         # 기존 joint trainer lifecycle
+│   ├── modular_representations.py # 오른팔 Joint/Task 8D 표현
+│   ├── modular_dataset_loader.py  # 같은 HDF5를 표현별 tensor로 변환
+│   └── modular_trainer.py # 공통 조건의 Joint/Task 학습 lifecycle
 ├── runtime/               # 학습된 정책의 실행 계층
 │   ├── runner.py          # checkpoint 복원과 temporal ensemble
 │   ├── catalog.py         # outputs/act checkpoint 탐색
-│   └── evaluation.py      # closed-loop 평가와 결과 집계
+│   ├── task_space.py      # task pose 출력과 오른팔 IK 연결
+│   └── evaluation.py      # closed-loop 평가, PTE와 결과 집계
 ├── apps/                  # GLFW/ImGui 사용자 애플리케이션
 │   ├── base.py            # 공통 key-edge와 렌더 프레임
 │   ├── leader.py          # demonstration leader
@@ -77,13 +81,14 @@ checkpoint 실행은 `runtime`, UI는 `apps`에서 직접 import한다.
 |---|---|
 | `data/` | `test_il_dataset`, `test_il_dataset_validation`, record alignment |
 | `simulation/` | action, state adapter, camera, env, replay |
-| `act/` | ACT forward/loss와 1-epoch training smoke test |
-| `runtime/` | temporal aggregation, policy app, closed-loop smoke test |
+| `act/` | ACT forward/loss, Joint/Task 표현과 1-epoch training smoke test |
+| `runtime/` | temporal aggregation/PTE, task IK, closed-loop smoke test |
 | `apps/` | policy/record UI smoke test와 teleop policy→IK 전환 |
 
 전체 변경 후에는 `test_il_*.py`와 기존 whole-body/Phase 6 회귀를 함께 실행한다.
 
 실행 명령은 루트에 여러 스크립트로 흩어놓지 않고 `src/il.py`에서 통합한다. 실제
 argument parser는 `ffw_sh5_grasp/cli/<command>.py`에 있으며 dispatcher는 선택된
-command만 import한다. 예를 들어 학습은 `python3 src/il.py train --config ...`, 검증은
-`python3 src/il.py validate --dataset-dir ...`로 실행한다.
+command만 import한다. 기존 학습은 `python3 src/il.py train --config ...`, Joint/Task
+학습은 `python3 src/il.py train-modular --config ...`, 평가 행렬은
+`python3 src/il.py evaluate-color-sort`로 실행한다.

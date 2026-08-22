@@ -9,14 +9,12 @@
 ``kinematics.solver``에 분리되어 있다.
 """
 
-from dataclasses import dataclass, field
 import math
+from dataclasses import dataclass, field
 
 import mujoco
 import numpy as np
 
-from . import bimanual
-from .base import BodyTwist
 from ..config import SETTINGS
 from ..kinematics import collision, constraints, rotations, tasks
 from ..kinematics.solver import (
@@ -24,6 +22,9 @@ from ..kinematics.solver import (
     IKMethod,
 )
 from ..kinematics.tree import KinematicTree
+from . import bimanual
+from .base import BodyTwist
+
 # yaml 설정에서 읽는 기본값. 생성자에서 명시적으로 주입하면 덮어쓴다.
 BASE_JOINTS = ("base_x", "base_y", "base_yaw")
 DEFAULT_BASE_LINEAR_VELOCITY_LIMIT = SETTINGS.number(

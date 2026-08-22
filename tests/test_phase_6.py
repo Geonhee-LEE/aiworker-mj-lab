@@ -19,13 +19,16 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 MODEL_PATH = REPO_ROOT / "models" / "full_scene.xml"
 
 import teleop_app  # noqa: E402
-from ffw_sh5_grasp.application import targets as teleop_targets  # noqa: E402
 from ffw_sh5_grasp.application import state as application_state  # noqa: E402
+from ffw_sh5_grasp.application import targets as teleop_targets  # noqa: E402
 from ffw_sh5_grasp.control import base  # noqa: E402
-from ffw_sh5_grasp.kinematics import rotations, tasks as pose_tasks  # noqa: E402
-from ffw_sh5_grasp.visualization import diagnostics  # noqa: E402
+from ffw_sh5_grasp.kinematics import rotations  # noqa: E402
+from ffw_sh5_grasp.kinematics import tasks as pose_tasks
+from ffw_sh5_grasp.visualization import (
+    diagnostics,  # noqa: E402
+    task_space,  # noqa: E402
+)
 from ffw_sh5_grasp.visualization import render as teleop_render  # noqa: E402
-from ffw_sh5_grasp.visualization import task_space  # noqa: E402
 from ffw_sh5_grasp.visualization import ui as teleop_ui  # noqa: E402
 
 ARM_R = [f"arm_r_joint{i}" for i in range(1, 8)]

@@ -42,6 +42,10 @@
          렌더 순회로 라벨 랩과 두 메시 사이의 이음매가 자연스러운지 확인했다. -->
     <texture type="2d" name="can_label" file="../assets/soda_can/soda_can_label.png"/>
     <material name="can_mat" texture="can_label" specular="0.3" shininess="0.4"/>
+    <!-- 색상 분류 시나리오는 동일한 can body/충돌 geom을 유지하고 측면 visual의
+         material만 reset 때 교체한다. 따라서 두 색 캔의 질량·마찰·관성은 완전히 같다. -->
+    <material name="can_green_sort_mat" rgba="0.08 0.62 0.14 1" specular="0.3" shininess="0.4"/>
+    <material name="can_red_sort_mat" rgba="0.82 0.08 0.08 1" specular="0.3" shininess="0.4"/>
     <material name="can_cap_mat" rgba="0.82 0.82 0.85 1" specular="0.6" shininess="0.6"/>
     <mesh name="can_side_detail" file="../../soda_can/can_side_detail.obj" scale="1.1 1.1 0.7333"/>
     <mesh name="can_cap_detail" file="../../soda_can/can_cap_detail.obj" scale="1.1 1.1 0.7333"/>
@@ -822,8 +826,8 @@
            결합된다. 기존 단일 soda_can 메시처럼 명시적 pos/quat 없이 메시 로컬 좌표를 쓰며,
            아래 can_geom에 맞도록 <asset>에서 1.1/1.1/0.7333 배율을 적용한다. 생성 과정은
            위 <asset> 주석을 참고한다. -->
-      <geom type="mesh" mesh="can_side_detail" material="can_mat" class="visual"/>
-      <geom type="mesh" mesh="can_cap_detail" material="can_cap_mat" class="visual"/>
+      <geom name="can_side_visual" type="mesh" mesh="can_side_detail" material="can_mat" class="visual"/>
+      <geom name="can_cap_visual" type="mesh" mesh="can_cap_detail" material="can_cap_mat" class="visual"/>
       <geom name="can_geom" type="cylinder" size="0.033 0.055" rgba="0 0 0 0"
         priority="1" contype="1" conaffinity="3" condim="6" friction="0.5 0.01 0.003"
         solimp="0.5 0.99 0.0001" solref="0.005 1"/>
@@ -848,6 +852,29 @@
       <site name="target_bin_center" pos="0 0 0.0625" size="0.01"
         rgba="0.1 1 0.2 0.35" group="5"/>
     </body>
+    <!-- can_color_sort 전용 빨간 상자다. 기존 can_to_box 시나리오에서는 task adapter가
+         이 body의 visual과 collision을 비활성화하므로 기존 장면은 그대로 유지된다. -->
+    <body name="target_bin_red" pos="0.5155 -0.175 0.7391">
+      <geom name="target_bin_red_floor" type="box" size="0.085 0.085 0.0075"
+        class="target_bin_collision" rgba="0.88 0.12 0.12 1"/>
+      <geom name="target_bin_red_front" type="box" pos="0 -0.08 0.0875"
+        size="0.085 0.005 0.08" class="target_bin_collision"
+        rgba="0.78 0.08 0.08 0.85"/>
+      <geom name="target_bin_red_back" type="box" pos="0 0.08 0.0875"
+        size="0.085 0.005 0.08" class="target_bin_collision"
+        rgba="0.78 0.08 0.08 0.85"/>
+      <geom name="target_bin_red_left" type="box" pos="-0.08 0 0.0875"
+        size="0.005 0.075 0.08" class="target_bin_collision"
+        rgba="0.78 0.08 0.08 0.85"/>
+      <geom name="target_bin_red_right" type="box" pos="0.08 0 0.0875"
+        size="0.005 0.075 0.08" class="target_bin_collision"
+        rgba="0.78 0.08 0.08 0.85"/>
+      <site name="target_bin_red_center" pos="0 0 0.0625" size="0.01"
+        rgba="1 0.15 0.15 0.35" group="5"/>
+    </body>
+    <!-- 두 색 캔이 목표 상자와 무관한 같은 분포에서 시작하도록 쓰는 고정 기준점. -->
+    <site name="can_color_sort_spawn" pos="0.4055 -0.05 0.7866"
+      size="0.005" rgba="0 0 0 0" group="5"/>
     <body name="ik_target_l" mocap="true" pos="0.45 0.25 0.95">
       <geom name="ik_target_l_geom" type="sphere" size="0.025" rgba="0.1 0.9 0.1 0.35"
         contype="0" conaffinity="0" group="5"/>

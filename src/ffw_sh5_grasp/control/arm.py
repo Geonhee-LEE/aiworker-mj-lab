@@ -35,7 +35,6 @@ import numpy as np
 from .. import mujoco_utils
 from ..config import SETTINGS
 
-
 DEFAULT_KP = SETTINGS.number("arm_control.proportional_gain", positive=True)
 DEFAULT_KD = SETTINGS.number("arm_control.derivative_gain", minimum=0.0)
 

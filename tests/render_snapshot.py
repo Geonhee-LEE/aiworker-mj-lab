@@ -5,8 +5,9 @@
 사용법: ``python3 tests/render_snapshot.py models/hand_only.xml /tmp/out.png [--grasp 0.5]``
 """
 
-import sys
 import pathlib
+import sys
+
 import mujoco
 import numpy as np
 from PIL import Image

@@ -14,3 +14,7 @@ datasets/
 outputs/
 *.rrd
 wandb/
+*.pdf
+*.pptx
+.cache/
+huggingface/release/

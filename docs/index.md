@@ -6,6 +6,7 @@ FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 텔레오퍼
 
 [빠른 시작](getting-started.md){ .md-button .md-button--primary }
 [화면과 조작](run.md){ .md-button }
+[모방학습](guide/il/index.md){ .md-button }
 [시스템 구조](overview.md){ .md-button }
 
 <figure class="hero-figure" markdown>
@@ -40,6 +41,12 @@ FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 텔레오퍼
     공개 함수의 입력, 반환값과 데이터 변경 여부를 패키지별로 찾는다.
 
     [API 레퍼런스](api/index.md)
+
+-   :material-robot-industrial: **ACT 정책을 학습하고 싶다**
+
+    색상 분류 데이터를 수집하고 Joint/Task 정책과 PTE를 같은 조건에서 비교한다.
+
+    [학습과 평가](modular-act-training.md) · [공개 모델과 데이터](huggingface.md)
 
 </div>
 
@@ -79,6 +86,10 @@ UI는 로봇 관절을 순간 이동시키지 않는다. 목표값을 바꾸면 
 -   **스워브 모바일 베이스**
 
     차체 속도를 실제 steer/drive actuator 명령으로 바꾸고 wheel-ground contact로 이동한다.
+
+-   **ACT 색상 분류**
+
+    4색 캔을 좌우 상자에 분류하며 Joint/Task policy와 PTE 미래 offset을 비교한다.
 
 </div>
 
