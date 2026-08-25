@@ -22,16 +22,24 @@ from ffw_sh5_grasp.imitation.runtime.runner import (
 
 def test_act_shapes_and_loss():
     config = ACTPolicyConfig(
-        chunk_size=4, hidden_dim=32, latent_dim=8,
-        encoder_layers=1, decoder_layers=1, feedforward_dim=64,
-        attention_heads=4, camera_count=3, pretrained_backbone=False)
+        chunk_size=4,
+        hidden_dim=32,
+        latent_dim=8,
+        encoder_layers=1,
+        decoder_layers=1,
+        feedforward_dim=64,
+        attention_heads=4,
+        camera_count=3,
+        pretrained_backbone=False,
+    )
     policy = ACTPolicy(config, load_backbone_weights=False)
     batch = {
         "qpos": torch.zeros(2, 16),
         "images": torch.rand(2, 3, 3, 32, 32),
         "actions": torch.rand(2, 4, 16),
-        "is_pad": torch.tensor([[False, False, False, True],
-                                [False, False, True, True]]),
+        "is_pad": torch.tensor(
+            [[False, False, False, True], [False, False, True, True]]
+        ),
     }
     output = policy(batch["qpos"], batch["images"])
     assert output["actions"].shape == (2, 4, 16)
@@ -43,26 +51,42 @@ def test_act_shapes_and_loss():
 
 def test_checkpoint_runner_and_temporal_aggregation():
     config = ACTPolicyConfig(
-        chunk_size=3, hidden_dim=32, latent_dim=8,
-        encoder_layers=1, decoder_layers=1, feedforward_dim=64,
-        attention_heads=4, camera_count=3, pretrained_backbone=False)
+        chunk_size=3,
+        hidden_dim=32,
+        latent_dim=8,
+        encoder_layers=1,
+        decoder_layers=1,
+        feedforward_dim=64,
+        attention_heads=4,
+        camera_count=3,
+        pretrained_backbone=False,
+    )
     policy = ACTPolicy(config, load_backbone_weights=False)
     stats = DatasetStats(
-        qpos_mean=np.zeros(16, np.float32), qpos_std=np.ones(16, np.float32),
-        action_mean=np.zeros(16, np.float32), action_std=np.ones(16, np.float32))
+        qpos_mean=np.zeros(16, np.float32),
+        qpos_std=np.ones(16, np.float32),
+        action_mean=np.zeros(16, np.float32),
+        action_std=np.ones(16, np.float32),
+    )
     with tempfile.TemporaryDirectory() as directory:
         checkpoint = pathlib.Path(directory) / "checkpoints/policy.ckpt"
         checkpoint.parent.mkdir()
-        torch.save({
-            "model": policy.state_dict(), "policy_config": config.as_dict(),
-            "camera_names": ["a", "b", "c"]}, checkpoint)
+        torch.save(
+            {
+                "model": policy.state_dict(),
+                "policy_config": config.as_dict(),
+                "camera_names": ["a", "b", "c"],
+            },
+            checkpoint,
+        )
         stats_path = pathlib.Path(directory) / "dataset_stats.pkl"
         save_stats(stats, stats_path)
         runner = ACTPolicyRunner(checkpoint, stats_path, device="cpu")
         observation = {
             "qpos": np.zeros(16, np.float32),
-            "images": {name: np.zeros((32, 32, 3), np.uint8)
-                       for name in ("a", "b", "c")},
+            "images": {
+                name: np.zeros((32, 32, 3), np.uint8) for name in ("a", "b", "c")
+            },
         }
         action, info = runner.get_action(observation)
         assert action.shape == (16,)
@@ -84,10 +108,10 @@ def test_temporal_aggregation_prioritizes_newer_predictions():
 
 def test_proleptic_aggregation_selects_future_column_and_discards_skipped():
     aggregator = TemporalAggregator(decay=0.0)
-    aggregator.add(0, np.stack([
-        np.full(16, value) for value in (0.0, 1.0, 2.0, 3.0)]))
-    aggregator.add(1, np.stack([
-        np.full(16, value) for value in (10.0, 11.0, 12.0, 13.0)]))
+    aggregator.add(0, np.stack([np.full(16, value) for value in (0.0, 1.0, 2.0, 3.0)]))
+    aggregator.add(
+        1, np.stack([np.full(16, value) for value in (10.0, 11.0, 12.0, 13.0)])
+    )
 
     # At execution t=1 with f=2, target t+f=3 receives predictions 3 and 12.
     assert np.allclose(aggregator.action(3), 7.5)
@@ -97,48 +121,62 @@ def test_proleptic_aggregation_selects_future_column_and_discards_skipped():
 
 def test_task_checkpoint_uses_right_ee_pose_and_quaternion_ensemble():
     config = ACTPolicyConfig(
-        state_dim=8, action_dim=8, chunk_size=3, camera_count=1,
-        hidden_dim=32, latent_dim=8, encoder_layers=1, decoder_layers=1,
-        feedforward_dim=64, attention_heads=4,
-        pretrained_backbone=False)
+        state_dim=8,
+        action_dim=8,
+        chunk_size=3,
+        camera_count=1,
+        hidden_dim=32,
+        latent_dim=8,
+        encoder_layers=1,
+        decoder_layers=1,
+        feedforward_dim=64,
+        attention_heads=4,
+        pretrained_backbone=False,
+    )
     policy = ACTPolicy(config, load_backbone_weights=False)
     stats = DatasetStats(
         qpos_mean=np.zeros(8, np.float32),
         qpos_std=np.ones(8, np.float32),
         action_mean=np.zeros(8, np.float32),
-        action_std=np.ones(8, np.float32))
+        action_std=np.ones(8, np.float32),
+    )
     with tempfile.TemporaryDirectory() as directory:
         checkpoint = pathlib.Path(directory) / "checkpoints/policy.ckpt"
         checkpoint.parent.mkdir()
-        torch.save({
-            "model": policy.state_dict(),
-            "policy_config": config.as_dict(),
-            "camera_names": ["cam"],
-            "representation": "task",
-            "representation_metadata": {
-                "ee_pose_frame": "world",
-                "ee_pose_quaternion_order": "wxyz",
+        torch.save(
+            {
+                "model": policy.state_dict(),
+                "policy_config": config.as_dict(),
+                "camera_names": ["cam"],
+                "representation": "task",
+                "representation_metadata": {
+                    "ee_pose_frame": "world",
+                    "ee_pose_quaternion_order": "wxyz",
+                },
             },
-        }, checkpoint)
+            checkpoint,
+        )
         stats_path = pathlib.Path(directory) / "dataset_stats.pkl"
         save_stats(stats, stats_path)
         runner = ACTPolicyRunner(
-            checkpoint, stats_path, device="cpu", representation="auto",
-            proleptic_steps=2)
+            checkpoint,
+            stats_path,
+            device="cpu",
+            representation="auto",
+            proleptic_steps=2,
+        )
         observation = {
             "qpos": np.arange(16, dtype=np.float32) / 15.0,
             "ee_pose": {
                 "right": np.array(
-                    [0.4, -0.1, 0.9, 2.0, 0.0, 0.0, 0.0],
-                    dtype=np.float32),
+                    [0.4, -0.1, 0.9, 2.0, 0.0, 0.0, 0.0], dtype=np.float32
+                ),
             },
             "images": {"cam": np.zeros((32, 32, 3), np.uint8)},
         }
         state, _images = runner._inputs(observation)
         assert runner.representation == "task"
-        assert np.allclose(
-            state[0].numpy(),
-            [0.4, -0.1, 0.9, 1.0, 0.0, 0.0, 0.0, 1.0])
+        assert np.allclose(state[0].numpy(), [0.4, -0.1, 0.9, 1.0, 0.0, 0.0, 0.0, 1.0])
         action, info = runner.get_action(observation)
         assert action.shape == (8,)
         assert info["predicted_chunk"].shape == (3, 8)
@@ -164,8 +202,8 @@ def test_task_checkpoint_uses_right_ee_pose_and_quaternion_ensemble():
 
         try:
             ACTPolicyRunner(
-                checkpoint, stats_path, device="cpu",
-                representation="joint")
+                checkpoint, stats_path, device="cpu", representation="joint"
+            )
         except ValueError as error:
             assert "does not match" in str(error)
         else:

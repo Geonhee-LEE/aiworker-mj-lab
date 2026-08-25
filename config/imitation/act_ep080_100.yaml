@@ -1,6 +1,7 @@
 run_name: can_to_box_act_ep080_100
 dataset_dir: datasets/can_to_box_ep080_100
 output_dir: outputs/act
+representation: joint
 # can-to-box v1은 16D HDF5 중 오른팔 8D만 학습한다.
 camera_names: [cam_high, cam_right_wrist]
 policy_side: right
@@ -28,7 +29,10 @@ test_fraction: 0.1
 split_seed: 42
 training_seed: 1
 num_workers: 0
+prefetch_factor: 1
 device: auto
+checkpoint_interval: 100
+plot_interval: 100
 rerun: true
 wandb:
   # 인증 정보는 YAML에 넣지 않고 `wandb login`으로 로컬에 저장한다.

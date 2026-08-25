@@ -50,48 +50,62 @@ WHEEL_RADIUS = SETTINGS.number("base.geometry.wheel_radius_m", positive=True)
 # 공식 AI Worker 런타임 설정은 약 ±2π 조향을 허용한다. 이 범위를 유지하면 ±90도
 # 부근의 작은 차체 twist 변화가 거의 180도에 이르는 모듈 반전을 요구하는 현상도
 # 막을 수 있다. 좁은 범위 동작은 주입 가능한 범위 인자로 계속 검증한다.
-STEER_RANGE = tuple(float(value) for value in SETTINGS.get(
-    "base.geometry.steering_range_rad"))
+STEER_RANGE = tuple(
+    float(value) for value in SETTINGS.get("base.geometry.steering_range_rad")
+)
 MODULE_ANGLE_OFFSETS = {
-    name: float(value) for name, value in SETTINGS.get(
-        "base.geometry.module_angle_offsets_rad").items()
+    name: float(value)
+    for name, value in SETTINGS.get("base.geometry.module_angle_offsets_rad").items()
 }
-WHEEL_SPEED_LIMIT = tuple(float(value) for value in SETTINGS.get(
-    "base.geometry.wheel_speed_limit_rad_s"))
+WHEEL_SPEED_LIMIT = tuple(
+    float(value) for value in SETTINGS.get("base.geometry.wheel_speed_limit_rad_s")
+)
 if set(MODULE_ANGLE_OFFSETS) != set(WHEEL_POS):
-    raise ValueError("바퀴 위치와 module_angle_offsets_rad의 모듈 이름이 같아야 합니다.")
+    raise ValueError(
+        "바퀴 위치와 module_angle_offsets_rad의 모듈 이름이 같아야 합니다."
+    )
 if STEER_RANGE[0] >= STEER_RANGE[1] or WHEEL_SPEED_LIMIT[0] >= WHEEL_SPEED_LIMIT[1]:
     raise ValueError("조향 및 바퀴 속도 범위는 [최솟값, 최댓값] 순서여야 합니다.")
 
 LINEAR_VEL_DEADBAND = SETTINGS.number(
-    "base.control.linear_velocity_deadband_m_s", minimum=0.0)
+    "base.control.linear_velocity_deadband_m_s", minimum=0.0
+)
 ANGULAR_VEL_DEADBAND = SETTINGS.number(
-    "base.control.angular_velocity_deadband_rad_s", minimum=0.0)
+    "base.control.angular_velocity_deadband_rad_s", minimum=0.0
+)
 MODULE_SPEED_EPS = 1e-5
 STEERING_ANGULAR_VELOCITY_LIMIT = SETTINGS.number(
-    "base.control.steering_velocity_limit_rad_s", positive=True)
+    "base.control.steering_velocity_limit_rad_s", positive=True
+)
 STEERING_ALIGNMENT_ANGLE_ERROR_THRESHOLD = SETTINGS.number(
-    "base.control.alignment_angle_threshold_rad", minimum=0.0)
+    "base.control.alignment_angle_threshold_rad", minimum=0.0
+)
 STEERING_ALIGNMENT_START_SPEED_ERROR_THRESHOLD = SETTINGS.number(
-    "base.control.alignment_start_speed_threshold_rad_s", minimum=0.0)
-STEERING_TOLERANCE = SETTINGS.number(
-    "base.control.steering_tolerance_rad", minimum=0.0)
+    "base.control.alignment_start_speed_threshold_rad_s", minimum=0.0
+)
+STEERING_TOLERANCE = SETTINGS.number("base.control.steering_tolerance_rad", minimum=0.0)
 DIRECTION_SWITCH_STEERING_HYSTERESIS = SETTINGS.number(
-    "base.control.direction_switch_hysteresis_rad", minimum=0.0)
+    "base.control.direction_switch_hysteresis_rad", minimum=0.0
+)
 REVERSAL_DECEL_RATE = SETTINGS.number(
-    "base.control.reversal_deceleration_rate", positive=True)
+    "base.control.reversal_deceleration_rate", positive=True
+)
 REVERSAL_ACCEL_RATE = SETTINGS.number(
-    "base.control.reversal_acceleration_rate", positive=True)
-REVERSAL_THRESHOLD = SETTINGS.number(
-    "base.control.reversal_threshold", minimum=0.0)
+    "base.control.reversal_acceleration_rate", positive=True
+)
+REVERSAL_THRESHOLD = SETTINGS.number("base.control.reversal_threshold", minimum=0.0)
 DRIVE_COMMAND_ACCEL_LIMIT = SETTINGS.number(
-    "base.control.drive_acceleration_limit_rad_s2", positive=True)
+    "base.control.drive_acceleration_limit_rad_s2", positive=True
+)
 DRIVE_COMMAND_BRAKE_LIMIT = SETTINGS.number(
-    "base.control.drive_brake_limit_rad_s2", positive=True)
+    "base.control.drive_brake_limit_rad_s2", positive=True
+)
 DRIVE_COMMAND_CREEP_THRESHOLD = SETTINGS.number(
-    "base.control.drive_creep_threshold_rad_s", minimum=0.0)
+    "base.control.drive_creep_threshold_rad_s", minimum=0.0
+)
 DRIVE_COMMAND_CREEP_BRAKE_LIMIT = SETTINGS.number(
-    "base.control.drive_creep_brake_limit_rad_s2", positive=True)
+    "base.control.drive_creep_brake_limit_rad_s2", positive=True
+)
 
 
 @dataclass(frozen=True)
@@ -134,7 +148,9 @@ class BaseTeleop:
         # 홀로노믹 차체 twist에서 병진과 yaw는 독립 성분이다. yaw 입력 중 병진을
         # 억제하면 곡선 주행을 할 수 없으므로 두 성분을 함께 허용한다.
         if fwd != 0.0 or left != 0.0:
-            self.v_local += (target_local - self.v_local) * (1.0 - math.exp(-K_ACCEL * dt))
+            self.v_local += (target_local - self.v_local) * (
+                1.0 - math.exp(-K_ACCEL * dt)
+            )
         else:
             self.v_local *= math.exp(-K_BRAKE * dt)
 
@@ -165,9 +181,14 @@ class BaseTeleop:
 class SwerveKinematics:
     """독립 조향 바퀴 모듈의 순수 역기구학과 정기구학."""
 
-    def __init__(self, wheel_positions=WHEEL_POS, wheel_radius=WHEEL_RADIUS,
-                 steer_range=STEER_RANGE, angle_offsets=MODULE_ANGLE_OFFSETS,
-                 wheel_speed_limit=WHEEL_SPEED_LIMIT):
+    def __init__(
+        self,
+        wheel_positions=WHEEL_POS,
+        wheel_radius=WHEEL_RADIUS,
+        steer_range=STEER_RANGE,
+        angle_offsets=MODULE_ANGLE_OFFSETS,
+        wheel_speed_limit=WHEEL_SPEED_LIMIT,
+    ):
         """모듈 위치·반지름·조향 보정값과 actuator 한계를 복사해 보관한다.
 
         기본값은 FFW-SH5 YAML 설정이며, 테스트나 다른 플랫폼은 같은 형식의 기하를
@@ -202,16 +223,23 @@ class SwerveKinematics:
             robot_angle = math.atan2(wheel_vy, wheel_vx)
             joint_angle = _normalize_angle(robot_angle - self.angle_offsets[name])
             steer, direction = self._nearest_feasible_state(
-                current, joint_angle, preferred_directions.get(name, 1.0))
+                current, joint_angle, preferred_directions.get(name, 1.0)
+            )
             states[name] = (steer, direction * linear_speed / self.wheel_radius)
 
         # 포화 중에도 요청한 차체 twist 방향을 보존한다. 공통 배율은 모든 모듈의 속도
         # 비율을 유지하지만 모듈별 제한은 병진과 회전의 비율을 왜곡한다.
-        max_requested = max((abs(speed) for _angle, speed in states.values()), default=0.0)
-        max_allowed = max(abs(self.wheel_speed_limit[0]), abs(self.wheel_speed_limit[1]))
+        max_requested = max(
+            (abs(speed) for _angle, speed in states.values()), default=0.0
+        )
+        max_allowed = max(
+            abs(self.wheel_speed_limit[0]), abs(self.wheel_speed_limit[1])
+        )
         scale = 1.0 if max_requested <= max_allowed else max_allowed / max_requested
         if scale < 1.0:
-            states = {name: (angle, speed * scale) for name, (angle, speed) in states.items()}
+            states = {
+                name: (angle, speed * scale) for name, (angle, speed) in states.items()
+            }
         return states, scale
 
     def forward(self, steering_positions, wheel_velocities):
@@ -227,8 +255,7 @@ class SwerveKinematics:
         # 원래 계수 부족인 행렬을 가역처럼 보이게 하고 약 1e-7 rad 잡음을 수 m/s의
         # 가짜 횡속도로 증폭한다. 절단 SVD로 물리적 의미가 있는 최소 노름 관측 twist를
         # 반환한다.
-        solution, *_ = np.linalg.lstsq(
-            np.asarray(rows), np.asarray(rhs), rcond=1e-6)
+        solution, *_ = np.linalg.lstsq(np.asarray(rows), np.asarray(rhs), rcond=1e-6)
         return BodyTwist(*(float(v) for v in solution))
 
     def _nearest_feasible_state(self, current, target_angle, preferred_direction=1.0):
@@ -244,8 +271,11 @@ class SwerveKinematics:
             if lo - 1e-12 <= angle <= hi + 1e-12:
                 direction = 1.0 if k % 2 == 0 else -1.0
                 travel = abs(angle - current)
-                switch_cost = (DIRECTION_SWITCH_STEERING_HYSTERESIS
-                               if direction != preferred_direction else 0.0)
+                switch_cost = (
+                    DIRECTION_SWITCH_STEERING_HYSTERESIS
+                    if direction != preferred_direction
+                    else 0.0
+                )
                 candidates.append((travel + switch_cost, travel, angle, direction))
         if not candidates:
             # π보다 좁은 조향 구간은 모든 방향을 표현할 수 없다. 이런 모델에서도
@@ -300,14 +330,21 @@ class SwerveDrive:
             return self._hold_zero(steering_positions)
 
         desired, self.wheel_saturation_scale = self.kinematics.inverse(
-            twist, steering_positions or self.previous_commands,
-            self.previous_wheel_rotation_direction)
+            twist,
+            steering_positions or self.previous_commands,
+            self.previous_wheel_rotation_direction,
+        )
         module_results = {}
         all_aligned = True
         for name, (target_angle, target_wheel_speed) in desired.items():
             steering_cmd, wheel_cmd, aligned = self._control_module(
-                name, target_angle, target_wheel_speed, dt,
-                steering_positions, wheel_velocities)
+                name,
+                target_angle,
+                target_wheel_speed,
+                dt,
+                steering_positions,
+                wheel_velocities,
+            )
             module_results[name] = (steering_cmd, wheel_cmd)
             all_aligned = all_aligned and aligned
 
@@ -315,8 +352,7 @@ class SwerveDrive:
         # 따른다. 조향 도중 차체가 의도하지 않은 방향으로 순간 이동하는 것을 막는다.
         if not all_aligned:
             module_results = {
-                name: (angle, 0.0)
-                for name, (angle, _speed) in module_results.items()
+                name: (angle, 0.0) for name, (angle, _speed) in module_results.items()
             }
             self.previous_drive_commands = dict.fromkeys(self.wheels, 0.0)
         else:
@@ -332,14 +368,19 @@ class SwerveDrive:
         result = {}
         for name, (steering, target_speed) in commands.items():
             previous = self.previous_drive_commands[name]
-            braking = (previous * target_speed >= 0.0
-                       and abs(target_speed) < abs(previous))
+            braking = previous * target_speed >= 0.0 and abs(target_speed) < abs(
+                previous
+            )
             if braking and abs(previous) < DRIVE_COMMAND_CREEP_THRESHOLD:
                 rate = DRIVE_COMMAND_CREEP_BRAKE_LIMIT
             else:
-                rate = DRIVE_COMMAND_BRAKE_LIMIT if braking else DRIVE_COMMAND_ACCEL_LIMIT
+                rate = (
+                    DRIVE_COMMAND_BRAKE_LIMIT if braking else DRIVE_COMMAND_ACCEL_LIMIT
+                )
             max_change = rate * dt
-            speed = previous + float(np.clip(target_speed - previous, -max_change, max_change))
+            speed = previous + float(
+                np.clip(target_speed - previous, -max_change, max_change)
+            )
             if abs(speed) < 1e-6:
                 speed = 0.0
             self.previous_drive_commands[name] = speed
@@ -352,44 +393,61 @@ class SwerveDrive:
             self.reversal_phase[name] = ReversalPhase.NORMAL
             self.wheel_speed_scale[name] = 1.0
             cur = _feedback_value(
-                steering_positions, name, self.previous_commands[name])
+                steering_positions, name, self.previous_commands[name]
+            )
             self.steer_angle[name] = cur
             self.previous_commands[name] = cur
         return {name: (self.steer_angle[name], 0.0) for name in self.wheels}
 
-    def _control_module(self, name, target_angle, target_wheel_speed, dt,
-                        steering_positions, wheel_velocities):
+    def _control_module(
+        self,
+        name,
+        target_angle,
+        target_wheel_speed,
+        dt,
+        steering_positions,
+        wheel_velocities,
+    ):
         """모듈 하나에 반전 FSM·조향 변화율·정렬 게이트를 적용한다.
 
         반환값은 ``(조향 명령, 구동 각속도 명령, 정렬 여부)``다. 실제 조향이 허용
         오차 밖이면 잘못된 방향으로 밀지 않도록 구동 명령을 0으로 만든다.
         """
         current_steering = _feedback_value(
-            steering_positions, name, self.previous_commands[name])
+            steering_positions, name, self.previous_commands[name]
+        )
         current_wheel_velocity = _feedback_value(wheel_velocities, name, 0.0)
         direction = -1.0 if target_wheel_speed < 0.0 else 1.0
         steering_target = self._update_reversal_phase(
-            name, direction, target_angle, current_steering, current_wheel_velocity, dt)
+            name, direction, target_angle, current_steering, current_wheel_velocity, dt
+        )
         # 지연된 피드백 위치가 아니라 명령 궤적의 변화율을 제한한다. 실시간 피드백을
         # 기준으로 쓰면 위치 서보 오차와 토크가 일정하게 남아 정지 마찰 때문에 조향이
         # 약 20도 부근에 갇힐 수 있다.
         steering_cmd = _limit_steering_rate(
-            self.previous_commands[name], steering_target, dt,
+            self.previous_commands[name],
+            steering_target,
+            dt,
             self.kinematics.steer_range,
         )
 
         effective_direction = (
             self.previous_wheel_rotation_direction[name]
-            if self.reversal_phase[name] == ReversalPhase.DECELERATING else direction
+            if self.reversal_phase[name] == ReversalPhase.DECELERATING
+            else direction
         )
-        wheel_cmd = effective_direction * abs(target_wheel_speed) * self.wheel_speed_scale[name]
+        wheel_cmd = (
+            effective_direction * abs(target_wheel_speed) * self.wheel_speed_scale[name]
+        )
         align_err = abs(target_angle - current_steering)
         aligned = align_err < STEERING_ALIGNMENT_ANGLE_ERROR_THRESHOLD
         if not aligned:
             wheel_cmd = 0.0
         return steering_cmd, wheel_cmd, aligned
 
-    def _update_reversal_phase(self, name, direction, target, current, wheel_velocity, dt):
+    def _update_reversal_phase(
+        self, name, direction, target, current, wheel_velocity, dt
+    ):
         """바퀴 방향 변경을 감속→조향→가속 순서로 진행하고 현재 조향 목표를 반환한다."""
         previous_direction = self.previous_wheel_rotation_direction[name]
         phase = self.reversal_phase[name]
@@ -403,7 +461,9 @@ class SwerveDrive:
                 return target
 
         if direction != previous_direction and phase in (
-                ReversalPhase.NORMAL, ReversalPhase.ACCELERATING):
+            ReversalPhase.NORMAL,
+            ReversalPhase.ACCELERATING,
+        ):
             self.reversal_target_steering_angle[name] = target
             self.reversal_target_direction[name] = direction
             if abs(wheel_velocity) < STEERING_ALIGNMENT_START_SPEED_ERROR_THRESHOLD:
@@ -420,7 +480,8 @@ class SwerveDrive:
             self.reversal_target_direction[name] = direction
             self.reversal_target_steering_angle[name] = target
             self.wheel_speed_scale[name] = max(
-                0.0, self.wheel_speed_scale[name] - REVERSAL_DECEL_RATE * dt)
+                0.0, self.wheel_speed_scale[name] - REVERSAL_DECEL_RATE * dt
+            )
             if self.wheel_speed_scale[name] <= REVERSAL_THRESHOLD:
                 self.wheel_speed_scale[name] = 0.0
                 self.reversal_phase[name] = ReversalPhase.STEERING
@@ -431,13 +492,16 @@ class SwerveDrive:
             self.reversal_target_direction[name] = direction
             self.wheel_speed_scale[name] = 0.0
             if abs(target - current) < STEERING_TOLERANCE:
-                self.previous_wheel_rotation_direction[name] = self.reversal_target_direction[name]
+                self.previous_wheel_rotation_direction[name] = (
+                    self.reversal_target_direction[name]
+                )
                 self.reversal_phase[name] = ReversalPhase.ACCELERATING
             return target
 
         if phase == ReversalPhase.ACCELERATING:
             self.wheel_speed_scale[name] = min(
-                1.0, self.wheel_speed_scale[name] + REVERSAL_ACCEL_RATE * dt)
+                1.0, self.wheel_speed_scale[name] + REVERSAL_ACCEL_RATE * dt
+            )
             if self.wheel_speed_scale[name] >= 1.0:
                 self.reversal_phase[name] = ReversalPhase.NORMAL
             return target

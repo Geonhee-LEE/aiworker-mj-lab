@@ -10,9 +10,18 @@ _TASK_ACTION_COMPONENTS = _POSE_COMPONENTS + ("grasp",)
 
 
 class RolloutRerunLogger:
-    def __init__(self, path, camera_names, *, enabled=True,
-                 application_id="aiworker_act_rollout", live=False,
-                 port=9877, frame_stride=1, image_jpeg_quality=85):
+    def __init__(
+        self,
+        path,
+        camera_names,
+        *,
+        enabled=True,
+        application_id="aiworker_act_rollout",
+        live=False,
+        port=9877,
+        frame_stride=1,
+        image_jpeg_quality=85,
+    ):
         self.path = Path(path)
         self.camera_names = tuple(camera_names)
         self.enabled = bool(enabled)
@@ -35,15 +44,15 @@ class RolloutRerunLogger:
             import rerun as rr
         except ImportError as error:
             raise RuntimeError(
-                "Rerun rollout logging requires: pip install rerun-sdk") from error
+                "Rerun rollout logging requires: pip install rerun-sdk"
+            ) from error
         self.rr = rr
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.recording = rr.RecordingStream(self.application_id)
         self.recording.__enter__()
         blueprint = rollout_blueprint(self.camera_names)
         try:
-            self.recording.save(
-                self.path, default_blueprint=blueprint)
+            self.recording.save(self.path, default_blueprint=blueprint)
             if self.live:
                 self.recording.spawn(
                     port=self.port,
@@ -62,9 +71,19 @@ class RolloutRerunLogger:
             raise
         return self
 
-    def log(self, frame, observation, action, *, predicted_chunk=None,
-            expert_action=None, task_action=None, representation="joint",
-            ik_metrics=None, temporal_metrics=None):
+    def log(
+        self,
+        frame,
+        observation,
+        action,
+        *,
+        predicted_chunk=None,
+        expert_action=None,
+        task_action=None,
+        representation="joint",
+        ik_metrics=None,
+        temporal_metrics=None,
+    ):
         if self.recording is None:
             return
         if int(frame) % self.frame_stride:
@@ -73,53 +92,53 @@ class RolloutRerunLogger:
         for name, image in observation["images"].items():
             image_log = self.rr.Image(image)
             if hasattr(image_log, "compress"):
-                image_log = image_log.compress(
-                    jpeg_quality=self.image_jpeg_quality)
+                image_log = image_log.compress(jpeg_quality=self.image_jpeg_quality)
             self.recording.log(f"cameras/{name}", image_log)
         for side, pose in observation.get("ee_pose", {}).items():
             for component, value in zip(_POSE_COMPONENTS, pose):
                 self.recording.log(
-                    f"state/ee_pose/{side}/{component}",
-                    self.rr.Scalars(float(value)))
+                    f"state/ee_pose/{side}/{component}", self.rr.Scalars(float(value))
+                )
         for index, name in enumerate(ACTION_NAMES):
             self.recording.log(
-                f"state/qpos/{name}", self.rr.Scalars(observation["qpos"][index]))
+                f"state/qpos/{name}", self.rr.Scalars(observation["qpos"][index])
+            )
             self.recording.log(
-                f"policy/executed/{name}", self.rr.Scalars(action[index]))
+                f"policy/executed/{name}", self.rr.Scalars(action[index])
+            )
             if expert_action is not None:
                 self.recording.log(
-                    f"expert/action/{name}",
-                    self.rr.Scalars(expert_action[index]))
+                    f"expert/action/{name}", self.rr.Scalars(expert_action[index])
+                )
         if predicted_chunk is not None:
             self.recording.log(
                 "policy/action_chunk",
                 self.rr.Tensor(
-                    predicted_chunk,
-                    dim_names=("future_timestep", "action_dimension")))
+                    predicted_chunk, dim_names=("future_timestep", "action_dimension")
+                ),
+            )
         if task_action is not None:
-            for component, value in zip(
-                    _TASK_ACTION_COMPONENTS, task_action):
+            for component, value in zip(_TASK_ACTION_COMPONENTS, task_action):
                 self.recording.log(
-                    f"policy/task_target/{component}",
-                    self.rr.Scalars(float(value)))
+                    f"policy/task_target/{component}", self.rr.Scalars(float(value))
+                )
         if ik_metrics is not None:
             for name, value in ik_metrics.items():
-                self.recording.log(
-                    f"policy/ik/{name}", self.rr.Scalars(float(value)))
+                self.recording.log(f"policy/ik/{name}", self.rr.Scalars(float(value)))
         if temporal_metrics is not None:
             for name, value in temporal_metrics.items():
                 self.recording.log(
-                    f"policy/temporal/{name}",
-                    self.rr.Scalars(float(value)))
+                    f"policy/temporal/{name}", self.rr.Scalars(float(value))
+                )
         if int(frame) == 0:
             self.recording.log(
-                "policy/representation", self.rr.TextLog(str(representation)))
+                "policy/representation", self.rr.TextLog(str(representation))
+            )
         task = observation["task"]
+        self.recording.log("task/success", self.rr.Scalars(float(task["success"])))
         self.recording.log(
-            "task/success", self.rr.Scalars(float(task["success"])))
-        self.recording.log(
-            "task/object_position_error",
-            self.rr.Scalars(task["object_position_error"]))
+            "task/object_position_error", self.rr.Scalars(task["object_position_error"])
+        )
 
     def __exit__(self, type_, value, traceback):
         recording = self.recording

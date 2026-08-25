@@ -17,7 +17,9 @@ def find_actuator_for_joint(model, joint_id):
     액추에이터를 선형 탐색한다. 해당 액추에이터가 없으면 ``None``을 반환한다.
     """
     for aid in range(model.nu):
-        if (model.actuator_trntype[aid] == mujoco.mjtTrn.mjTRN_JOINT
-                and model.actuator_trnid[aid, 0] == joint_id):
+        if (
+            model.actuator_trntype[aid] == mujoco.mjtTrn.mjTRN_JOINT
+            and model.actuator_trnid[aid, 0] == joint_id
+        ):
             return aid
     return None

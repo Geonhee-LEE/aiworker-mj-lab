@@ -53,10 +53,13 @@ class ArmTorqueController:
         """
         self.model = model
         joint_names = tuple(joint_names)
-        self.joint_ids = np.array([
-            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
-            for name in joint_names
-        ], dtype=int)
+        self.joint_ids = np.array(
+            [
+                mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+                for name in joint_names
+            ],
+            dtype=int,
+        )
         self.qpos_adrs = np.asarray(model.jnt_qposadr[self.joint_ids], dtype=int)
         self.dof_ids = np.asarray(model.jnt_dofadr[self.joint_ids], dtype=int)
         actuator_ids = []
@@ -69,9 +72,11 @@ class ArmTorqueController:
             actuator_ids.append(aid)
         self.actuator_ids = np.asarray(actuator_ids, dtype=int)
         self.ctrl_lower = np.asarray(
-            model.actuator_ctrlrange[self.actuator_ids, 0], dtype=float)
+            model.actuator_ctrlrange[self.actuator_ids, 0], dtype=float
+        )
         self.ctrl_upper = np.asarray(
-            model.actuator_ctrlrange[self.actuator_ids, 1], dtype=float)
+            model.actuator_ctrlrange[self.actuator_ids, 1], dtype=float
+        )
         self.kp = float(kp)
         self.kd = float(kd)
 

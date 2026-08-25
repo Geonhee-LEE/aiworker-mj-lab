@@ -39,7 +39,9 @@ SIDE_Z_FRAC_HI = 0.92
 
 def write_obj(path, verts, faces, uvs_per_face_corner=None):
     """정점·삼각형 면과 선택적 면 꼭짓점 UV를 OBJ 형식으로 기록한다."""
-    lines = ["# tests/generate_can_label_mesh.py가 생성한 파일이므로 직접 수정하지 않는다.\n"]
+    lines = [
+        "# tests/generate_can_label_mesh.py가 생성한 파일이므로 직접 수정하지 않는다.\n"
+    ]
     for v in verts:
         lines.append(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
     if uvs_per_face_corner is not None:
@@ -49,7 +51,7 @@ def write_obj(path, verts, faces, uvs_per_face_corner=None):
         for fi, face in enumerate(faces):
             a, b, c = face + 1  # OBJ 인덱스는 1부터 시작한다.
             base = fi * 3
-            lines.append(f"f {a}/{base+1} {b}/{base+2} {c}/{base+3}\n")
+            lines.append(f"f {a}/{base + 1} {b}/{base + 2} {c}/{base + 3}\n")
     else:
         for face in faces:
             a, b, c = face + 1
@@ -71,8 +73,10 @@ def main():
     is_side = (face_z >= z_lo) & (face_z <= z_hi)
     side_faces = faces[is_side]
     cap_faces = faces[~is_side]
-    print(f"side faces: {len(side_faces)}  cap faces: {len(cap_faces)}  "
-          f"(of {len(faces)} total)")
+    print(
+        f"side faces: {len(side_faces)}  cap faces: {len(cap_faces)}  "
+        f"(of {len(faces)} total)"
+    )
 
     # 옆면 mesh는 면 꼭짓점마다 원통형 UV를 만들고 각 면의 각도를 독립적으로 펼친다.
     side_uvs = []

@@ -80,15 +80,16 @@ class KinematicTree:
         self.nq = int(model.nq)
         self.qpos0 = np.asarray(model.qpos0, dtype=float).copy()
         self.bodies = tuple(
-            self._copy_body(model, body_id) for body_id in range(model.nbody))
+            self._copy_body(model, body_id) for body_id in range(model.nbody)
+        )
         self.joints = tuple(
-            self._copy_joint(model, joint_id) for joint_id in range(model.njnt))
+            self._copy_joint(model, joint_id) for joint_id in range(model.njnt)
+        )
         self.sites = tuple(
-            self._copy_site(model, site_id) for site_id in range(model.nsite))
-        self.joint_by_name = {
-            joint.name: joint for joint in self.joints if joint.name}
-        self.site_by_name = {
-            site.name: site for site in self.sites if site.name}
+            self._copy_site(model, site_id) for site_id in range(model.nsite)
+        )
+        self.joint_by_name = {joint.name: joint for joint in self.joints if joint.name}
+        self.site_by_name = {site.name: site for site in self.sites if site.name}
 
         self.body_paths = tuple(self._body_path(body.id) for body in self.bodies)
         children_by_body = [[] for _ in self.bodies]
@@ -100,7 +101,8 @@ class KinematicTree:
         self.children_by_body = tuple(tuple(ids) for ids in children_by_body)
         self.sites_by_body = tuple(tuple(ids) for ids in sites_by_body)
         self.site_paths = {
-            site.id: self.body_paths[site.body_id] for site in self.sites}
+            site.id: self.body_paths[site.body_id] for site in self.sites
+        }
 
     @staticmethod
     def _name(model, object_type, object_id):
@@ -166,8 +168,7 @@ class KinematicTree:
                 joint = self.joints[joint_id]
                 axis_world = rotation @ joint.axis
                 anchor_world = position + rotation @ joint.position
-                joint_frames[joint_id] = (
-                    joint.kind, axis_world, anchor_world)
+                joint_frames[joint_id] = (joint.kind, axis_world, anchor_world)
                 displacement = qpos[joint.qpos_adr] - self.qpos0[joint.qpos_adr]
                 if joint.kind == _SLIDE:
                     position = position + axis_world * displacement
@@ -177,7 +178,8 @@ class KinematicTree:
                 else:
                     raise NotImplementedError(
                         f"body path contains unsupported joint {joint.name!r}; "
-                        "tree kinematics supports scalar hinge and slide joints")
+                        "tree kinematics supports scalar hinge and slide joints"
+                    )
         return position, rotation, joint_frames
 
     @staticmethod
@@ -191,12 +193,10 @@ class KinematicTree:
             if kind == _SLIDE:
                 jacobian[:, column] = axis_world
             elif kind == _HINGE:
-                jacobian[:, column] = np.cross(
-                    axis_world, point_world - anchor_world)
+                jacobian[:, column] = np.cross(axis_world, point_world - anchor_world)
         return jacobian
 
-    def point_jacobian(self, qpos, body_id, point_world, joint_ids,
-                       frame_cache=None):
+    def point_jacobian(self, qpos, body_id, point_world, joint_ids, frame_cache=None):
         """Body에 고정된 world point의 3×N Jacobian을 반환한다."""
         qpos = np.asarray(qpos, dtype=float)
         if qpos.shape != (self.nq,):
@@ -211,7 +211,8 @@ class KinematicTree:
                 _, _, joint_frames = self._forward_body(qpos, body_id)
                 frame_cache[body_id] = joint_frames
         return self._point_jacobian_from_frames(
-            np.asarray(point_world, dtype=float), joint_ids, joint_frames)
+            np.asarray(point_world, dtype=float), joint_ids, joint_frames
+        )
 
     def forward_site(self, qpos, site_id, joint_ids):
         """Site world pose와 선택된 joint 열의 6×N Jacobian을 반환한다."""
@@ -227,7 +228,8 @@ class KinematicTree:
         site_rotation = rotation @ site.rotation
         jacobian = np.zeros((6, len(joint_ids)))
         jacobian[:3] = self._point_jacobian_from_frames(
-            site_position, joint_ids, joint_frames)
+            site_position, joint_ids, joint_frames
+        )
         for column, joint_id in enumerate(joint_ids):
             frame = joint_frames.get(int(joint_id))
             if frame is not None and frame[0] == _HINGE:

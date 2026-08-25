@@ -1,5 +1,36 @@
 # 릴리스 기록
 
+## 3.1.0 — Research Report, Grad-CAM & Cleanup
+
+2026-08-25 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v3.1.0)
+
+### 보고서와 분석
+
+- `IK_Teleoperation_v3.pdf`의 연구 흐름을 실제 코드·manifest·rollout 로그와 교차검증한
+  [ACT 연구 보고서](research-report.md) 추가
+- 보고서의 수집/학습 주기, D97/D150 색상 개수와 PTE 범위를 현재 구현 기준으로 정정
+- action-target Grad-CAM CLI와 lossless NPZ를 추가하고, Joint/Task의 공정한 비교를 위한
+  signed world-frame EE-Y 폐루프 분석 방법과 인과 해석 한계를 문서화
+- PTE 성공률·penalized mean time 및 데이터/성공·실패 분포 그래프 생성기 추가
+
+### 코드 구조
+
+- Joint/Task 학습의 중복 `modular_dataset_loader`, `modular_trainer`,
+  `modular_training_config`를 공용 dataset/trainer/config와 representation strategy로 통합
+- `train-modular`는 단일 `train` 구현으로 연결하고 오래된 standalone entrypoint와 policy
+  wrapper를 제거
+- checkpoint representation, dataset statistics, split과 policy catalog 회귀를 보강
+
+### 배포와 검증
+
+- 공개 Hugging Face
+  [데이터셋](https://huggingface.co/datasets/ggh-png/ffw-sh5-can-color-sort)과
+  [모델](https://huggingface.co/ggh-png/ffw-sh5-act-color-sort)의 카드·manifest·사용법 갱신
+- 두 Hub 저장소에 코드 릴리즈와 대응하는 `v3.1.0` revision tag 추가
+- Ruff, pytest 44개와 `mkdocs build --strict` 통과
+
+전체 diff: [v3.0.0...v3.1.0](https://github.com/ggh-png/aiworker-mj-lab/compare/v3.0.0...v3.1.0)
+
 ## 3.0.0 — Modular ACT Color Sorting
 
 2026-08-23 발행. [GitHub Release](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v3.0.0)

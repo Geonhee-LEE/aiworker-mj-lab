@@ -13,8 +13,7 @@ def main(argv=None):
     parser.add_argument("--episode-idx", type=int, default=0)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
-    path = resolve_episode_path(
-        args.episode, args.dataset_dir, args.episode_idx)
+    path = resolve_episode_path(args.episode, args.dataset_dir, args.episode_idx)
     import imageio.v2 as imageio
     import numpy as np
 
@@ -30,9 +29,10 @@ def main(argv=None):
         for frame in range(episode.length):
             images = [episode.images[name][frame] for name in camera_names]
             target_height = max(image.shape[0] for image in images)
-            padded = [np.pad(
-                image, ((0, target_height - image.shape[0]), (0, 0), (0, 0)))
-                for image in images]
+            padded = [
+                np.pad(image, ((0, target_height - image.shape[0]), (0, 0), (0, 0)))
+                for image in images
+            ]
             writer.append_data(np.concatenate(padded, axis=1))
     print(output)
 

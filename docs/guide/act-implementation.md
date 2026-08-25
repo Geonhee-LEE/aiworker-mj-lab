@@ -100,7 +100,7 @@ PTE `f>0`에서는 `t+f`의 후보를 최신 예측부터 놓고 `exp(-m*i)`로 
 | `act/training_config.py` | YAML 파싱·검증과 policy 차원 선택 |
 | `act/dataset_loader.py` | episode split, train 통계, lazy chunk sampling |
 | `act/trainer.py` | seed, DataLoader, optimizer, checkpoint lifecycle |
-| `act/modular_*.py` | Joint/Task 표현, 모델 검증, 공통 설정과 학습 lifecycle |
+| `act/representations.py` | Joint/Task state·action 변환과 Task target FK |
 | `act/training_output.py` | CSV/JSONL과 PNG metric 출력 |
 | `runtime/runner.py` | checkpoint 복원, 역정규화, temporal ensemble/PTE |
 | `runtime/task_space.py` | task 출력 quaternion 처리와 오른팔 IK adapter |

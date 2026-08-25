@@ -48,10 +48,8 @@ def bounded_quadratic_program(hessian, linear, lower, upper):
     x[fixed] = 0.5 * (lower[fixed] + upper[fixed])
     if np.any(movable):
         reduced_hessian = hessian[np.ix_(movable, movable)]
-        reduced_linear = (
-            linear[movable] + hessian[np.ix_(movable, fixed)] @ x[fixed])
-        solution, *_ = np.linalg.lstsq(
-            reduced_hessian, -reduced_linear, rcond=None)
+        reduced_linear = linear[movable] + hessian[np.ix_(movable, fixed)] @ x[fixed]
+        solution, *_ = np.linalg.lstsq(reduced_hessian, -reduced_linear, rcond=None)
         x[movable] = np.clip(solution, lower[movable], upper[movable])
     active_lower = movable & (x <= lower + TOLERANCE)
     active_upper = movable & ~active_lower & (x >= upper - TOLERANCE)
@@ -63,10 +61,10 @@ def bounded_quadratic_program(hessian, linear, lower, upper):
         candidate = x.copy()
         if np.any(free):
             reduced_hessian = hessian[np.ix_(free, free)]
-            reduced_linear = (
-                linear[free] + hessian[np.ix_(free, active)] @ x[active])
+            reduced_linear = linear[free] + hessian[np.ix_(free, active)] @ x[active]
             candidate[free], *_ = np.linalg.lstsq(
-                reduced_hessian, -reduced_linear, rcond=None)
+                reduced_hessian, -reduced_linear, rcond=None
+            )
 
         direction = candidate - x
         step = 1.0
@@ -100,8 +98,8 @@ def bounded_quadratic_program(hessian, linear, lower, upper):
 
 
 def bounded_quadratic_program_with_barriers(
-        hessian, linear, lower, upper,
-        barrier_matrix, barrier_lower, slack_weight):
+    hessian, linear, lower, upper, barrier_matrix, barrier_lower, slack_weight
+):
     """Box-QP에 ``Gx >= h`` quadratic soft barrier를 추가해 푼다."""
     hessian = np.asarray(hessian, dtype=float)
     linear = np.asarray(linear, dtype=float)
@@ -121,18 +119,20 @@ def bounded_quadratic_program_with_barriers(
     active = barrier_matrix @ solution < barrier_lower
     iteration_count = (
         BARRIER_ITERATION_MULTIPLIER * barrier_matrix.shape[0]
-        + BARRIER_EXTRA_ITERATIONS)
+        + BARRIER_EXTRA_ITERATIONS
+    )
     for _ in range(iteration_count):
         if not np.any(active):
             return solution
         active_matrix = barrier_matrix[active]
         active_lower = barrier_lower[active]
         augmented_hessian = (
-            hessian + 2.0 * slack_weight * active_matrix.T @ active_matrix)
-        augmented_linear = (
-            linear - 2.0 * slack_weight * active_matrix.T @ active_lower)
+            hessian + 2.0 * slack_weight * active_matrix.T @ active_matrix
+        )
+        augmented_linear = linear - 2.0 * slack_weight * active_matrix.T @ active_lower
         candidate = bounded_quadratic_program(
-            augmented_hessian, augmented_linear, lower, upper)
+            augmented_hessian, augmented_linear, lower, upper
+        )
         next_active = barrier_matrix @ candidate < barrier_lower - TOLERANCE
         if np.array_equal(next_active, active):
             return candidate

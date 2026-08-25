@@ -17,7 +17,8 @@ class TrainingWandbLogger:
             import wandb
         except ImportError as error:
             raise RuntimeError(
-                "config wandb.enabled=true requires: pip install wandb") from error
+                "config wandb.enabled=true requires: pip install wandb"
+            ) from error
         options = {
             "project": self.project,
             "name": self.run_name,

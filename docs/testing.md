@@ -80,6 +80,15 @@ server는 필요하지 않고 CI 카메라는 headless OSMesa로 검증한다. N
 - Rerun Viewer가 종료되어도 flush 예외가 policy/teleop 종료를 다시 중단하지 않음
 - Hugging Face manifest가 150 episode와 네 best checkpoint의 SHA-256을 기록
 
+## 3.1.0 분석·구조 gate
+
+- Joint/Task가 공용 dataset loader/trainer/config를 사용하고 representation strategy만 교체
+- D97 Joint/Task와 D150 Joint/Task의 ordered episode split 동일성
+- Grad-CAM이 policy camera별 finite heatmap, raw maximum과 gradient 크기를 반환
+- continuous action scalar, signed target과 linear action direction의 gradient 경로
+- Hugging Face dataset/model publish 계획과 선택적 Hub revision tag
+- 연구 보고서의 25 Hz, 데이터 색상 구성과 PTE 수치가 manifest·평가 로그와 일치
+
 ## 핵심 제어 회귀가 증명하는 것
 
 ### Custom kinematics hard gate

@@ -18,7 +18,8 @@ class PositionalEncoderLayer(nn.Module):
     def __init__(self, hidden_dim, attention_heads, feedforward_dim, dropout):
         super().__init__()
         self.self_attention = nn.MultiheadAttention(
-            hidden_dim, attention_heads, dropout=dropout, batch_first=True)
+            hidden_dim, attention_heads, dropout=dropout, batch_first=True
+        )
         self.feedforward = nn.Sequential(
             nn.Linear(hidden_dim, feedforward_dim),
             nn.ReLU(),
@@ -33,12 +34,12 @@ class PositionalEncoderLayer(nn.Module):
     def forward(self, source, position, *, padding_mask=None):
         query = key = source + position
         attended = self.self_attention(
-            query, key, source, key_padding_mask=padding_mask,
-            need_weights=False)[0]
-        source = self.attention_norm(
-            source + self.attention_dropout(attended))
+            query, key, source, key_padding_mask=padding_mask, need_weights=False
+        )[0]
+        source = self.attention_norm(source + self.attention_dropout(attended))
         return self.feedforward_norm(
-            source + self.feedforward_dropout(self.feedforward(source)))
+            source + self.feedforward_dropout(self.feedforward(source))
+        )
 
 
 class PositionalEncoder(nn.Module):
@@ -46,8 +47,7 @@ class PositionalEncoder(nn.Module):
 
     def __init__(self, layer, layer_count):
         super().__init__()
-        self.layers = nn.ModuleList(
-            deepcopy(layer) for _ in range(int(layer_count)))
+        self.layers = nn.ModuleList(deepcopy(layer) for _ in range(int(layer_count)))
 
     def forward(self, source, position, *, padding_mask=None):
         output = source
@@ -62,9 +62,11 @@ class PositionalDecoderLayer(nn.Module):
     def __init__(self, hidden_dim, attention_heads, feedforward_dim, dropout):
         super().__init__()
         self.self_attention = nn.MultiheadAttention(
-            hidden_dim, attention_heads, dropout=dropout, batch_first=True)
+            hidden_dim, attention_heads, dropout=dropout, batch_first=True
+        )
         self.cross_attention = nn.MultiheadAttention(
-            hidden_dim, attention_heads, dropout=dropout, batch_first=True)
+            hidden_dim, attention_heads, dropout=dropout, batch_first=True
+        )
         self.feedforward = nn.Sequential(
             nn.Linear(hidden_dim, feedforward_dim),
             nn.ReLU(),
@@ -80,17 +82,22 @@ class PositionalDecoderLayer(nn.Module):
 
     def forward(self, target, memory, query_position, memory_position):
         query = key = target + query_position
-        attended = self.self_attention(
-            query, key, target, need_weights=False)[0]
+        attended = self.self_attention(query, key, target, need_weights=False)[0]
         target = self.self_attention_norm(
-            target + self.self_attention_dropout(attended))
+            target + self.self_attention_dropout(attended)
+        )
         attended = self.cross_attention(
-            target + query_position, memory + memory_position, memory,
-            need_weights=False)[0]
+            target + query_position,
+            memory + memory_position,
+            memory,
+            need_weights=False,
+        )[0]
         target = self.cross_attention_norm(
-            target + self.cross_attention_dropout(attended))
+            target + self.cross_attention_dropout(attended)
+        )
         return self.feedforward_norm(
-            target + self.feedforward_dropout(self.feedforward(target)))
+            target + self.feedforward_dropout(self.feedforward(target))
+        )
 
 
 class PositionalDecoder(nn.Module):
@@ -98,19 +105,19 @@ class PositionalDecoder(nn.Module):
 
     def __init__(self, layer, layer_count, hidden_dim):
         super().__init__()
-        self.layers = nn.ModuleList(
-            deepcopy(layer) for _ in range(int(layer_count)))
+        self.layers = nn.ModuleList(deepcopy(layer) for _ in range(int(layer_count)))
         self.norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, target, memory, query_position, memory_position):
         output = target
         for layer in self.layers:
-            output = layer(
-                output, memory, query_position, memory_position)
+            output = layer(output, memory, query_position, memory_position)
         return self.norm(output)
 
 
 __all__ = [
-    "PositionalDecoder", "PositionalDecoderLayer", "PositionalEncoder",
+    "PositionalDecoder",
+    "PositionalDecoderLayer",
+    "PositionalEncoder",
     "PositionalEncoderLayer",
 ]

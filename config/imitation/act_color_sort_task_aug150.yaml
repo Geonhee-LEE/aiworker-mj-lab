@@ -1,6 +1,7 @@
 run_name: can_color_sort_act_task_aug150
 dataset_dir: datasets/can_color_sort
 output_dir: outputs/act_modular
+episode_count: 150
 representation: task
 # 표현 방식만 비교하도록 joint 설정과 동일한 카메라/모델/optimizer/split을 사용한다.
 camera_names: [cam_high, cam_right_wrist]

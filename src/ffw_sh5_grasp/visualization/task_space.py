@@ -53,14 +53,18 @@ def apply_target(app, side, world_position, world_rpy):
     """
     position = np.asarray(world_position, dtype=float)
     rpy = np.asarray(world_rpy, dtype=float)
-    if position.shape != (3,) or rpy.shape != (3,) or not np.all(
-            np.isfinite(np.concatenate((position, rpy)))):
+    if (
+        position.shape != (3,)
+        or rpy.shape != (3,)
+        or not np.all(np.isfinite(np.concatenate((position, rpy))))
+    ):
         return False, "Rejected: XYZ and RPY must contain three finite numbers."
     if side not in SIDE_LABELS:
         return False, f"Rejected: unknown hand {side!r}."
 
     target_position = np.asarray(
-        targets.world_to_target_pos(app, side, position), dtype=float)
+        targets.world_to_target_pos(app, side, position), dtype=float
+    )
 
     # 캡처된 가상 물체가 다음 프레임에 양손 목표를 덮어쓰지 않게 독립 MoveL로
     # 전환한다. FK 팔은 현재 pose에서 IK로 전환한 다음 새 목표를 기록한다.
@@ -73,7 +77,8 @@ def apply_target(app, side, world_position, world_rpy):
     quaternion = rotations.rpy_deg_to_quat(rpy)
     app.targets[f"pos_{side}"] = target_position.tolist()
     target_rpy = np.asarray(
-        targets.world_quat_to_target_rpy(app, side, quaternion), dtype=float)
+        targets.world_quat_to_target_rpy(app, side, quaternion), dtype=float
+    )
     # 같은 회전을 나타내는 표현 중 평활화 상태와 가장 가까운 각도를 고른다.
     smoothed_rpy = np.asarray(app.smoothed_rpy[side], dtype=float)
     target_rpy += 360.0 * np.round((smoothed_rpy - target_rpy) / 360.0)

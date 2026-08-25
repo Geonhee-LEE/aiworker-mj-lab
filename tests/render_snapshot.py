@@ -35,7 +35,13 @@ def main():
     # 사전 자세인 thumb CMC·MCP yaw와 벌림 관절인 finger MCP는 0으로 두고 제외한다.
     CURL_JOINTS = {"finger_r_joint3", "finger_r_joint4"}
     for base in (5, 9, 13, 17):
-        CURL_JOINTS.update({f"finger_r_joint{base+1}", f"finger_r_joint{base+2}", f"finger_r_joint{base+3}"})
+        CURL_JOINTS.update(
+            {
+                f"finger_r_joint{base + 1}",
+                f"finger_r_joint{base + 2}",
+                f"finger_r_joint{base + 3}",
+            }
+        )
 
     if kinematic:
         # 순수 FK 자세 확인을 위해 굽힘 관절 qpos를 관절 범위의 ``grasp`` 비율로 직접

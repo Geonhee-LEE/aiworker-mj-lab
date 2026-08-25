@@ -26,8 +26,7 @@ def task_action_to_joint(env, solver, task_action, *, speed_scale=1.0):
     """
     task_action = np.asarray(task_action, dtype=float)
     if task_action.shape != (8,) or not np.all(np.isfinite(task_action)):
-        raise ValueError(
-            "task policy action must be a finite 8D pose+grasp vector")
+        raise ValueError("task policy action must be a finite 8D pose+grasp vector")
     quaternion_norm = float(np.linalg.norm(task_action[3:7]))
     if quaternion_norm < 1e-8:
         raise ValueError("task policy predicted a zero quaternion")
@@ -61,14 +60,16 @@ def task_action_to_joint(env, solver, task_action, *, speed_scale=1.0):
         orientation_error_rad=float(command.orientation_errors["r"]),
         minimum_collision_distance_m=float(
             command.minimum_collision_distance
-            if np.isfinite(command.minimum_collision_distance) else math.inf),
-        collision_constraint_violation=float(
-            command.collision_constraint_violation),
+            if np.isfinite(command.minimum_collision_distance)
+            else math.inf
+        ),
+        collision_constraint_violation=float(command.collision_constraint_violation),
         active_collision_pairs=tuple(command.active_collision_pairs),
     )
     return joint_action, diagnostics
 
 
 __all__ = [
-    "TaskIKDiagnostics", "task_action_to_joint",
+    "TaskIKDiagnostics",
+    "task_action_to_joint",
 ]

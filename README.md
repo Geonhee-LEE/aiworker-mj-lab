@@ -10,7 +10,8 @@ joint/task-space ACT, HDF5 record/replay, 선행 앙상블(PTE), 색상 분류 �
 
 [문서 사이트](https://ggh-png.github.io/aiworker-mj-lab/) ·
 [빠른 시작](docs/getting-started.md) ·
-[3.0.0 릴리스](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v3.0.0)
+[ACT 연구 보고서](docs/research-report.md) ·
+[3.1.0 릴리스](https://github.com/ggh-png/aiworker-mj-lab/releases/tag/v3.1.0)
 
 ## 데모
 
@@ -33,6 +34,7 @@ joint/task-space ACT, HDF5 record/replay, 선행 앙상블(PTE), 색상 분류 �
 | 파지 | 양손 relative-pose constraint, finger contact force와 마찰 기반 파지 |
 | 충돌 대응 | 팔-팔·팔-몸체·팔/손-table 거리 gradient와 velocity CBF |
 | 모방학습 | 4색 can sorting, joint/task ACT, PTE, 2,000-rollout 평가 |
+| 정책 설명 | action-target Grad-CAM과 closed-loop signed world-EE-Y 분석 |
 | 검증 | Ruff, pytest, Phase 0–6, Whole-body 및 strict 문서 빌드 |
 
 로봇 관절이나 베이스 pose를 순간 이동시켜 결과를 만들지 않습니다. IK와 controller가
@@ -139,7 +141,7 @@ python3 src/il.py evaluate \
 # Control Center의 ACT Policy 탭에서 outputs/act 아래 모델을 선택한다.
 python3 src/teleop_app.py
 
-# Modular joint/task checkpoint는 metadata로 입력 표현을 자동 판별한다.
+# Joint/Task checkpoint는 metadata로 입력 표현을 자동 판별한다.
 python3 src/teleop_app.py --env 1 \
   --policy-checkpoint outputs/act_modular/can_color_sort_act_task/checkpoints/policy_best.ckpt \
   --policy-representation auto \
@@ -186,12 +188,14 @@ hf auth login
 python3 scripts/publish_huggingface.py \
   --dataset-repo-id ggh-png/ffw-sh5-can-color-sort \
   --model-repo-id ggh-png/ffw-sh5-act-color-sort \
+  --revision-tag v3.1.0 \
   --dry-run
 
 # 기본값은 private 저장소다. 검증 후 공개 저장소로 업로드한다.
 HF_XET_HIGH_PERFORMANCE=1 python3 scripts/publish_huggingface.py \
   --dataset-repo-id ggh-png/ffw-sh5-can-color-sort \
   --model-repo-id ggh-png/ffw-sh5-act-color-sort \
+  --revision-tag v3.1.0 \
   --public
 ```
 

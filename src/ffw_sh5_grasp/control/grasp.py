@@ -41,10 +41,22 @@ THUMB_CURL_OPEN_AT_HI = {"l": True, "r": False}
 # 참여하지 않고, grasp 스칼라에 비례해 보기 좋으라고만 살짝 굽힌다(아래 apply_grasp
 # 참고).
 RING_PINKY_CURL_JOINTS = {
-    "l": ("finger_l_joint14", "finger_l_joint15", "finger_l_joint16",
-          "finger_l_joint18", "finger_l_joint19", "finger_l_joint20"),
-    "r": ("finger_r_joint14", "finger_r_joint15", "finger_r_joint16",
-          "finger_r_joint18", "finger_r_joint19", "finger_r_joint20"),
+    "l": (
+        "finger_l_joint14",
+        "finger_l_joint15",
+        "finger_l_joint16",
+        "finger_l_joint18",
+        "finger_l_joint19",
+        "finger_l_joint20",
+    ),
+    "r": (
+        "finger_r_joint14",
+        "finger_r_joint15",
+        "finger_r_joint16",
+        "finger_r_joint18",
+        "finger_r_joint19",
+        "finger_r_joint20",
+    ),
 }
 # 엄지 CMC(벌림) 관절은 grasp/thumb 스칼라와 무관하게 항상 이 고정값으로 유지된다 --
 # Phase 2에서 FK 그리드 서치로 찾은, 검지·중지 수렴 지점을 엄지가 마주보게 하는 각도.
@@ -71,17 +83,17 @@ FINGER_OPEN_FRAC = SETTINGS.number("grasp.finger_open_fraction", minimum=0.0)
 THUMB_OPEN_FRAC = SETTINGS.number("grasp.thumb_open_fraction", minimum=0.0)
 # 약지/새끼 pip/dip/tip이 grasp=1.0일 때 굽는 최대 비율(자기 range의 35%까지만) --
 # pick 성공률을 0.20~0.60으로 스윕해서 찾은 안전한 상한(0.40/0.45 사이가 절벽).
-RING_PINKY_MAX_FRAC = SETTINGS.number(
-    "grasp.ring_pinky_max_fraction", minimum=0.0)
-DEFAULT_MIN_FINGERS = SETTINGS.integer(
-    "grasp.detection.minimum_fingers", minimum=1)
+RING_PINKY_MAX_FRAC = SETTINGS.number("grasp.ring_pinky_max_fraction", minimum=0.0)
+DEFAULT_MIN_FINGERS = SETTINGS.integer("grasp.detection.minimum_fingers", minimum=1)
 DEFAULT_MIN_TOTAL_FORCE = SETTINGS.number(
-    "grasp.detection.minimum_total_force_n", minimum=0.0)
+    "grasp.detection.minimum_total_force_n", minimum=0.0
+)
 DEFAULT_REQUIRE_THUMB = SETTINGS.get("grasp.detection.require_thumb")
 for _name, _fraction in (
-        ("finger_open_fraction", FINGER_OPEN_FRAC),
-        ("thumb_open_fraction", THUMB_OPEN_FRAC),
-        ("ring_pinky_max_fraction", RING_PINKY_MAX_FRAC)):
+    ("finger_open_fraction", FINGER_OPEN_FRAC),
+    ("thumb_open_fraction", THUMB_OPEN_FRAC),
+    ("ring_pinky_max_fraction", RING_PINKY_MAX_FRAC),
+):
     if _fraction > 1.0:
         raise ValueError(f"grasp.{_name}는 1 이하여야 합니다.")
 
@@ -89,22 +101,48 @@ for _name, _fraction in (
 # 조회하는 데 쓰는 역방향 매핑의 원본 데이터.
 FINGER_BODY_GROUPS = {
     "l": {
-        "thumb": ("finger_l_link1", "finger_l_link2", "finger_l_link3", "finger_l_link4"),
-        "index": ("finger_l_link5", "finger_l_link6", "finger_l_link7", "finger_l_link8"),
-        "middle": ("finger_l_link9", "finger_l_link10", "finger_l_link11", "finger_l_link12"),
+        "thumb": (
+            "finger_l_link1",
+            "finger_l_link2",
+            "finger_l_link3",
+            "finger_l_link4",
+        ),
+        "index": (
+            "finger_l_link5",
+            "finger_l_link6",
+            "finger_l_link7",
+            "finger_l_link8",
+        ),
+        "middle": (
+            "finger_l_link9",
+            "finger_l_link10",
+            "finger_l_link11",
+            "finger_l_link12",
+        ),
     },
     "r": {
-        "thumb": ("finger_r_link1", "finger_r_link2", "finger_r_link3", "finger_r_link4"),
-        "index": ("finger_r_link5", "finger_r_link6", "finger_r_link7", "finger_r_link8"),
-        "middle": ("finger_r_link9", "finger_r_link10", "finger_r_link11", "finger_r_link12"),
+        "thumb": (
+            "finger_r_link1",
+            "finger_r_link2",
+            "finger_r_link3",
+            "finger_r_link4",
+        ),
+        "index": (
+            "finger_r_link5",
+            "finger_r_link6",
+            "finger_r_link7",
+            "finger_r_link8",
+        ),
+        "middle": (
+            "finger_r_link9",
+            "finger_r_link10",
+            "finger_r_link11",
+            "finger_r_link12",
+        ),
     },
 }
 BODY_TO_FINGER_GROUP = {
-    side: {
-        body: group
-        for group, bodies in groups.items()
-        for body in bodies
-    }
+    side: {body: group for group, bodies in groups.items() for body in bodies}
     for side, groups in FINGER_BODY_GROUPS.items()
 }
 
@@ -211,12 +249,15 @@ def _command_coefficients(model, side):
             grasp_slope=RING_PINKY_MAX_FRAC * (hi - lo),
         )
 
-    cached = tuple(np.asarray(values, dtype=dtype) for values, dtype in (
-        (actuator_ids, int),
-        (offsets, float),
-        (grasp_slopes, float),
-        (thumb_slopes, float),
-    ))
+    cached = tuple(
+        np.asarray(values, dtype=dtype)
+        for values, dtype in (
+            (actuator_ids, int),
+            (offsets, float),
+            (grasp_slopes, float),
+            (thumb_slopes, float),
+        )
+    )
     _COMMAND_COEFFICIENT_CACHE[key] = cached
     return cached
 
@@ -233,7 +274,8 @@ def apply_grasp(model, data, grasp: float, thumb: float, *, side: str):
     grasp = float(np.clip(grasp, 0.0, 1.0))
     thumb = float(np.clip(thumb, 0.0, 1.0))
     actuator_ids, offsets, grasp_slopes, thumb_slopes = _command_coefficients(
-        model, side)
+        model, side
+    )
     data.ctrl[actuator_ids] = offsets + grasp * grasp_slopes + thumb * thumb_slopes
 
 
@@ -257,7 +299,9 @@ def get_finger_can_contacts(model, data, *, side: str):
         if can_gid not in (c.geom1, c.geom2):
             continue
         other = c.geom1 if c.geom2 == can_gid else c.geom2
-        bname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, model.geom_bodyid[other])
+        bname = mujoco.mj_id2name(
+            model, mujoco.mjtObj.mjOBJ_BODY, model.geom_bodyid[other]
+        )
         group = body_to_group.get(bname)
         if group is None:
             continue
@@ -267,9 +311,15 @@ def get_finger_can_contacts(model, data, *, side: str):
     return forces
 
 
-def is_grasped(model, data, min_fingers=DEFAULT_MIN_FINGERS,
-               min_total_force=DEFAULT_MIN_TOTAL_FORCE,
-               require_thumb=DEFAULT_REQUIRE_THUMB, *, side: str):
+def is_grasped(
+    model,
+    data,
+    min_fingers=DEFAULT_MIN_FINGERS,
+    min_total_force=DEFAULT_MIN_TOTAL_FORCE,
+    require_thumb=DEFAULT_REQUIRE_THUMB,
+    *,
+    side: str,
+):
     """위치나 부착 상태를 이용하지 않고 접촉력만으로 파지를 판정한다.
 
     서로 다른 손가락 그룹이 ``min_fingers``개 이상 캔에 닿고 합산 법선력이

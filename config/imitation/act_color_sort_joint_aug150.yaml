@@ -1,6 +1,7 @@
 run_name: can_color_sort_act_joint_aug150
 dataset_dir: datasets/can_color_sort
 output_dir: outputs/act_modular
+episode_count: 150
 representation: joint
 camera_names: [cam_high, cam_right_wrist]
 policy_side: right

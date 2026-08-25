@@ -21,8 +21,7 @@ def capture_reference(right, left):
     }
 
 
-def rigid_grasp_task(reference, site_states, dt,
-                     max_linear_speed, max_angular_speed):
+def rigid_grasp_task(reference, site_states, dt, max_linear_speed, max_angular_speed):
     """캡처한 오른손-왼손 상대 pose의 Jacobian과 복원 속도를 반환한다."""
     right, left = site_states["r"], site_states["l"]
     right_rotation = rotations.rotation_from_quaternion(right.quaternion)
@@ -34,8 +33,7 @@ def rigid_grasp_task(reference, site_states, dt,
 
     desired_left_position = right.position + right_to_left_world
     desired_left_rotation = right_rotation @ reference["rotation_right"]
-    desired_left_quaternion = rotations.quaternion_from_rotation(
-        desired_left_rotation)
+    desired_left_quaternion = rotations.quaternion_from_rotation(desired_left_rotation)
     error = pose_tasks.pose_error(
         left.position,
         left.quaternion,

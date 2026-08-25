@@ -49,8 +49,7 @@ def discover_policy_runs(output_dir=None):
     Passing ``output_dir`` preserves the previous single-root behavior, which
     is useful to inspect an isolated training directory in tests and tools.
     """
-    output_dirs = (
-        ACT_OUTPUT_DIRS if output_dir is None else (Path(output_dir),))
+    output_dirs = ACT_OUTPUT_DIRS if output_dir is None else (Path(output_dir),)
     runs = []
     for root in output_dirs:
         if not root.is_dir():
@@ -59,15 +58,18 @@ def discover_policy_runs(output_dir=None):
             checkpoint_dir = run_dir / "checkpoints"
             if not run_dir.is_dir() or not checkpoint_dir.is_dir():
                 continue
-            checkpoints = tuple(sorted(
-                (path for path in checkpoint_dir.glob("*.ckpt")
-                 if path.is_file()),
-                key=_checkpoint_key,
-            ))
+            checkpoints = tuple(
+                sorted(
+                    (path for path in checkpoint_dir.glob("*.ckpt") if path.is_file()),
+                    key=_checkpoint_key,
+                )
+            )
             if checkpoints:
-                runs.append(PolicyRun(
-                    run_dir.name, run_dir, checkpoints,
-                    _run_representation(run_dir)))
+                runs.append(
+                    PolicyRun(
+                        run_dir.name, run_dir, checkpoints, _run_representation(run_dir)
+                    )
+                )
     runs.sort(
         key=lambda run: max(path.stat().st_mtime for path in run.checkpoints),
         reverse=True,
@@ -76,6 +78,9 @@ def discover_policy_runs(output_dir=None):
 
 
 __all__ = [
-    "ACT_MODULAR_OUTPUT_DIR", "ACT_OUTPUT_DIR", "ACT_OUTPUT_DIRS",
-    "PolicyRun", "discover_policy_runs",
+    "ACT_MODULAR_OUTPUT_DIR",
+    "ACT_OUTPUT_DIR",
+    "ACT_OUTPUT_DIRS",
+    "PolicyRun",
+    "discover_policy_runs",
 ]

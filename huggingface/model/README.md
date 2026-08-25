@@ -17,6 +17,8 @@ datasets:
 FFW-SH5 MuJoCo 색상 분류 작업에 대해 같은 ACT 구조로 학습한 네 정책입니다.
 출력 표현 공간과 학습 데이터 조건만 교체하여 비교했습니다.
 
+이 카드는 코드 릴리즈 `v3.1.0`과 함께 검증되었습니다.
+
 ## Included policies
 
 | 경로 | Episodes | Representation | State / action |
@@ -71,9 +73,16 @@ Task-space 정책은 `[x, y, z, qw, qx, qy, qz, grasp]`를 예측하며 실행 �
 
 ## Inference
 
+먼저 모델을 고정 revision으로 내려받습니다.
+
+```bash
+hf download ggh-png/ffw-sh5-act-color-sort \
+  --revision v3.1.0 --local-dir outputs/hf/ffw-sh5-act-color-sort
+```
+
 ```bash
 python3 src/teleop_app.py --env 1 \
-  --policy-checkpoint policies/d150_joint/checkpoints/policy_best.ckpt \
+  --policy-checkpoint outputs/hf/ffw-sh5-act-color-sort/policies/d150_joint/checkpoints/policy_best.ckpt \
   --policy-representation auto \
   --policy-pte-steps 5
 ```

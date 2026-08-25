@@ -46,7 +46,8 @@ FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 텔레오퍼
 
     색상 분류 데이터를 수집하고 Joint/Task 정책과 PTE를 같은 조건에서 비교한다.
 
-    [학습과 평가](modular-act-training.md) · [공개 모델과 데이터](huggingface.md)
+    [연구 개요](research-report.md) · [학습과 평가](modular-act-training.md) ·
+    [공개 모델과 데이터](huggingface.md)
 
 </div>
 

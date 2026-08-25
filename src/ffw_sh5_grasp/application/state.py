@@ -25,9 +25,9 @@ def _readonly_array(values):
 
 def _readonly_arrays(values):
     """문자열 키 배열 mapping을 복사하고 읽기 전용 view로 감싼다."""
-    return MappingProxyType({
-        name: _readonly_array(value) for name, value in values.items()
-    })
+    return MappingProxyType(
+        {name: _readonly_array(value) for name, value in values.items()}
+    )
 
 
 def _readonly_scalars(values):
@@ -70,14 +70,18 @@ class MarkerBindings:
 
     def __post_init__(self):
         object.__setattr__(
-            self, "hand_mocap_ids",
-            MappingProxyType({name: int(value)
-                              for name, value in self.hand_mocap_ids.items()}),
+            self,
+            "hand_mocap_ids",
+            MappingProxyType(
+                {name: int(value) for name, value in self.hand_mocap_ids.items()}
+            ),
         )
         object.__setattr__(
-            self, "virtual_geom_rgba", _readonly_array(self.virtual_geom_rgba))
+            self, "virtual_geom_rgba", _readonly_array(self.virtual_geom_rgba)
+        )
         object.__setattr__(
-            self, "virtual_site_rgba", _readonly_array(self.virtual_site_rgba))
+            self, "virtual_site_rgba", _readonly_array(self.virtual_site_rgba)
+        )
 
 
 @dataclass(frozen=True)
@@ -95,15 +99,17 @@ class ModelBindings:
     can_geom: int
 
     def __post_init__(self):
+        object.__setattr__(self, "wheels", MappingProxyType(dict(self.wheels)))
         object.__setattr__(
-            self, "wheels", MappingProxyType(dict(self.wheels)))
-        object.__setattr__(
-            self, "monitor_qpos",
-            MappingProxyType({name: int(value)
-                              for name, value in self.monitor_qpos.items()}),
+            self,
+            "monitor_qpos",
+            MappingProxyType(
+                {name: int(value) for name, value in self.monitor_qpos.items()}
+            ),
         )
         object.__setattr__(
-            self, "monitor_ranges", _readonly_arrays(self.monitor_ranges))
+            self, "monitor_ranges", _readonly_arrays(self.monitor_ranges)
+        )
 
 
 @dataclass(frozen=True)
@@ -122,9 +128,11 @@ class RobotObservation:
         object.__setattr__(self, "qpos", _readonly_array(self.qpos))
         object.__setattr__(self, "qvel", _readonly_array(self.qvel))
         object.__setattr__(
-            self, "hand_positions", _readonly_arrays(self.hand_positions))
+            self, "hand_positions", _readonly_arrays(self.hand_positions)
+        )
         object.__setattr__(
-            self, "hand_quaternions", _readonly_arrays(self.hand_quaternions))
+            self, "hand_quaternions", _readonly_arrays(self.hand_quaternions)
+        )
 
     @classmethod
     def capture(cls, app):
@@ -168,17 +176,24 @@ class TaskCommand:
     thumb: Mapping[str, float] = field(default_factory=dict)
 
     def __post_init__(self):
-        object.__setattr__(self, "hand_poses", MappingProxyType({
-            side: (_readonly_array(position), _readonly_array(quaternion))
-            for side, (position, quaternion) in self.hand_poses.items()
-        }))
+        object.__setattr__(
+            self,
+            "hand_poses",
+            MappingProxyType(
+                {
+                    side: (_readonly_array(position), _readonly_array(quaternion))
+                    for side, (position, quaternion) in self.hand_poses.items()
+                }
+            ),
+        )
         object.__setattr__(self, "lift_position", float(self.lift_position))
         object.__setattr__(self, "grasp", _readonly_scalars(self.grasp))
         object.__setattr__(self, "thumb", _readonly_scalars(self.thumb))
 
     @classmethod
-    def create(cls, hand_poses, lift_position, *, base_twist=None,
-               grasp=None, thumb=None):
+    def create(
+        cls, hand_poses, lift_position, *, base_twist=None, grasp=None, thumb=None
+    ):
         """pose와 손 명령을 복사해 이후 UI 변경과 분리된 task 명령을 만든다."""
         return cls(
             hand_poses=hand_poses,
@@ -201,19 +216,25 @@ class ControlCommand:
     thumb: Mapping[str, float]
 
     def __post_init__(self):
-        object.__setattr__(
-            self, "arm_positions", _readonly_arrays(self.arm_positions))
+        object.__setattr__(self, "arm_positions", _readonly_arrays(self.arm_positions))
         object.__setattr__(self, "lift_position", float(self.lift_position))
-        object.__setattr__(self, "wheel_commands", MappingProxyType({
-            name: (float(command[0]), float(command[1]))
-            for name, command in self.wheel_commands.items()
-        }))
+        object.__setattr__(
+            self,
+            "wheel_commands",
+            MappingProxyType(
+                {
+                    name: (float(command[0]), float(command[1]))
+                    for name, command in self.wheel_commands.items()
+                }
+            ),
+        )
         object.__setattr__(self, "grasp", _readonly_scalars(self.grasp))
         object.__setattr__(self, "thumb", _readonly_scalars(self.thumb))
 
     @classmethod
-    def create(cls, arm_positions, lift_position, base_twist, wheel_commands,
-               grasp, thumb):
+    def create(
+        cls, arm_positions, lift_position, base_twist, wheel_commands, grasp, thumb
+    ):
         """모든 배열과 mapping을 복사해 물리 적용 중 바뀌지 않는 명령을 만든다."""
         return cls(
             arm_positions=arm_positions,

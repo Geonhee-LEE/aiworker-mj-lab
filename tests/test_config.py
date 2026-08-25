@@ -40,12 +40,17 @@ def _settings_access_paths():
     paths = {"schema_version"}
     for source_path in SRC_DIR.rglob("*.py"):
         tree = ast.parse(
-            source_path.read_text(encoding="utf-8"), filename=str(source_path))
+            source_path.read_text(encoding="utf-8"), filename=str(source_path)
+        )
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            if not isinstance(node, ast.Call) or not isinstance(
+                node.func, ast.Attribute
+            ):
                 continue
             owner = node.func.value
-            if not (isinstance(owner, ast.Name) and owner.id == "SETTINGS" and node.args):
+            if not (
+                isinstance(owner, ast.Name) and owner.id == "SETTINGS" and node.args
+            ):
                 continue
             path_node = node.args[0]
             if isinstance(path_node, ast.Constant) and isinstance(path_node.value, str):
@@ -58,7 +63,10 @@ def main():
     defaults = load_settings()
     assert defaults.path == DEFAULT_CONFIG
     assert defaults.number("arm_control.proportional_gain") == 600.0
-    assert defaults.get("base.geometry.wheel_positions_m")["rear_wheel"] == [-0.2899, 0.0]
+    assert defaults.get("base.geometry.wheel_positions_m")["rear_wheel"] == [
+        -0.2899,
+        0.0,
+    ]
 
     # 사용자가 일부 값만 적어도 나머지는 기본 YAML에서 상속되어야 한다.
     with tempfile.TemporaryDirectory() as directory:
@@ -117,12 +125,15 @@ def main():
     default_data = yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8"))
     access_paths = _settings_access_paths()
     unused_paths = [
-        path for path in _leaf_paths(default_data)
+        path
+        for path in _leaf_paths(default_data)
         if not any(path == used or path.startswith(f"{used}.") for used in access_paths)
     ]
     assert not unused_paths, f"코드에서 사용하지 않는 YAML 설정: {unused_paths}"
-    print(f"YAML 설정 기본값/덮어쓰기/검증/한국어 주석/사용 여부: "
-          f"{len(_leaf_paths(default_data))}개 OK")
+    print(
+        f"YAML 설정 기본값/덮어쓰기/검증/한국어 주석/사용 여부: "
+        f"{len(_leaf_paths(default_data))}개 OK"
+    )
     print("PASS")
 
 

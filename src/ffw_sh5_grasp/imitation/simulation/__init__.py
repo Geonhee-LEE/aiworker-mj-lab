@@ -5,6 +5,9 @@ from .environment import AIWorkerMujocoEnv
 from .task import TASK_NAMES, create_task
 
 __all__ = [
-    "AIWorkerMujocoEnv", "ActionAdapter", "DecodedAction", "TASK_NAMES",
+    "AIWorkerMujocoEnv",
+    "ActionAdapter",
+    "DecodedAction",
+    "TASK_NAMES",
     "create_task",
 ]

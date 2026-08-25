@@ -25,7 +25,8 @@ class JointSpaceKinematics:
         except KeyError as error:
             raise ValueError(
                 "joint-space kinematics references an unknown site or joint: "
-                f"{error.args[0]!r}") from error
+                f"{error.args[0]!r}"
+            ) from error
         scalar_types = {
             int(mujoco.mjtJoint.mjJNT_HINGE),
             int(mujoco.mjtJoint.mjJNT_SLIDE),
@@ -34,7 +35,8 @@ class JointSpaceKinematics:
         if unsupported:
             raise ValueError(
                 "controlled joints must be scalar hinge/slide joints: "
-                + ", ".join(unsupported))
+                + ", ".join(unsupported)
+            )
         if len({joint.id for joint in joints}) != len(joints):
             raise ValueError("controlled joint names must be unique")
 
@@ -62,14 +64,18 @@ class JointSpaceKinematics:
             qpos = np.asarray(context_qpos, dtype=float).copy()
             if qpos.shape != (self.tree.nq,):
                 raise ValueError(
-                    f"expected context_qpos shape ({self.tree.nq},), got {qpos.shape}")
+                    f"expected context_qpos shape ({self.tree.nq},), got {qpos.shape}"
+                )
         q = q.copy()
         q[self.joint_limited] = np.clip(
             q[self.joint_limited],
             self.joint_ranges[self.joint_limited, 0],
-            self.joint_ranges[self.joint_limited, 1])
+            self.joint_ranges[self.joint_limited, 1],
+        )
         qpos[self.qpos_adrs] = q
         return self.tree.forward_site(qpos, self.site_id, self.joint_ids)
 
     forward_kinematics = forward
+
+
 __all__ = ["JointSpaceKinematics"]

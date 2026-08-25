@@ -1,6 +1,7 @@
 # Hugging Face 배포
 
-`v3.0.0`의 색상 분류 데이터와 평가용 ACT 정책은 공개 저장소로 배포되어 있다.
+`v3.1.0`의 색상 분류 데이터와 평가용 ACT 정책은 공개 저장소로 배포되어 있다. 두
+저장소의 `v3.1.0` revision은 코드 릴리즈와 같은 manifest·model card를 가리킨다.
 
 - [FFW-SH5 Can Color Sort 데이터셋](https://huggingface.co/datasets/ggh-png/ffw-sh5-can-color-sort)
 - [FFW-SH5 ACT Color Sort 정책](https://huggingface.co/ggh-png/ffw-sh5-act-color-sort)
@@ -12,9 +13,11 @@ python -m pip install -r requirements-huggingface.txt
 
 hf download ggh-png/ffw-sh5-can-color-sort \
   --repo-type dataset \
+  --revision v3.1.0 \
   --local-dir datasets/can_color_sort_hf
 
 hf download ggh-png/ffw-sh5-act-color-sort \
+  --revision v3.1.0 \
   --local-dir outputs/hf/ffw-sh5-act-color-sort
 ```
 
@@ -47,6 +50,7 @@ python3 scripts/prepare_huggingface_release.py
 python3 scripts/publish_huggingface.py \
   --dataset-repo-id ggh-png/ffw-sh5-can-color-sort \
   --model-repo-id ggh-png/ffw-sh5-act-color-sort \
+  --revision-tag v3.1.0 \
   --dry-run
 ```
 
@@ -58,7 +62,27 @@ hf auth login
 HF_XET_HIGH_PERFORMANCE=1 python3 scripts/publish_huggingface.py \
   --dataset-repo-id ggh-png/ffw-sh5-can-color-sort \
   --model-repo-id ggh-png/ffw-sh5-act-color-sort \
+  --revision-tag v3.1.0 \
   --public
+```
+
+업로드 뒤에는 두 저장소의 tag가 실제 main commit을 가리키는지 확인한다.
+
+```bash
+python3 - <<'PY'
+from huggingface_hub import HfApi
+
+api = HfApi()
+for repo_id, repo_type in (
+    ("ggh-png/ffw-sh5-can-color-sort", "dataset"),
+    ("ggh-png/ffw-sh5-act-color-sort", "model"),
+):
+    main = api.repo_info(repo_id, repo_type=repo_type).sha
+    tagged = api.repo_info(
+        repo_id, repo_type=repo_type, revision="v3.1.0"
+    ).sha
+    print(repo_id, main, tagged, main == tagged)
+PY
 ```
 
 현재 카드는 원 프로젝트 asset 전체의 라이선스 검토가 끝나지 않았음을 분명히 하기

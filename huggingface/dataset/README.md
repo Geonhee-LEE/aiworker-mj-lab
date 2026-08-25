@@ -19,6 +19,8 @@ tags:
 FFW-SH5 MuJoCo 환경에서 오른팔 teleoperation으로 수집한 색상 분류 시연
 데이터셋입니다. 캔을 집어 같은 분류군의 상자에 넣는 작업을 수행합니다.
 
+이 카드는 코드 릴리즈 `v3.1.0`과 함께 검증되었습니다.
+
 - 빨강·주황 캔 → 빨강 상자
 - 초록·파랑 캔 → 파랑 상자
 - 캔 위치, 캔 색상, 좌우 상자 색상 배치는 episode reset마다 무작위화
@@ -73,6 +75,17 @@ with h5py.File("data/episode_000000.hdf5", "r") as episode:
     cam_high = episode["observations/images/cam_high"][:]
     action = episode["action"][:]
 ```
+
+전체 데이터는 고정 revision으로 내려받을 수 있습니다.
+
+```bash
+hf download {{DATASET_REPO_ID}} --repo-type dataset \
+  --revision v3.1.0 --local-dir datasets/can_color_sort_hf
+```
+
+MuJoCo에서는 RGB, joint state, EE pose와 action을 같은 25 Hz control tick에 저장합니다.
+실제 로봇 데이터는 camera와 joint controller timestamp를 공통 clock에 맞춘 뒤 학습
+시점으로 resampling해야 합니다.
 
 원본 학습·검증 코드는 {{CODE_REPO_URL}}에서 확인할 수 있습니다.
 

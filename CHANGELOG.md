@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.1.0 — 2026-08-25
+
+- `IK_Teleoperation_v3.pdf`의 Task→IK teleoperation→dataset→ACT→PTE→평가 흐름을
+  실제 manifest와 rollout 수치로 교차검증한 연구 개요 문서 추가
+- D97/D150 Joint·Task 학습의 중복 `modular_*` loader/trainer/config 경로를 공용
+  representation 기반 `train` 경로로 통합하고 오래된 wrapper·entrypoint 제거
+- ACT 연속 action target용 카메라별 Grad-CAM CLI, 원 heatmap/gradient NPZ와 회귀 테스트
+  추가 및 signed world-EE-Y 폐루프 분석 절차 문서화
+- PTE 성공률·penalized time, 학습/평가 데이터 분포와 성공/실패 원시 개수를 재현 가능한
+  그래프와 CSV로 정리
+- Hugging Face dataset/model 카드와 다운로드 예제를 갱신하고 Hub `v3.1.0` revision tag를
+  생성하는 배포 옵션 추가
+- Ruff, 44개 pytest와 strict MkDocs 검증 경로 정리
+
 ## 3.0.0 — 2026-08-23
 
 - 초록·빨강·주황·파랑 캔과 좌우 목표 상자 배치를 reset마다 독립적으로 무작위화하는

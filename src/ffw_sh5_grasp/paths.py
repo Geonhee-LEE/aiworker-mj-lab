@@ -6,5 +6,8 @@ from .config import SETTINGS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _configured_model_path = Path(SETTINGS.get("application.model_path"))
-MODEL_PATH = (_configured_model_path if _configured_model_path.is_absolute()
-              else REPO_ROOT / _configured_model_path)
+MODEL_PATH = (
+    _configured_model_path
+    if _configured_model_path.is_absolute()
+    else REPO_ROOT / _configured_model_path
+)

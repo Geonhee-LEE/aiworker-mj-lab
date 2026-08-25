@@ -123,8 +123,7 @@ def restore_window_render_target(app):
     producing a dark or partially cleared operator window.
     """
     glfw.make_context_current(app.window)
-    mujoco.mjr_setBuffer(
-        mujoco.mjtFramebuffer.mjFB_WINDOW, app.context)
+    mujoco.mjr_setBuffer(mujoco.mjtFramebuffer.mjFB_WINDOW, app.context)
 
 
 def shutdown(app):
@@ -144,12 +143,12 @@ def _move_camera(app, action, relative_x, relative_y):
     camera 앞에 요구한다. 현재 서명을 먼저 사용하고 구버전에서만 fallback한다.
     """
     try:
-        mujoco.mjv_moveCamera(
-            app.model, action, relative_x, relative_y, app.cam)
+        mujoco.mjv_moveCamera(app.model, action, relative_x, relative_y, app.cam)
     except TypeError as current_error:
         try:
             mujoco.mjv_moveCamera(
-                app.model, action, relative_x, relative_y, app.scene, app.cam)
+                app.model, action, relative_x, relative_y, app.scene, app.cam
+            )
         except TypeError:
             raise current_error
 
@@ -167,19 +166,29 @@ def handle_camera_mouse(app, io):
     middle = glfw.get_mouse_button(app.window, glfw.MOUSE_BUTTON_MIDDLE) == glfw.PRESS
     if left or right or middle:
         _, win_h = glfw.get_window_size(app.window)
-        mod_shift = (glfw.get_key(app.window, glfw.KEY_LEFT_SHIFT) == glfw.PRESS
-                     or glfw.get_key(app.window, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS)
+        mod_shift = (
+            glfw.get_key(app.window, glfw.KEY_LEFT_SHIFT) == glfw.PRESS
+            or glfw.get_key(app.window, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS
+        )
         if right:
-            action = mujoco.mjtMouse.mjMOUSE_MOVE_H if mod_shift else mujoco.mjtMouse.mjMOUSE_MOVE_V
+            action = (
+                mujoco.mjtMouse.mjMOUSE_MOVE_H
+                if mod_shift
+                else mujoco.mjtMouse.mjMOUSE_MOVE_V
+            )
         elif left:
-            action = mujoco.mjtMouse.mjMOUSE_ROTATE_H if mod_shift else mujoco.mjtMouse.mjMOUSE_ROTATE_V
+            action = (
+                mujoco.mjtMouse.mjMOUSE_ROTATE_H
+                if mod_shift
+                else mujoco.mjtMouse.mjMOUSE_ROTATE_V
+            )
         else:
             action = mujoco.mjtMouse.mjMOUSE_ZOOM
         _move_camera(app, action, dx / win_h, dy / win_h)
     if io.mouse_wheel != 0:
         _move_camera(
-            app, mujoco.mjtMouse.mjMOUSE_ZOOM, 0.0,
-            -MOUSE_ZOOM_SCALE * io.mouse_wheel)
+            app, mujoco.mjtMouse.mjMOUSE_ZOOM, 0.0, -MOUSE_ZOOM_SCALE * io.mouse_wheel
+        )
 
 
 def pose_to_imguizmo_matrix(world_pos, world_quat):
@@ -234,8 +243,10 @@ def _imguizmo_camera_matrices(app, viewport):
     proj[2, 3] = -(2.0 * far * near) / (far - near)
     proj[3, 2] = -1.0
 
-    return (imguizmo.im_guizmo.Matrix16(view.reshape(16, order="F")),
-            imguizmo.im_guizmo.Matrix16(proj.reshape(16, order="F")))
+    return (
+        imguizmo.im_guizmo.Matrix16(view.reshape(16, order="F")),
+        imguizmo.im_guizmo.Matrix16(proj.reshape(16, order="F")),
+    )
 
 
 def draw_transform_gizmo(app, viewport):
@@ -257,21 +268,31 @@ def draw_transform_gizmo(app, viewport):
     gizmo.begin_frame()
     gizmo.set_drawlist(imgui.get_foreground_draw_list(main_viewport))
     gizmo.set_rect(
-        float(main_viewport.pos.x), float(main_viewport.pos.y),
-        float(main_viewport.size.x), float(main_viewport.size.y))
+        float(main_viewport.pos.x),
+        float(main_viewport.pos.y),
+        float(main_viewport.size.x),
+        float(main_viewport.size.y),
+    )
     gizmo.set_orthographic(False)
     gizmo.set_gizmo_size_clip_space(GIZMO_SIZE)
     changed_translate = gizmo.manipulate(
-        view_matrix, proj_matrix, gizmo.OPERATION.translate, gizmo.MODE.world,
-        object_matrix)
+        view_matrix,
+        proj_matrix,
+        gizmo.OPERATION.translate,
+        gizmo.MODE.world,
+        object_matrix,
+    )
     changed_rotate = gizmo.manipulate(
-        view_matrix, proj_matrix, gizmo.OPERATION.rotate, gizmo.MODE.local,
-        object_matrix)
+        view_matrix,
+        proj_matrix,
+        gizmo.OPERATION.rotate,
+        gizmo.MODE.local,
+        object_matrix,
+    )
     app.gizmo_mouse_active = bool(gizmo.is_using_any() or gizmo.is_over())
     if changed_translate or changed_rotate:
         new_pos, new_quat = imguizmo_matrix_to_pose(object_matrix)
-        targets.set_gizmo_target_world_pose(
-            app, target, new_pos, new_quat)
+        targets.set_gizmo_target_world_pose(app, target, new_pos, new_quat)
 
 
 def collision_visualization_data(app):
@@ -299,8 +320,13 @@ def _append_visual_geom(scene, geom_type, size, pos, mat, rgba):
         return None
     geom = scene.geoms[scene.ngeom]
     mujoco.mjv_initGeom(
-        geom, geom_type, np.asarray(size, dtype=float), np.asarray(pos, dtype=float),
-        np.asarray(mat, dtype=float).reshape(9), np.asarray(rgba, dtype=np.float32))
+        geom,
+        geom_type,
+        np.asarray(size, dtype=float),
+        np.asarray(pos, dtype=float),
+        np.asarray(mat, dtype=float).reshape(9),
+        np.asarray(rgba, dtype=np.float32),
+    )
     scene.ngeom += 1
     return geom
 
@@ -309,9 +335,11 @@ def _append_collision_overlay(app, constraints):
     """충돌 mesh에 색을 입히고 최근접점과 두 점을 잇는 선분을 그린다."""
     for index in range(app.scene.ngeom):
         geom = app.scene.geoms[index]
-        if (int(geom.objtype) == int(mujoco.mjtObj.mjOBJ_GEOM)
-                and 0 <= int(geom.objid) < app.model.ngeom
-                and int(app.model.geom_group[int(geom.objid)]) == 3):
+        if (
+            int(geom.objtype) == int(mujoco.mjtObj.mjOBJ_GEOM)
+            and 0 <= int(geom.objid) < app.model.ngeom
+            and int(app.model.geom_group[int(geom.objid)]) == 3
+        ):
             geom.rgba[:] = COLLISION_GEOMETRY_RGBA
             geom.transparent = 1
 
@@ -321,15 +349,29 @@ def _append_collision_overlay(app, constraints):
         color = _collision_color(constraint.distance, safe_distance)
         for point in (constraint.point_a, constraint.point_b):
             _append_visual_geom(
-                app.scene, mujoco.mjtGeom.mjGEOM_SPHERE,
-                [COLLISION_POINT_RADIUS] * 3, point, identity, color)
+                app.scene,
+                mujoco.mjtGeom.mjGEOM_SPHERE,
+                [COLLISION_POINT_RADIUS] * 3,
+                point,
+                identity,
+                color,
+            )
         line = _append_visual_geom(
-            app.scene, mujoco.mjtGeom.mjGEOM_LINE,
-            [0.0, 0.0, 0.0], np.zeros(3), identity, color)
+            app.scene,
+            mujoco.mjtGeom.mjGEOM_LINE,
+            [0.0, 0.0, 0.0],
+            np.zeros(3),
+            identity,
+            color,
+        )
         if line is not None:
             mujoco.mjv_connector(
-                line, mujoco.mjtGeom.mjGEOM_LINE, COLLISION_LINE_WIDTH,
-                constraint.point_a, constraint.point_b)
+                line,
+                mujoco.mjtGeom.mjGEOM_LINE,
+                COLLISION_LINE_WIDTH,
+                constraint.point_a,
+                constraint.point_b,
+            )
 
 
 def render_scene(app):
@@ -343,8 +385,15 @@ def render_scene(app):
     app.opt.geomgroup[3] = bool(getattr(app, "collision_viz", False))
     fb_w, fb_h = glfw.get_framebuffer_size(app.window)
     viewport = mujoco.MjrRect(0, 0, fb_w, fb_h)
-    mujoco.mjv_updateScene(app.model, app.data, app.opt, app.pert, app.cam,
-                           mujoco.mjtCatBit.mjCAT_ALL, app.scene)
+    mujoco.mjv_updateScene(
+        app.model,
+        app.data,
+        app.opt,
+        app.pert,
+        app.cam,
+        mujoco.mjtCatBit.mjCAT_ALL,
+        app.scene,
+    )
     collision_data = collision_visualization_data(app)
     if app.collision_viz:
         _append_collision_overlay(app, collision_data)
@@ -365,9 +414,9 @@ def end_frame(app, t0):
     """프레임 주파수 EMA를 갱신하고 목표 제어 주기를 넘지 않도록 남은 시간을 쉰다."""
     elapsed = time.perf_counter() - t0
     current_weight = 1.0 - FREQUENCY_EMA_PREVIOUS_WEIGHT
-    app.freq_ema = (
-        FREQUENCY_EMA_PREVIOUS_WEIGHT * app.freq_ema
-        + current_weight * (1.0 / max(elapsed, 1e-6)))
+    app.freq_ema = FREQUENCY_EMA_PREVIOUS_WEIGHT * app.freq_ema + current_weight * (
+        1.0 / max(elapsed, 1e-6)
+    )
     sleep_time = app.frame_dt - elapsed
     if sleep_time > 0:
         time.sleep(sleep_time)

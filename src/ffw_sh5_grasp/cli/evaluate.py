@@ -17,31 +17,41 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=1000)
     parser.add_argument("--device", default="auto")
     parser.add_argument(
-        "--task", choices=("can_to_box", "can_color_sort"),
-        default="can_to_box")
+        "--task", choices=("can_to_box", "can_color_sort"), default="can_to_box"
+    )
     parser.add_argument(
-        "--representation", choices=("auto", "joint", "task"),
-        default="auto")
+        "--representation", choices=("auto", "joint", "task"), default="auto"
+    )
     parser.add_argument("--pte-steps", type=int, default=0)
     parser.add_argument("--temporal-decay", type=float, default=0.05)
     parser.add_argument("--task-ik-speed-scale", type=float)
     parser.add_argument("--stable-success-steps", type=int, default=10)
     parser.add_argument("--progress", action="store_true")
     parser.add_argument("--no-rerun", action="store_true")
-    parser.add_argument("--viewer", action="store_true",
-                        help="show the policy rollout in the MuJoCo viewer")
+    parser.add_argument(
+        "--viewer",
+        action="store_true",
+        help="show the policy rollout in the MuJoCo viewer",
+    )
     args = parser.parse_args(argv)
     result = evaluate(
-        args.checkpoint, stats_path=args.stats, output_dir=args.output_dir,
-        num_episodes=args.num_episodes, max_steps=args.max_steps,
-        seed=args.seed, device=args.device, rerun=not args.no_rerun,
-        viewer=args.viewer, task_name=args.task,
+        args.checkpoint,
+        stats_path=args.stats,
+        output_dir=args.output_dir,
+        num_episodes=args.num_episodes,
+        max_steps=args.max_steps,
+        seed=args.seed,
+        device=args.device,
+        rerun=not args.no_rerun,
+        viewer=args.viewer,
+        task_name=args.task,
         representation=args.representation,
         proleptic_steps=args.pte_steps,
         temporal_decay=args.temporal_decay,
         task_ik_speed_scale=args.task_ik_speed_scale,
         stable_success_steps=args.stable_success_steps,
-        progress=args.progress)
+        progress=args.progress,
+    )
     print(json.dumps(result, indent=2))
 
 

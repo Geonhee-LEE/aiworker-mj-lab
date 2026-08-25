@@ -59,7 +59,10 @@ def build_report(model):
 
     lines.append("### Option")
     opt = model.opt
-    cone_name = {mujoco.mjtCone.mjCONE_PYRAMIDAL: "pyramidal", mujoco.mjtCone.mjCONE_ELLIPTIC: "elliptic"}[opt.cone]
+    cone_name = {
+        mujoco.mjtCone.mjCONE_PYRAMIDAL: "pyramidal",
+        mujoco.mjtCone.mjCONE_ELLIPTIC: "elliptic",
+    }[opt.cone]
     integrator_name = {
         mujoco.mjtIntegrator.mjINT_EULER: "Euler",
         mujoco.mjtIntegrator.mjINT_RK4: "RK4",
@@ -76,12 +79,16 @@ def build_report(model):
     lines.append("")
 
     lines.append("### Joints (all)")
-    lines.append("| name | type | range | damping | armature | actuator | kp | forcerange |")
+    lines.append(
+        "| name | type | range | damping | armature | actuator | kp | forcerange |"
+    )
     lines.append("|---|---|---|---|---|---|---|---|")
     for jid in range(model.njnt):
         name = joint_name(model, jid) or f"<unnamed{jid}>"
         jtype = JOINT_TYPE_NAMES.get(model.jnt_type[jid], str(model.jnt_type[jid]))
-        jrange = model.jnt_range[jid].tolist() if model.jnt_limited[jid] else "unlimited"
+        jrange = (
+            model.jnt_range[jid].tolist() if model.jnt_limited[jid] else "unlimited"
+        )
         dofadr = model.jnt_dofadr[jid]
         damping = model.dof_damping[dofadr]
         armature = model.dof_armature[dofadr]
@@ -89,10 +96,16 @@ def build_report(model):
         if aid is not None:
             aname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aid)
             kp = model.actuator_gainprm[aid, 0]
-            frange = model.actuator_forcerange[aid].tolist() if model.actuator_forcelimited[aid] else "unlimited"
+            frange = (
+                model.actuator_forcerange[aid].tolist()
+                if model.actuator_forcelimited[aid]
+                else "unlimited"
+            )
         else:
             aname, kp, frange = "-", "-", "-"
-        lines.append(f"| {name} | {jtype} | {jrange} | {damping:.3g} | {armature:.3g} | {aname} | {kp} | {frange} |")
+        lines.append(
+            f"| {name} | {jtype} | {jrange} | {damping:.3g} | {armature:.3g} | {aname} | {kp} | {frange} |"
+        )
     lines.append("")
 
     lines.append("### Finger joints detail (finger_l_*, finger_r_*)")
@@ -105,7 +118,11 @@ def build_report(model):
         aid = actuator_for_joint(model, jid)
         if aid is not None:
             kp = model.actuator_gainprm[aid, 0]
-            frange = model.actuator_forcerange[aid].tolist() if model.actuator_forcelimited[aid] else "unlimited"
+            frange = (
+                model.actuator_forcerange[aid].tolist()
+                if model.actuator_forcelimited[aid]
+                else "unlimited"
+            )
             lines.append(f"| {name} | yes | {kp} | {frange} |")
         else:
             lines.append(f"| {name} | NO | - | - |")
@@ -118,13 +135,17 @@ def build_report(model):
     primitive_collision_count = 0
     finger_collision_types = set()
     for gid in range(model.ngeom):
-        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gid) or f"<unnamed{gid}>"
+        name = (
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, gid) or f"<unnamed{gid}>"
+        )
         gtype = GEOM_TYPE_NAMES.get(model.geom_type[gid], str(model.geom_type[gid]))
         contype = model.geom_contype[gid]
         conaffinity = model.geom_conaffinity[gid]
         friction = model.geom_friction[gid].tolist()
         condim = model.geom_condim[gid]
-        lines.append(f"| {name} | {gtype} | {contype} | {conaffinity} | {friction} | {condim} |")
+        lines.append(
+            f"| {name} | {gtype} | {contype} | {conaffinity} | {friction} | {condim} |"
+        )
 
         is_collision_geom = contype != 0 or conaffinity != 0
         if is_collision_geom:
@@ -140,9 +161,13 @@ def build_report(model):
     lines.append("")
 
     lines.append("### Collision geom summary")
-    lines.append(f"- mesh-type collision geoms (contype/conaffinity != 0): {mesh_collision_count}")
+    lines.append(
+        f"- mesh-type collision geoms (contype/conaffinity != 0): {mesh_collision_count}"
+    )
     lines.append(f"- primitive-type collision geoms: {primitive_collision_count}")
-    lines.append(f"- finger/hand collision geom types found: {sorted(finger_collision_types) or 'none'}")
+    lines.append(
+        f"- finger/hand collision geom types found: {sorted(finger_collision_types) or 'none'}"
+    )
     lines.append("")
 
     return "\n".join(lines), finger_collision_types
@@ -169,7 +194,9 @@ def main():
         sys.exit(1)
 
     model = mujoco.MjModel.from_xml_path(str(SCENE_PATH))
-    print(f"Loaded {SCENE_PATH.relative_to(REPO_ROOT)} OK: nq={model.nq} nv={model.nv} nu={model.nu}")
+    print(
+        f"Loaded {SCENE_PATH.relative_to(REPO_ROOT)} OK: nq={model.nq} nv={model.nv} nu={model.nu}"
+    )
 
     report, finger_collision_types = build_report(model)
 

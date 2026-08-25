@@ -39,12 +39,17 @@ src/
 | `imitation.dataset` | `imitation.data.episode` |
 | `imitation.mujoco_env` | `imitation.simulation.environment` |
 | `imitation.policy_runner` | `imitation.runtime.runner` |
-| `imitation.record_app`, `policy_app` | `imitation.apps.recording`, `apps.policy` |
+| `imitation.record_app` | `imitation.apps.recording` |
+| `imitation.apps.policy`, `cli.policy` | `imitation.runtime.runner`, `cli.evaluate` |
+| `modular_dataset_loader`, `modular_trainer`, `modular_training_config` | `act.dataset_loader`, `act.trainer`, `act.training_config` |
+| `modular_representations` | `act.representations` |
 | `BaseTeleop.update(...)` | `update_body(...)` 후 `SwerveDrive.update_twist(...)` |
 | ACT YAML `transformer_layers` | `encoder_layers`와 `decoder_layers`를 각각 지정 |
 
 이 표의 제거된 이름은 import compatibility를 보장하지 않는다. 저장된 ACT v2
 checkpoint와 ALOHA HDF5 episode schema는 코드 경로와 무관하므로 계속 사용할 수 있다.
+CLI의 `train-modular` 이름은 shell script 호환을 위해 남아 있지만 내부적으로 같은
+`cli.train`과 `act.trainer`를 호출한다.
 
 ## 모델 자산
 

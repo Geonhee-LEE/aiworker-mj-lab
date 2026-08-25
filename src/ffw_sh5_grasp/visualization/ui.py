@@ -54,11 +54,13 @@ def _ensure_window_state(app):
     if not hasattr(app, "ui_windows") or set(app.ui_windows) != set(UI_WINDOW_SPECS):
         previous = getattr(app, "ui_windows", {})
         app.ui_windows = {
-            "control": any(previous.get(key, False)
-                           for key in ("control", "marker", "right_arm",
-                                       "left_arm", "robot")),
-            "diagnostics": any(previous.get(key, False)
-                               for key in ("diagnostics", "joints", "tree")),
+            "control": any(
+                previous.get(key, False)
+                for key in ("control", "marker", "right_arm", "left_arm", "robot")
+            ),
+            "diagnostics": any(
+                previous.get(key, False) for key in ("diagnostics", "joints", "tree")
+            ),
         }
         if not previous:
             app.ui_windows = {
@@ -91,14 +93,20 @@ def _begin_tool_window(app, key):
         imgui.set_next_window_pos(position, imgui.Cond_.always)
     elif layout_request == "main":
         imgui.set_next_window_pos(
-            (main_viewport.pos.x + spec["position"][0],
-             main_viewport.pos.y + spec["position"][1]),
-            imgui.Cond_.always)
+            (
+                main_viewport.pos.x + spec["position"][0],
+                main_viewport.pos.y + spec["position"][1],
+            ),
+            imgui.Cond_.always,
+        )
     else:
         imgui.set_next_window_pos(
-            (main_viewport.pos.x + spec["position"][0],
-             main_viewport.pos.y + spec["position"][1]),
-            imgui.Cond_.first_use_ever)
+            (
+                main_viewport.pos.x + spec["position"][0],
+                main_viewport.pos.y + spec["position"][1],
+            ),
+            imgui.Cond_.first_use_ever,
+        )
     imgui.set_next_window_size(spec["size"], imgui.Cond_.first_use_ever)
     expanded, opened = imgui.begin(spec["title"], app.ui_windows[key])
     app.ui_windows[key] = bool(opened)
@@ -141,7 +149,9 @@ def _draw_vector_sliders(prefix, values, axes, lo, hi, fmt, on_change=None):
     """벡터 각 축의 실수 슬라이더를 그리고 하나라도 바뀌었는지 반환한다."""
     changed_any = False
     for i, axis in enumerate(axes):
-        changed, values[i] = _slider_float_clamped(f"{axis}##{prefix}_{axis}", values[i], lo, hi, fmt)
+        changed, values[i] = _slider_float_clamped(
+            f"{axis}##{prefix}_{axis}", values[i], lo, hi, fmt
+        )
         if changed:
             changed_any = True
             if on_change is not None:
@@ -168,7 +178,9 @@ def _clamp_pose_targets(targets, side):
         rpy[i] = _clamp(rpy[i], *HAND_RPY_RANGE)
 
 
-def _apply_cartesian_jog(app, side, pos_delta=(0.0, 0.0, 0.0), rpy_delta=(0.0, 0.0, 0.0)):
+def _apply_cartesian_jog(
+    app, side, pos_delta=(0.0, 0.0, 0.0), rpy_delta=(0.0, 0.0, 0.0)
+):
     """선택한 손 또는 가상 물체 목표에 Cartesian 위치·RPY 증분을 적용한다."""
     if side == "virtual":
         pos = app.targets["virtual_object_pos"]
@@ -210,15 +222,19 @@ def _draw_jog_row(app, title, axis_labels, step, is_rotation=False):
             delta = [0.0, 0.0, 0.0]
             delta[i] = -step
             _apply_cartesian_jog(
-                app, app.jog_side,
-                **({"rpy_delta": delta} if is_rotation else {"pos_delta": delta}))
+                app,
+                app.jog_side,
+                **({"rpy_delta": delta} if is_rotation else {"pos_delta": delta}),
+            )
         imgui.same_line()
         if _repeat_button(pos):
             delta = [0.0, 0.0, 0.0]
             delta[i] = step
             _apply_cartesian_jog(
-                app, app.jog_side,
-                **({"rpy_delta": delta} if is_rotation else {"pos_delta": delta}))
+                app,
+                app.jog_side,
+                **({"rpy_delta": delta} if is_rotation else {"pos_delta": delta}),
+            )
 
 
 def _active_marker_choices(app):
@@ -244,13 +260,17 @@ def _draw_cyclo_control_panel(app):
     for controller, label in (("movel", "MoveL"), ("bimanual_movel", "Bimanual MoveL")):
         if controller != "movel":
             imgui.same_line()
-        if imgui.radio_button(f"{label}##cyclo{controller}", app.cyclo_controller == controller):
+        if imgui.radio_button(
+            f"{label}##cyclo{controller}", app.cyclo_controller == controller
+        ):
             if controller == "movel" and app.cyclo_grasp_captured:
                 app.release_grasp()
             app.cyclo_controller = controller
 
     if app.cyclo_controller == "bimanual_movel":
-        if imgui.button("Release Grasp" if app.cyclo_grasp_captured else "Capture Grasp"):
+        if imgui.button(
+            "Release Grasp" if app.cyclo_grasp_captured else "Capture Grasp"
+        ):
             if app.cyclo_grasp_captured:
                 app.release_grasp()
                 app.jog_side = "r"
@@ -272,9 +292,11 @@ def _draw_cyclo_control_panel(app):
     imgui.text("3D gizmo: arrows = XYZ, rings = Roll/Pitch/Yaw")
 
     _, app.jog_pos_step_m = _slider_float_clamped(
-        "Position step", app.jog_pos_step_m, *JOG_POS_STEP_RANGE, "%.3f m")
+        "Position step", app.jog_pos_step_m, *JOG_POS_STEP_RANGE, "%.3f m"
+    )
     _, app.jog_rpy_step_deg = _slider_float_clamped(
-        "RPY step", app.jog_rpy_step_deg, *JOG_RPY_STEP_RANGE, "%.1f deg")
+        "RPY step", app.jog_rpy_step_deg, *JOG_RPY_STEP_RANGE, "%.1f deg"
+    )
 
     _draw_jog_row(app, "Position", POS_AXES, app.jog_pos_step_m, is_rotation=False)
     _draw_jog_row(app, "RPY", RPY_AXES, app.jog_rpy_step_deg, is_rotation=True)
@@ -283,7 +305,7 @@ def _draw_cyclo_control_panel(app):
             app.targets["virtual_object_rpy"] = [0.0, 0.0, 0.0]
             app.apply_virtual_object_target()
         else:
-            for side in (("l", "r") if app.jog_side == "both" else (app.jog_side,)):
+            for side in ("l", "r") if app.jog_side == "both" else (app.jog_side,):
                 if app.arm_mode[side] == "ik":
                     app.targets[f"rpy_{side}"][:] = [0.0, 0.0, 0.0]
 
@@ -292,15 +314,27 @@ def _draw_cyclo_control_panel(app):
         imgui.text("Virtual object target")
         pos = app.targets["virtual_object_pos"]
         rpy = app.targets["virtual_object_rpy"]
+
         def apply_virtual_edit():
             """가상 물체 슬라이더 변경을 캡처된 양손 목표에 즉시 반영한다."""
             app.apply_virtual_object_target()
+
         _draw_vector_sliders(
-            "virtual_object_pos", pos, POS_AXES, *VIRTUAL_POS_RANGE,
-            "%.3f m", apply_virtual_edit)
+            "virtual_object_pos",
+            pos,
+            POS_AXES,
+            *VIRTUAL_POS_RANGE,
+            "%.3f m",
+            apply_virtual_edit,
+        )
         _draw_vector_sliders(
-            "virtual_object_rpy", rpy, RPY_AXES, *HAND_RPY_RANGE,
-            "%.1f deg", apply_virtual_edit)
+            "virtual_object_rpy",
+            rpy,
+            RPY_AXES,
+            *HAND_RPY_RANGE,
+            "%.1f deg",
+            apply_virtual_edit,
+        )
 
 
 def _draw_task_space_panel(app):
@@ -308,14 +342,16 @@ def _draw_task_space_panel(app):
     task_space.ensure_state(app)
     imgui.text_wrapped(
         "Enter an absolute end-effector pose in the MuJoCo world frame. "
-        "Apply Target sends it through target smoothing, whole-body IK, and actuators.")
+        "Apply Target sends it through target smoothing, whole-body IK, and actuators."
+    )
 
     imgui.text("End effector")
     for index, (side, label) in enumerate(TASK_SPACE_SIDES):
         if index:
             imgui.same_line()
         if imgui.radio_button(
-                f"{label}##task_space_{side}", app.task_space_side == side):
+            f"{label}##task_space_{side}", app.task_space_side == side
+        ):
             app.task_space_side = side
 
     side = app.task_space_side
@@ -324,16 +360,20 @@ def _draw_task_space_panel(app):
     imgui.separator_text("World position (m)")
     for index, axis in enumerate(POS_AXES):
         changed, value = imgui.input_float(
-            f"{axis}##task_space_pos_{side}_{axis}", position[index],
-            0.001, 0.010, "%.4f")
+            f"{axis}##task_space_pos_{side}_{axis}",
+            position[index],
+            0.001,
+            0.010,
+            "%.4f",
+        )
         if changed:
             position[index] = value
 
     imgui.separator_text("World orientation RPY (deg)")
     for index, axis in enumerate(RPY_AXES):
         changed, value = imgui.input_float(
-            f"{axis}##task_space_rpy_{side}_{axis}", rpy[index],
-            1.0, 10.0, "%.2f")
+            f"{axis}##task_space_rpy_{side}_{axis}", rpy[index], 1.0, 10.0, "%.2f"
+        )
         if changed:
             rpy[index] = value
 
@@ -346,10 +386,10 @@ def _draw_task_space_panel(app):
         app.task_space_status = "Loaded the active IK target pose."
 
     if imgui.button("Apply Target##task_space_apply"):
-        _ok, app.task_space_status = task_space.apply_target(
-            app, side, position, rpy)
+        _ok, app.task_space_status = task_space.apply_target(app, side, position, rpy)
     _item_tooltip(
-        "Applies this hand independently. If a bimanual grasp is captured, it is released first.")
+        "Applies this hand independently. If a bimanual grasp is captured, it is released first."
+    )
     imgui.text_wrapped(app.task_space_status)
 
     state = app.whole_body_solver.site_state(app.data, side)
@@ -357,40 +397,58 @@ def _draw_task_space_panel(app):
     imgui.separator_text("Measured end-effector pose")
     imgui.text(
         f"XYZ  {state.position[0]:+.4f}  {state.position[1]:+.4f}  "
-        f"{state.position[2]:+.4f} m")
+        f"{state.position[2]:+.4f} m"
+    )
     imgui.text(
-        f"RPY  {current_rpy[0]:+.2f}  {current_rpy[1]:+.2f}  "
-        f"{current_rpy[2]:+.2f} deg")
+        f"RPY  {current_rpy[0]:+.2f}  {current_rpy[1]:+.2f}  {current_rpy[2]:+.2f} deg"
+    )
 
 
 def _draw_status_panel(app, data):
     """시간·IK 오차·베이스 명령·충돌 CBF와 키 도움말을 상태 패널에 표시한다."""
-    imgui.text(f"CAN  |  {app.cyclo_controller}  |  marker: {_selected_marker_label(app)}")
-    imgui.text(f"sim {data.time:6.1f}s  wall {time.perf_counter()-app.wall_start:6.1f}s  "
-               f"{app.freq_ema:4.1f} Hz")
+    imgui.text(
+        f"CAN  |  {app.cyclo_controller}  |  marker: {_selected_marker_label(app)}"
+    )
+    imgui.text(
+        f"sim {data.time:6.1f}s  wall {time.perf_counter() - app.wall_start:6.1f}s  "
+        f"{app.freq_ema:4.1f} Hz"
+    )
     method = app.whole_body_solver.solver_method
     imgui.text(
-        f"IK [{method}]  L: {_ik_err_text(app, 'l')}   R: {_ik_err_text(app, 'r')}")
+        f"IK [{method}]  L: {_ik_err_text(app, 'l')}   R: {_ik_err_text(app, 'r')}"
+    )
     base_bindings = app.bindings.base
     imgui.text(
         f"Base x={data.qpos[base_bindings.x_qpos]:+.2f}m "
         f"y={data.qpos[base_bindings.y_qpos]:+.2f}m "
-        f"yaw={math.degrees(data.qpos[base_bindings.yaw_qpos]):+.1f}deg")
+        f"yaw={math.degrees(data.qpos[base_bindings.yaw_qpos]):+.1f}deg"
+    )
     body_cmd = getattr(app, "commanded_base_twist", None)
     if body_cmd is not None:
-        whole_body_state = "ON" if getattr(app, "whole_body_enabled", True) else "OFF (arm-only)"
-        imgui.text(f"Whole-body IK {whole_body_state}  |  body cmd vx={body_cmd.vx:+.2f} "
-                   f"vy={body_cmd.vy:+.2f} wz={body_cmd.wz:+.2f}")
+        whole_body_state = (
+            "ON" if getattr(app, "whole_body_enabled", True) else "OFF (arm-only)"
+        )
+        imgui.text(
+            f"Whole-body IK {whole_body_state}  |  body cmd vx={body_cmd.vx:+.2f} "
+            f"vy={body_cmd.vy:+.2f} wz={body_cmd.wz:+.2f}"
+        )
     if getattr(app, "collision_viz", False):
         active = len(getattr(app, "collision_active_pairs", ()))
         distance = getattr(app, "collision_min_distance", math.inf)
         buffer_mm = 1000.0 * app.whole_body_solver.collision_buffer
-        distance_text = (f"min {distance*1000:.1f}mm" if math.isfinite(distance)
-                         else f"clear >{buffer_mm:.0f}mm")
+        distance_text = (
+            f"min {distance * 1000:.1f}mm"
+            if math.isfinite(distance)
+            else f"clear >{buffer_mm:.0f}mm"
+        )
         violation = getattr(app, "collision_constraint_violation", 0.0)
-        imgui.text(f"Collision CBF viz ON  |  active {active}  |  {distance_text}  |  "
-                   f"slack {violation:.4f}m/s")
-    imgui.text("Keys: arrows drive/yaw, [/] strafe, Q/E lift, R reset, G contacts, V collision, C camera")
+        imgui.text(
+            f"Collision CBF viz ON  |  active {active}  |  {distance_text}  |  "
+            f"slack {violation:.4f}m/s"
+        )
+    imgui.text(
+        "Keys: arrows drive/yaw, [/] strafe, Q/E lift, R reset, G contacts, V collision, C camera"
+    )
 
 
 def _draw_ik_pose_controls(app, targets, side):
@@ -398,11 +456,16 @@ def _draw_ik_pose_controls(app, targets, side):
     pos = targets[f"pos_{side}"]
     rpy = targets[f"rpy_{side}"]
     imgui.text("Position offset from home (startup/world anchor)")
-    _draw_vector_sliders(f"{side}_pos", pos, POS_AXES,
-                         HAND_POS_OFFSET_RANGE[0], HAND_POS_OFFSET_RANGE[1], "%.3f m")
-    imgui.text("Orientation RPY (home-relative)")
     _draw_vector_sliders(
-        f"{side}_rpy", rpy, RPY_AXES, *HAND_RPY_RANGE, "%.1f deg")
+        f"{side}_pos",
+        pos,
+        POS_AXES,
+        HAND_POS_OFFSET_RANGE[0],
+        HAND_POS_OFFSET_RANGE[1],
+        "%.3f m",
+    )
+    imgui.text("Orientation RPY (home-relative)")
+    _draw_vector_sliders(f"{side}_rpy", rpy, RPY_AXES, *HAND_RPY_RANGE, "%.1f deg")
     if imgui.button(f"Reset RPY##{side}"):
         rpy[0], rpy[1], rpy[2] = 0.0, 0.0, 0.0
 
@@ -412,7 +475,9 @@ def _draw_fk_joint_controls(app, side):
     imgui.text("Joint angles (deg)")
     fk_deg = app.fk_q_deg[side]
     for i, (lo, hi) in enumerate(app.arm_joint_ranges_deg[side]):
-        _, fk_deg[i] = _slider_float_clamped(f"J{i+1}##{side}fk", fk_deg[i], lo, hi, "%.1f deg")
+        _, fk_deg[i] = _slider_float_clamped(
+            f"J{i + 1}##{side}fk", fk_deg[i], lo, hi, "%.1f deg"
+        )
 
 
 def _draw_arm_panel(app, targets, side):
@@ -434,14 +499,18 @@ def _draw_can_grasp_panel(app, targets):
     for side, label in (("r", "Right"), ("l", "Left")):
         if side == "l":
             imgui.separator()
-        if imgui.button(f"{'Release' if app.grab_state[side] else 'Grab'} {label}##grab{side}"):
+        if imgui.button(
+            f"{'Release' if app.grab_state[side] else 'Grab'} {label}##grab{side}"
+        ):
             app.grab_state[side] = not bool(app.grab_state[side])
         changed, targets[f"grasp_{side}"] = imgui.slider_float(
-            f"{label} grasp##{side}", targets[f"grasp_{side}"], 0.0, 1.0)
+            f"{label} grasp##{side}", targets[f"grasp_{side}"], 0.0, 1.0
+        )
         if changed:
             app.grab_state[side] = None
         changed, targets[f"thumb_{side}"] = imgui.slider_float(
-            f"{label} thumb##{side}", targets[f"thumb_{side}"], 0.0, 1.0)
+            f"{label} thumb##{side}", targets[f"thumb_{side}"], 0.0, 1.0
+        )
         if changed:
             app.grab_state[side] = None
 
@@ -456,16 +525,23 @@ def _draw_lift_utils_panel(app, targets):
             imgui.text(
                 f"Can: {task.object_variant.upper()} -> "
                 f"{task.target_label.upper()} box "
-                f"({layout[task.target_label]})")
+                f"({layout[task.target_label]})"
+            )
     whole_body_enabled = getattr(app, "whole_body_enabled", True)
-    button_label = ("Whole-body Control: ON##wholebody"
-                    if whole_body_enabled else "Whole-body Control: OFF (arm-only)##wholebody")
+    button_label = (
+        "Whole-body Control: ON##wholebody"
+        if whole_body_enabled
+        else "Whole-body Control: OFF (arm-only)##wholebody"
+    )
     if imgui.button(button_label):
         app.toggle_whole_body_control()
     imgui.same_line()
-    imgui.text("base + lift join IK" if whole_body_enabled else "base + lift excluded from IK")
+    imgui.text(
+        "base + lift join IK" if whole_body_enabled else "base + lift excluded from IK"
+    )
     _, targets["lift"] = _slider_float_clamped(
-        "Lift target", targets["lift"], app.lift_range[0], app.lift_range[1], "%.3f m")
+        "Lift target", targets["lift"], app.lift_range[0], app.lift_range[1], "%.3f m"
+    )
     if imgui.button("Reset Can (R)"):
         app.reset_active_object()
     imgui.same_line()
@@ -473,7 +549,8 @@ def _draw_lift_utils_panel(app, targets):
         app.contact_viz = not app.contact_viz
     imgui.same_line()
     changed, collision_viz = imgui.checkbox(
-        "Collision CBF Viz (V)", getattr(app, "collision_viz", False))
+        "Collision CBF Viz (V)", getattr(app, "collision_viz", False)
+    )
     if changed:
         app.collision_viz = collision_viz
     imgui.same_line()
@@ -494,22 +571,31 @@ def _draw_ik_solver_panel(app):
         if index:
             imgui.same_line()
         if imgui.radio_button(
-                f"{label}##ik_method_{method}", solver.solver_method == method):
+            f"{label}##ik_method_{method}", solver.solver_method == method
+        ):
             solver.set_solver_method(method)
 
     if solver.solver_method == "pseudoinverse":
         changed, value = _slider_float_clamped(
-            "SVD rcond", solver.differential_solver.pseudoinverse_rcond,
-            *PSEUDOINVERSE_RCOND_RANGE, "%.1e")
+            "SVD rcond",
+            solver.differential_solver.pseudoinverse_rcond,
+            *PSEUDOINVERSE_RCOND_RANGE,
+            "%.1e",
+        )
         if changed:
             solver.differential_solver.pseudoinverse_rcond = value
-        imgui.text("Box/CBF safety constraints are projected after the minimum-norm solve.")
+        imgui.text(
+            "Box/CBF safety constraints are projected after the minimum-norm solve."
+        )
         return
 
     if solver.solver_method == "dls":
         changed, value = _slider_float_clamped(
-            "DLS damping", solver.differential_solver.dls_damping,
-            *DLS_DAMPING_RANGE, "%.3f")
+            "DLS damping",
+            solver.differential_solver.dls_damping,
+            *DLS_DAMPING_RANGE,
+            "%.3f",
+        )
         if changed:
             solver.set_dls_damping(value)
         imgui.text("Box/CBF safety constraints are projected after the damped solve.")
@@ -518,55 +604,130 @@ def _draw_ik_solver_panel(app):
     imgui.text("QP dimensionless strengths")
     imgui.text_wrapped(
         "Cost = strength * (residual / matching speed limit)^2. "
-        "Hover a slider for its meaning.")
+        "Hover a slider for its meaning."
+    )
     imgui.text_wrapped(
         "Hard constraints: velocity bounds, joint-limit CBF, fixed mode DOFs. "
-        "All sliders below tune soft costs; collision uses a penalized CBF slack.")
+        "All sliders below tune soft costs; collision uses a penalized CBF slack."
+    )
     logarithmic = imgui.SliderFlags_.logarithmic
     weight_specs = (
-        ("position", "Position", 1e-3, 1e4, "%.4g", logarithmic,
-         "Tracks commanded hand linear velocity. Residual is divided by the "
-         "maximum task linear speed (m/s). Higher means smaller position error."),
-        ("orientation", "Orientation", 1e-3, 1e4, "%.4g", logarithmic,
-         "Tracks commanded hand angular velocity. Residual is divided by the "
-         "maximum task angular speed (rad/s). Higher means smaller rotation error."),
-        ("rigid_grasp_position", "Rigid grasp position", 1e-3, 1e4,
-         "%.4g", logarithmic,
-         "Preserves the captured relative translation between both hands. "
-         "Its residual is divided by the maximum linear speed (m/s)."),
-        ("rigid_grasp_orientation", "Rigid grasp orientation", 1e-3, 1e4,
-         "%.4g", logarithmic,
-         "Preserves the captured relative rotation between both hands. "
-         "Its residual is divided by the maximum angular speed (rad/s)."),
-        ("damping_base_linear", "Damping base XY", 1e-4, 1e3,
-         "%.4g", logarithmic,
-         "Penalizes base X/Y speed divided by its velocity limit. Higher values "
-         "make translation participate less."),
-        ("damping_base_yaw", "Damping base yaw", 1e-4, 1e3,
-         "%.4g", logarithmic,
-         "Penalizes base yaw speed divided by its velocity limit. Higher values "
-         "make base rotation participate less."),
-        ("damping_lift", "Damping lift", 1e-4, 1e3, "%.4g", logarithmic,
-         "Penalizes lift speed divided by its velocity limit. Higher values make "
-         "the lift participate less."),
-        ("damping_arm", "Damping arms", 1e-4, 1e3, "%.4g", logarithmic,
-         "Penalizes each arm joint speed divided by its velocity limit. Higher "
-         "values make both arms participate less."),
-        ("posture_lift", "Posture lift", 1e-4, 1e3, "%.4g", logarithmic,
-         "Tracks the lift's nominal recovery velocity after normalization. Higher "
-         "values pull the lift toward its nominal position more strongly."),
-        ("posture_arm", "Posture arms", 1e-4, 1e3, "%.4g", logarithmic,
-         "Tracks each arm's nominal recovery velocity after normalization. Higher "
-         "values pull the arms toward their nominal posture more strongly."),
-        ("collision_slack", "Collision CBF slack", 1e-2, 1e5,
-         "%.4g", logarithmic,
-         "Penalizes violation of the collision distance-rate CBF after dividing "
-         "it by the maximum task linear speed. Higher is safer but can be stiffer."),
+        (
+            "position",
+            "Position",
+            1e-3,
+            1e4,
+            "%.4g",
+            logarithmic,
+            "Tracks commanded hand linear velocity. Residual is divided by the "
+            "maximum task linear speed (m/s). Higher means smaller position error.",
+        ),
+        (
+            "orientation",
+            "Orientation",
+            1e-3,
+            1e4,
+            "%.4g",
+            logarithmic,
+            "Tracks commanded hand angular velocity. Residual is divided by the "
+            "maximum task angular speed (rad/s). Higher means smaller rotation error.",
+        ),
+        (
+            "rigid_grasp_position",
+            "Rigid grasp position",
+            1e-3,
+            1e4,
+            "%.4g",
+            logarithmic,
+            "Preserves the captured relative translation between both hands. "
+            "Its residual is divided by the maximum linear speed (m/s).",
+        ),
+        (
+            "rigid_grasp_orientation",
+            "Rigid grasp orientation",
+            1e-3,
+            1e4,
+            "%.4g",
+            logarithmic,
+            "Preserves the captured relative rotation between both hands. "
+            "Its residual is divided by the maximum angular speed (rad/s).",
+        ),
+        (
+            "damping_base_linear",
+            "Damping base XY",
+            1e-4,
+            1e3,
+            "%.4g",
+            logarithmic,
+            "Penalizes base X/Y speed divided by its velocity limit. Higher values "
+            "make translation participate less.",
+        ),
+        (
+            "damping_base_yaw",
+            "Damping base yaw",
+            1e-4,
+            1e3,
+            "%.4g",
+            logarithmic,
+            "Penalizes base yaw speed divided by its velocity limit. Higher values "
+            "make base rotation participate less.",
+        ),
+        (
+            "damping_lift",
+            "Damping lift",
+            1e-4,
+            1e3,
+            "%.4g",
+            logarithmic,
+            "Penalizes lift speed divided by its velocity limit. Higher values make "
+            "the lift participate less.",
+        ),
+        (
+            "damping_arm",
+            "Damping arms",
+            1e-4,
+            1e3,
+            "%.4g",
+            logarithmic,
+            "Penalizes each arm joint speed divided by its velocity limit. Higher "
+            "values make both arms participate less.",
+        ),
+        (
+            "posture_lift",
+            "Posture lift",
+            1e-4,
+            1e3,
+            "%.4g",
+            logarithmic,
+            "Tracks the lift's nominal recovery velocity after normalization. Higher "
+            "values pull the lift toward its nominal position more strongly.",
+        ),
+        (
+            "posture_arm",
+            "Posture arms",
+            1e-4,
+            1e3,
+            "%.4g",
+            logarithmic,
+            "Tracks each arm's nominal recovery velocity after normalization. Higher "
+            "values pull the arms toward their nominal posture more strongly.",
+        ),
+        (
+            "collision_slack",
+            "Collision CBF slack",
+            1e-2,
+            1e5,
+            "%.4g",
+            logarithmic,
+            "Penalizes violation of the collision distance-rate CBF after dividing "
+            "it by the maximum task linear speed. Higher is safer but can be stiffer.",
+        ),
     )
     weights = solver.qp_weights()
     for name, label, lower, upper, fmt, flags, help_text in weight_specs:
         changed, value = _slider_float_clamped(
-            f"{label}##qp_weight_{name}", weights[name], lower, upper, fmt, flags)
+            f"{label}##qp_weight_{name}", weights[name], lower, upper, fmt, flags
+        )
         _item_tooltip(help_text)
         if changed:
             solver.set_qp_weight(name, value)
@@ -576,32 +737,34 @@ def _draw_act_policy_panel(app):
     """Select and launch a trained standard or modular ACT checkpoint."""
     imgui.text_wrapped(
         "Select a training run and checkpoint. ACT will use this teleop "
-        "window and the current MuJoCo model directly.")
+        "window and the current MuJoCo model directly."
+    )
     representation_names = ("auto", "joint", "task")
-    representation_index = representation_names.index(
-        app.act_policy_representation)
+    representation_index = representation_names.index(app.act_policy_representation)
     changed, representation_index = imgui.combo(
-        "Policy representation", representation_index,
-        [name.upper() for name in representation_names])
+        "Policy representation",
+        representation_index,
+        [name.upper() for name in representation_names],
+    )
     if changed:
-        app.set_act_policy_representation(
-            representation_names[representation_index])
+        app.set_act_policy_representation(representation_names[representation_index])
 
     changed, pte_steps = imgui.input_int(
-        "PTE future steps", app.act_policy_pte_steps, 1, 5)
+        "PTE future steps", app.act_policy_pte_steps, 1, 5
+    )
     if changed:
         app.set_act_policy_pte_steps(pte_steps)
     if app.act_policy_env is None:
         imgui.text_wrapped(
             "PTE f=0 is the original ACT ensemble. Positive f executes "
-            "a future action predicted by the same checkpoint.")
+            "a future action predicted by the same checkpoint."
+        )
     else:
-        pte_seconds = (
-            app.act_policy_pte_steps
-            / app.act_policy_env.actual_control_hz)
+        pte_seconds = app.act_policy_pte_steps / app.act_policy_env.actual_control_hz
         imgui.text(
             f"PTE look-ahead: {pte_seconds:.3f} s "
-            f"(max {app.act_policy_runner.max_proleptic_steps} steps)")
+            f"(max {app.act_policy_runner.max_proleptic_steps} steps)"
+        )
 
     if imgui.button("Refresh models##act_policy"):
         app.refresh_act_policies()
@@ -611,10 +774,10 @@ def _draw_act_policy_panel(app):
         imgui.text_wrapped(app.act_policy_status)
         return
 
-    run_names = [
-        f"[{run.representation.upper()}] {run.name}" for run in runs]
+    run_names = [f"[{run.representation.upper()}] {run.name}" for run in runs]
     changed, run_index = imgui.combo(
-        "Training run", app.act_policy_run_index, run_names)
+        "Training run", app.act_policy_run_index, run_names
+    )
     if changed:
         app.act_policy_run_index = run_index
         app.act_policy_checkpoint_index = 0
@@ -622,16 +785,18 @@ def _draw_act_policy_panel(app):
     selected_run = runs[app.act_policy_run_index]
     checkpoint_names = [path.name for path in selected_run.checkpoints]
     changed, checkpoint_index = imgui.combo(
-        "Checkpoint", app.act_policy_checkpoint_index, checkpoint_names)
+        "Checkpoint", app.act_policy_checkpoint_index, checkpoint_names
+    )
     if changed:
         app.act_policy_checkpoint_index = checkpoint_index
 
-    changed, max_steps = imgui.input_int(
-        "Max steps", app.act_policy_max_steps, 10, 100)
+    changed, max_steps = imgui.input_int("Max steps", app.act_policy_max_steps, 10, 100)
     if changed:
         app.act_policy_max_steps = max(1, max_steps)
-        if (app.act_policy_env is not None
-                and app.act_policy_frame >= app.act_policy_max_steps):
+        if (
+            app.act_policy_env is not None
+            and app.act_policy_frame >= app.act_policy_max_steps
+        ):
             app.request_finish_act_policy("Max steps reached")
 
     checkpoint = selected_run.checkpoints[app.act_policy_checkpoint_index]
@@ -644,23 +809,22 @@ def _draw_act_policy_panel(app):
         return
     imgui.separator_text("Active rollout")
     imgui.text_wrapped(f"Model: {app.act_policy_checkpoint.name}")
-    imgui.text(
-        f"Representation: {app.act_policy_runner.representation.upper()}")
+    imgui.text(f"Representation: {app.act_policy_runner.representation.upper()}")
     imgui.text(
         f"Temporal mode: "
         f"{'ACT' if app.act_policy_runner.proleptic_steps == 0 else 'PTE'} "
-        f"(f={app.act_policy_runner.proleptic_steps})")
+        f"(f={app.act_policy_runner.proleptic_steps})"
+    )
     if app.act_policy_runner.representation == "task":
-        imgui.text(
-            f"IK speed scale: {app.act_policy_ik_speed_scale:.2f}x")
+        imgui.text(f"IK speed scale: {app.act_policy_ik_speed_scale:.2f}x")
     if getattr(app, "act_policy_rerun_path", None) is not None:
         imgui.text_wrapped(f"Rerun: {app.act_policy_rerun_path}")
         imgui.text(
             "Rerun logging: "
             f"~{app.act_policy_env.actual_control_hz / app.act_policy_rerun_logger.frame_stride:.1f} Hz "
-            "(control remains 25 Hz)")
-    imgui.text(
-        f"Frame: {app.act_policy_frame} / {app.act_policy_max_steps}")
+            "(control remains 25 Hz)"
+        )
+    imgui.text(f"Frame: {app.act_policy_frame} / {app.act_policy_max_steps}")
     placed = app.act_policy_observation["task"]["success"]
     imgui.text(f"Can settled in box: {'YES' if placed else 'NO'}")
     if imgui.button("Pause" if app.act_policy_running else "Run policy"):
@@ -676,7 +840,8 @@ def _draw_act_policy_panel(app):
     imgui.text("SPACE: run/pause | N: one step | R: reset can")
     imgui.text_wrapped(
         "Placing the can does not stop the rollout; the learned home-return "
-        "sequence continues until Max steps.")
+        "sequence continues until Max steps."
+    )
 
 
 def _draw_window_visibility(app):
@@ -704,7 +869,8 @@ def _draw_window_visibility(app):
         if index % 2:
             imgui.same_line()
         changed, visible = imgui.checkbox(
-            f"{spec['title']}##window_{key}", app.ui_windows[key])
+            f"{spec['title']}##window_{key}", app.ui_windows[key]
+        )
         if changed:
             app.ui_windows[key] = visible
 
@@ -713,8 +879,8 @@ def _draw_status_window(app, data):
     """주 viewport 좌상단에 항상 고정되는 상태·창 관리 도구 창을 그린다."""
     main_viewport = imgui.get_main_viewport()
     imgui.set_next_window_pos(
-        (main_viewport.pos.x + 10.0, main_viewport.pos.y + 10.0),
-        imgui.Cond_.always)
+        (main_viewport.pos.x + 10.0, main_viewport.pos.y + 10.0), imgui.Cond_.always
+    )
     imgui.set_next_window_size((550, 275), imgui.Cond_.first_use_ever)
     if _begin_expanded("FFW-SH5 Status & Windows"):
         _draw_status_panel(app, data)
@@ -748,10 +914,12 @@ def _draw_control_center(app, targets):
     _draw_tab("Task Space", lambda: _draw_task_space_panel(app))
     _draw_tab(
         f"Right Arm ({app.arm_mode['r'].upper()})###right_arm_tab",
-        lambda: _draw_arm_panel(app, targets, "r"))
+        lambda: _draw_arm_panel(app, targets, "r"),
+    )
     _draw_tab(
         f"Left Arm ({app.arm_mode['l'].upper()})###left_arm_tab",
-        lambda: _draw_arm_panel(app, targets, "l"))
+        lambda: _draw_arm_panel(app, targets, "l"),
+    )
     _draw_tab("Pose Graph", lambda: diagnostics.draw_pose_graph_panel(app))
     _draw_tab("IK Solver", lambda: _draw_ik_solver_panel(app))
     _draw_tab("ACT Policy", lambda: _draw_act_policy_panel(app))

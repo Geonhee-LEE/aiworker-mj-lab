@@ -8,14 +8,15 @@ from ffw_sh5_grasp.imitation.data.paths import resolve_episode_path  # noqa: E40
 
 
 def test_resolve_episode_path_prefers_explicit_path():
-    assert resolve_episode_path(
-        "custom.hdf5", "ignored", 12) == pathlib.Path("custom.hdf5")
+    assert resolve_episode_path("custom.hdf5", "ignored", 12) == pathlib.Path(
+        "custom.hdf5"
+    )
 
 
 def test_resolve_episode_path_builds_canonical_name():
-    assert resolve_episode_path(
-        None, "datasets/can_to_box", 7) == pathlib.Path(
-            "datasets/can_to_box/episode_000007.hdf5")
+    assert resolve_episode_path(None, "datasets/can_to_box", 7) == pathlib.Path(
+        "datasets/can_to_box/episode_000007.hdf5"
+    )
 
 
 def test_resolve_episode_path_requires_a_source():

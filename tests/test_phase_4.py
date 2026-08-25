@@ -110,33 +110,46 @@ def run_hold_test(model):
     n = int(HOLD_DURATION / dt)
     max_qacc = 0.0
     for _ in range(n):
-        _hold_whole_body(model, data, ctrl_r, ctrl_l, HOME_Q_R, HOME_Q_L,
-                          grasp_r=0.0, thumb_r=0.0)
+        _hold_whole_body(
+            model, data, ctrl_r, ctrl_l, HOME_Q_R, HOME_Q_L, grasp_r=0.0, thumb_r=0.0
+        )
         mujoco.mj_step(model, data)
         max_qacc = max(max_qacc, float(np.max(np.abs(data.qacc))))
 
     drift_r = float(np.linalg.norm(data.site_xpos[site_r] - p0_r))
     drift_l = float(np.linalg.norm(data.site_xpos[site_l] - p0_l))
-    print(f"Hold test: max|qacc|={max_qacc:.3f} (limit {HOLD_QACC_LIMIT:.0e}), "
-          f"site_r drift={drift_r*1000:.3f}mm site_l drift={drift_l*1000:.3f}mm "
-          f"(limit {HOLD_SITE_DRIFT_LIMIT*1000:.0f}mm)")
-    ok = (max_qacc < HOLD_QACC_LIMIT and drift_r < HOLD_SITE_DRIFT_LIMIT
-          and drift_l < HOLD_SITE_DRIFT_LIMIT)
+    print(
+        f"Hold test: max|qacc|={max_qacc:.3f} (limit {HOLD_QACC_LIMIT:.0e}), "
+        f"site_r drift={drift_r * 1000:.3f}mm site_l drift={drift_l * 1000:.3f}mm "
+        f"(limit {HOLD_SITE_DRIFT_LIMIT * 1000:.0f}mm)"
+    )
+    ok = (
+        max_qacc < HOLD_QACC_LIMIT
+        and drift_r < HOLD_SITE_DRIFT_LIMIT
+        and drift_l < HOLD_SITE_DRIFT_LIMIT
+    )
     return ok
 
 
 def run_ik_unit_test(model, solver, rng):
     """전신 모델 문맥에서 오른팔 IK의 무작위 pose 수렴률을 검사한다."""
-    joint_ranges = np.array([model.jnt_range[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]
-                              for n in ARM_R])
+    joint_ranges = np.array(
+        [
+            model.jnt_range[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]
+            for n in ARM_R
+        ]
+    )
     scratch = mujoco.MjData(model)
     _reset_home(model, scratch)  # lift_joint와 상위 문맥 관절의 초기값도 함께 넣는다.
 
     successes = 0
     pos_errs, ori_errs = [], []
     for _ in range(N_IK_SAMPLES):
-        q_target = np.clip(HOME_Q_R + rng.uniform(-IK_TEST_SPREAD, IK_TEST_SPREAD, size=7),
-                            joint_ranges[:, 0], joint_ranges[:, 1])
+        q_target = np.clip(
+            HOME_Q_R + rng.uniform(-IK_TEST_SPREAD, IK_TEST_SPREAD, size=7),
+            joint_ranges[:, 0],
+            joint_ranges[:, 1],
+        )
         for qadr, val in zip(solver.qpos_adrs, q_target):
             scratch.qpos[qadr] = val
         mujoco.mj_forward(model, scratch)
@@ -145,29 +158,51 @@ def run_ik_unit_test(model, solver, rng):
         mujoco.mju_mat2Quat(target_quat, scratch.site_xmat[solver.site_id])
 
         _, pos_err, ori_err, converged = solve_offline_pose_multistart(
-            solver, HOME_Q_R, target_pos, target_quat, rng,
-            success_pos_tol=POS_TOL, success_ori_tol=np.radians(ORI_TOL_DEG),
-            context_qpos=scratch.qpos)
+            solver,
+            HOME_Q_R,
+            target_pos,
+            target_quat,
+            rng,
+            success_pos_tol=POS_TOL,
+            success_ori_tol=np.radians(ORI_TOL_DEG),
+            context_qpos=scratch.qpos,
+        )
         pos_errs.append(pos_err)
         ori_errs.append(np.degrees(ori_err))
         if converged:
             successes += 1
 
     rate = successes / N_IK_SAMPLES
-    print(f"IK unit test: {successes}/{N_IK_SAMPLES} converged ({rate*100:.0f}%), "
-          f"target >= {IK_SUCCESS_RATE_TARGET*100:.0f}%")
-    print(f"  pos_err: median={np.median(pos_errs)*1000:.3f}mm max={np.max(pos_errs)*1000:.3f}mm")
-    print(f"  ori_err: median={np.median(ori_errs):.3f}deg max={np.max(ori_errs):.3f}deg")
+    print(
+        f"IK unit test: {successes}/{N_IK_SAMPLES} converged ({rate * 100:.0f}%), "
+        f"target >= {IK_SUCCESS_RATE_TARGET * 100:.0f}%"
+    )
+    print(
+        f"  pos_err: median={np.median(pos_errs) * 1000:.3f}mm max={np.max(pos_errs) * 1000:.3f}mm"
+    )
+    print(
+        f"  ori_err: median={np.median(ori_errs):.3f}deg max={np.max(ori_errs):.3f}deg"
+    )
     return rate >= IK_SUCCESS_RATE_TARGET
 
 
 def _read_arm_q(model, data, joint_names):
     """지정 관절 이름 순서로 현재 팔 qpos 벡터를 읽는다."""
-    return np.array([data.qpos[model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]]
-                      for n in joint_names])
+    return np.array(
+        [
+            data.qpos[
+                model.jnt_qposadr[
+                    mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)
+                ]
+            ]
+            for n in joint_names
+        ]
+    )
 
 
-def _hold(model, data, ctrl_r, ctrl_l, q_r_des, duration, dt, grasp_frac=None, thumb_frac=None):
+def _hold(
+    model, data, ctrl_r, ctrl_l, q_r_des, duration, dt, grasp_frac=None, thumb_frac=None
+):
     """양팔 목표를 유지하며 선택적 오른손 파지 명령과 물리 step을 적용한다."""
     n = int(duration / dt)
     for _ in range(n):
@@ -178,7 +213,18 @@ def _hold(model, data, ctrl_r, ctrl_l, q_r_des, duration, dt, grasp_frac=None, t
         mujoco.mj_step(model, data)
 
 
-def _move(model, data, ctrl_r, ctrl_l, q_from, q_to, duration, dt, grasp_frac=None, thumb_frac=None):
+def _move(
+    model,
+    data,
+    ctrl_r,
+    ctrl_l,
+    q_from,
+    q_to,
+    duration,
+    dt,
+    grasp_frac=None,
+    thumb_frac=None,
+):
     """오른팔 목표를 보간하고 왼팔을 유지하며 선택적 파지와 물리 step을 적용한다."""
     n = int(duration / dt)
     for i in range(n):
@@ -195,9 +241,9 @@ def run_pick_trial(model, data, solver, ctrl_r, ctrl_l, rng):
     _reset_home(model, data)
     can_jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "can_free")
     can_qadr = model.jnt_qposadr[can_jid]
-    can_pos0 = data.qpos[can_qadr:can_qadr + 3].copy()
+    can_pos0 = data.qpos[can_qadr : can_qadr + 3].copy()
     can_pos0[:3] += rng.uniform(-CAN_NOISE, CAN_NOISE, size=3)
-    data.qpos[can_qadr:can_qadr + 3] = can_pos0
+    data.qpos[can_qadr : can_qadr + 3] = can_pos0
     mujoco.mj_forward(model, data)
 
     target_quat = np.array([0.5, 0.5, 0.5, 0.5])
@@ -205,22 +251,50 @@ def run_pick_trial(model, data, solver, ctrl_r, ctrl_l, rng):
 
     grasp_target_pos = can_pos0 + GRASP_TARGET_OFFSET
     pregrasp_pos = grasp_target_pos + PRE_GRASP_OFFSET
-    ctx = data.qpos.copy()  # lift_joint 같은 상위 관절은 ik.py의 context_qpos 설명을 따른다.
+    ctx = (
+        data.qpos.copy()
+    )  # lift_joint 같은 상위 관절은 ik.py의 context_qpos 설명을 따른다.
     q_pregrasp, perr, oerr, ok1 = solve_offline_pose_multistart(
-        solver, HOME_Q_R, pregrasp_pos, target_quat, rng, context_qpos=ctx)
+        solver, HOME_Q_R, pregrasp_pos, target_quat, rng, context_qpos=ctx
+    )
     q_grasp, perr2, oerr2, ok2 = solve_offline_pose_multistart(
-        solver, q_pregrasp, grasp_target_pos, target_quat, rng, context_qpos=ctx)
+        solver, q_pregrasp, grasp_target_pos, target_quat, rng, context_qpos=ctx
+    )
     if not (ok1 and ok2):
         return {"success": False, "reason": "ik_failed", "net_lift": 0.0}
 
     q_home = _read_arm_q(model, data, ARM_R)
 
-    _move(model, data, ctrl_r, ctrl_l, q_home, q_pregrasp, 3.0, dt, grasp_frac=0.0, thumb_frac=0.0)
-    _hold(model, data, ctrl_r, ctrl_l, q_pregrasp, 1.0, dt, grasp_frac=0.0, thumb_frac=0.0)
+    _move(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        q_home,
+        q_pregrasp,
+        3.0,
+        dt,
+        grasp_frac=0.0,
+        thumb_frac=0.0,
+    )
+    _hold(
+        model, data, ctrl_r, ctrl_l, q_pregrasp, 1.0, dt, grasp_frac=0.0, thumb_frac=0.0
+    )
 
     approach_dist = np.linalg.norm(PRE_GRASP_OFFSET)
     approach_time = approach_dist / APPROACH_SPEED
-    _move(model, data, ctrl_r, ctrl_l, q_pregrasp, q_grasp, approach_time, dt, grasp_frac=0.0, thumb_frac=0.0)
+    _move(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        q_pregrasp,
+        q_grasp,
+        approach_time,
+        dt,
+        grasp_frac=0.0,
+        thumb_frac=0.0,
+    )
     _hold(model, data, ctrl_r, ctrl_l, q_grasp, 1.0, dt, grasp_frac=0.0, thumb_frac=0.0)
 
     n = int(RAMP_TIME / dt)
@@ -230,17 +304,49 @@ def run_pick_trial(model, data, solver, ctrl_r, ctrl_l, rng):
         ctrl_l.apply(data, HOME_Q_L)
         grasp.apply_grasp(model, data, grasp=frac, thumb=frac, side="r")
         mujoco.mj_step(model, data)
-    _hold(model, data, ctrl_r, ctrl_l, q_grasp, SETTLE_TIME, dt, grasp_frac=1.0, thumb_frac=1.0)
+    _hold(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        q_grasp,
+        SETTLE_TIME,
+        dt,
+        grasp_frac=1.0,
+        thumb_frac=1.0,
+    )
 
     grasped = grasp.is_grasped(model, data, side="r")
     can_z_before_lift = data.qpos[can_qadr + 2]
 
     lift_target_pos = grasp_target_pos + np.array([0, 0, LIFT_HEIGHT])
     q_lift, _, _, _ = solve_offline_pose_multistart(
-        solver, q_grasp, lift_target_pos, target_quat, rng, context_qpos=ctx)
+        solver, q_grasp, lift_target_pos, target_quat, rng, context_qpos=ctx
+    )
     lift_time = LIFT_HEIGHT / LIFT_SPEED
-    _move(model, data, ctrl_r, ctrl_l, q_grasp, q_lift, lift_time, dt, grasp_frac=1.0, thumb_frac=1.0)
-    _hold(model, data, ctrl_r, ctrl_l, q_lift, POST_LIFT_HOLD, dt, grasp_frac=1.0, thumb_frac=1.0)
+    _move(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        q_grasp,
+        q_lift,
+        lift_time,
+        dt,
+        grasp_frac=1.0,
+        thumb_frac=1.0,
+    )
+    _hold(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        q_lift,
+        POST_LIFT_HOLD,
+        dt,
+        grasp_frac=1.0,
+        thumb_frac=1.0,
+    )
 
     net_lift = data.qpos[can_qadr + 2] - can_z_before_lift
     return {
@@ -257,10 +363,14 @@ def run_pick_test(model, solver, ctrl_r, ctrl_l, rng):
     for trial in range(N_PICK_TRIALS):
         r = run_pick_trial(model, data, solver, ctrl_r, ctrl_l, rng)
         results.append(r)
-        print(f"  pick trial {trial}: success={r['success']} net_lift={r['net_lift']*100:.2f}cm reason={r['reason']}")
+        print(
+            f"  pick trial {trial}: success={r['success']} net_lift={r['net_lift'] * 100:.2f}cm reason={r['reason']}"
+        )
     n_success = sum(r["success"] for r in results)
     rate = n_success / N_PICK_TRIALS
-    print(f"Pick test: {n_success}/{N_PICK_TRIALS} ({rate*100:.0f}%), target >= {PICK_SUCCESS_RATE_TARGET*100:.0f}%")
+    print(
+        f"Pick test: {n_success}/{N_PICK_TRIALS} ({rate * 100:.0f}%), target >= {PICK_SUCCESS_RATE_TARGET * 100:.0f}%"
+    )
     return rate >= PICK_SUCCESS_RATE_TARGET
 
 

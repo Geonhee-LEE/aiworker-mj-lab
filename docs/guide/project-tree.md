@@ -98,8 +98,9 @@ src/ffw_sh5_grasp/
 │   ├── rerun.py                        # HDF5 → Rerun 변환 명령
 │   ├── train.py                        # ACT 학습 명령
 │   ├── evaluate.py                     # closed-loop 평가 명령
-│   ├── compare.py                      # expert-policy 비교 명령
-│   └── policy.py                       # 독립 policy UI 명령
+│   ├── evaluate_color_sort.py          # 4-policy PTE 평가 행렬
+│   ├── gradcam.py                      # ACT action-target Grad-CAM
+│   └── compare.py                      # expert-policy 비교 명령
 │
 └── imitation/                          # 모방학습 전체 기능
     ├── __init__.py                     # IL package 설명과 경계
@@ -126,6 +127,7 @@ src/ffw_sh5_grasp/
     │   ├── backbone.py                 # ResNet18·2D position embedding
     │   ├── transformer.py              # positional encoder/decoder
     │   ├── policy.py                   # CVAE ACT forward·loss
+    │   ├── representations.py          # Joint/Task state·action 변환
     │   ├── dataset_loader.py           # split·정규화·action chunk sample
     │   ├── training_config.py          # 학습 YAML typed config
     │   ├── trainer.py                  # epoch·optimizer·checkpoint
@@ -135,14 +137,14 @@ src/ffw_sh5_grasp/
     │   ├── __init__.py                 # policy run 탐색 공개 API
     │   ├── runner.py                   # checkpoint 추론·temporal ensemble
     │   ├── catalog.py                  # outputs/act run 탐색
+    │   ├── task_space.py               # Task 출력 → 오른팔 IK
     │   └── evaluation.py               # rollout 실행·metric 집계
     │
     ├── apps/                           # IL 전용 interactive 앱
     │   ├── __init__.py                 # IL app package 설명(재-export 없음)
     │   ├── base.py                     # GLFW/ImGui 공통 lifecycle
     │   ├── leader.py                   # leader 입력 → 16D action
-    │   ├── recording.py                # demonstration 기록 UI
-    │   └── policy.py                   # 독립 ACT rollout UI
+    │   └── recording.py                # demonstration 기록 UI
     │
     └── visualization/                  # IL 결과를 외부 viewer에 기록
         ├── __init__.py                 # IL visualization package 설명
@@ -152,6 +154,7 @@ src/ffw_sh5_grasp/
         ├── rerun_dataset.py            # HDF5 episode 시각화
         ├── rerun_rollout.py            # rollout·expert 비교 기록
         ├── rerun_training.py           # 학습 metric Rerun 기록
+        ├── gradcam.py                  # policy camera별 action attribution
         └── wandb_training.py           # 학습 metric W&B 기록
 ```
 
@@ -313,18 +316,13 @@ STL/OBJ는 시각 형상이다. 충돌 안정성이나 접촉을 바꾸려면 me
 
 ## IL 구현 상세 { #il }
 
-이 프로젝트에는 ACT를 실행하는 경로가 세 가지 있다. 같은 checkpoint를 사용하지만
+이 프로젝트에는 ACT를 다루는 경로가 두 가지 있다. 같은 환경 계약을 사용하지만
 환경 소유권과 목적이 다르므로 먼저 구분해야 한다.
 
 | 경로 | 진입점 | MuJoCo/창 | 목적 |
 |---|---|---|---|
 | 데이터 수집 | `src/il.py record` | 별도 arm-only 환경과 창 생성 | 전문가 episode 기록 |
-| 독립 policy 실행 | `src/il.py policy` | 별도 arm-only 환경과 창 생성 | checkpoint 수동 점검 |
 | 기본 teleop 내 policy | `src/teleop_app.py`의 ACT panel | 현재 `TeleopApp.model/data/window` 재사용 | 같은 화면에서 ACT 실행 후 IK 복귀 |
-
-`cli/policy.py`는 기본 teleop 창에 policy를 삽입하는 파일이 아니다. 기본 창의 ACT 전환은
-`application/teleop.py`가 `runtime/runner.py`와 `simulation/environment.py`를 직접
-조립하고, `visualization/ui.py`가 선택 UI만 제공한다.
 
 ### IL 전체 데이터 계약
 
@@ -334,11 +332,12 @@ GizmoLeader → 16D action → AIWorkerMujocoEnv.step
             ↘ obs_t/action_t → EpisodeRecorder → episode_XXXXXX.hdf5
 
 학습
-HDF5 → train split 통계 → 오른팔 8D + 2 RGB → ACT → K×8 예측
+HDF5 → Joint 또는 Task 8D 변환 → train 통계 + 2 RGB → ACT → K×8 예측
 
 추론
-16D observation → 오른팔 index 선택·정규화 → ACT → K×8
-    → 역정규화·16D 확장 → temporal ensemble → environment.step
+16D qpos/right EE pose → checkpoint 표현 선택 → ACT → K×8 → temporal ensemble
+    ├─ Joint: 16D 확장 → environment.step
+    └─ Task: 오른팔 IK → 16D action → environment.step
 ```
 
 canonical state/action은 left-first 16차원이다.
@@ -367,7 +366,6 @@ dataset 검증만 할 때 PyTorch나 GLFW를 불필요하게 import하지 않는
 | `train` · `cli/train.py` | `act.trainer.train` | ACT YAML | split·통계·metric·plot과 best/last checkpoint가 있는 run directory를 만든다. |
 | `evaluate` · `cli/evaluate.py` | `runtime.evaluation.evaluate` | checkpoint, episode 수, max steps, seed | 새 arm-only 환경에서 closed-loop rollout을 실행하고 `evaluation.json`을 쓴다. 성공해도 조기 종료하지 않고 max steps까지 진행한다. |
 | `compare` · `cli/compare.py` | `load_episode`, `ACTPolicyRunner`, `RolloutRerunLogger` | checkpoint와 기록 episode | 기록된 관측에 policy를 적용하는 offline 비교다. MuJoCo에 예측 action을 실행하지 않고 expert/policy action을 `.rrd`에 함께 기록한다. |
-| `policy` · `cli/policy.py` | `apps.policy.ACTPolicyApp` | checkpoint, stats, device, seed, max steps | 별도 MuJoCo model/data와 GLFW 창을 열어 run/pause/single-step/reset을 제공한다. |
 
 ## IL 데이터 계층
 
@@ -415,13 +413,13 @@ observation을 만드는 환경 adapter이므로, ACT를 다른 정책으로 바
 | `simulation/state.py` | `PolicyStateAdapter` | MuJoCo arm qpos/qvel을 읽고, 여러 손가락 관절을 grasp command와 같은 선형 synergy에 최소제곱 투영해 16D qpos/qvel을 만든다. |
 | `simulation/cameras.py` | `MujocoCameraManager` | 기본 `cam_high`, `cam_right_wrist`를 uint8 RGB로 렌더한다. 정책 관측에서 head self-occluder와 operator marker group을 제외한다. 독립 renderer와 teleop의 공유 OpenGL context 경로를 모두 지원한다. |
 | `simulation/task.py` | `CanInBoxTask`, `TaskMetrics` | target site 기준 원판 안에서 캔 시작 위치를 randomize한다. 상자 XY 내부·높이 범위·속도 제한을 모두 만족할 때만 성공이다. `reset()`은 캔 free joint만 변경한다. |
-| `simulation/environment.py` | `AIWorkerMujocoEnv`, `enable_can_task_collisions` | 새 model/data를 소유하거나 기존 teleop model/data에 attach한다. 설정상 기본 25 Hz control frame 동안 arm torque와 grasp를 반복 적용한다. lift·head·wheel actuator는 home 명령으로, planar base는 passive stiffness/damping으로 유지하고 target bin과 오른손 task contact를 활성화한다. |
+| `simulation/environment.py` | `AIWorkerMujocoEnv`, `enable_task_collisions` | 새 model/data를 소유하거나 기존 teleop model/data에 attach한다. 설정상 기본 25 Hz control frame 동안 arm torque와 grasp를 반복 적용한다. lift·head·wheel actuator는 home 명령으로, planar base는 passive stiffness/damping으로 유지하고 target bin과 오른손 task contact를 활성화한다. |
 
 ### Environment 생성 방식
 
 | 방식 | 사용 위치 | reset 의미 |
 |---|---|---|
-| `AIWorkerMujocoEnv()` | record, replay, evaluate, 독립 policy 앱 | 자체 model/data를 만들고 home keyframe으로 로봇 전체를 reset한 뒤 캔을 randomize한다. |
+| `AIWorkerMujocoEnv()` | record, replay, evaluate | 자체 model/data를 만들고 home keyframe으로 로봇 전체를 reset한 뒤 캔을 randomize한다. |
 | `AIWorkerMujocoEnv(model=..., data=..., reset_on_init=False, ...)` | 기본 `TeleopApp` 내 ACT | 현재 화면의 model/data와 로봇 자세를 그대로 사용한다. 초기화 시 로봇이나 캔을 재배치하지 않는다. |
 
 environment observation은 다음 dictionary다.
@@ -444,8 +442,9 @@ environment observation은 다음 dictionary다.
 | `act/backbone.py` | `FrozenBatchNorm2d`, `ResNet18Backbone`, `PositionEmbeddingSine2D` | torchvision ResNet18의 마지막 pooling/FC를 제거해 stride-32, 512-channel spatial feature를 반환한다. ImageNet BatchNorm 통계는 고정하고 2D DETR 위치 embedding을 만든다. |
 | `act/transformer.py` | `PositionalEncoder*`, `PositionalDecoder*` | PyTorch attention의 query/key에 매 layer 위치 embedding을 더하는 post-normalized DETR식 encoder/decoder를 구현한다. |
 | `act/policy.py` | `ACTPolicyConfig`, `ACTPolicy` | posterior encoder, image/qpos/latent observation encoder, learned action-query decoder를 조립한다. 학습은 sampled latent, 추론은 `z=0`이며 masked L1 + `kl_weight·KL`을 반환한다. |
-| `act/dataset_loader.py` | `DatasetStats`, `split_episodes`, `compute_stats`, `ACTEpisodeDataset` | episode 단위 split을 만든다. train episode만으로 선택 차원의 평균/표준편차를 계산하고, 각 episode에서 epoch마다 임의 timestep 하나와 최대 `K` action을 lazy load한다. |
-| `act/training_config.py` | `WandbConfig`, `ACTTrainingConfig` | YAML을 읽어 path/tuple/dataclass로 변환하고 policy side, camera, 차원, split, optimizer 값을 검증한다. `policy_side=right`를 8개 index로 해석한다. |
+| `act/representations.py` | `JointRepresentation`, `RightTaskRepresentation` | 같은 HDF5에서 Joint 8D 또는 right EE pose+grasp Task 8D state/action을 만든다. Task target은 기록된 joint action의 FK 결과다. |
+| `act/dataset_loader.py` | `DatasetStats`, `split_episodes`, `compute_stats`, `ACTEpisodeDataset` | representation 변환 뒤 train 통계를 만들고, 각 episode에서 임의 timestep 하나와 최대 `K` action을 image와 정렬해 읽는다. |
+| `act/training_config.py` | `WandbConfig`, `ACTTrainingConfig` | YAML의 representation, policy side, camera, 차원, split, optimizer 값을 하나의 계약으로 검증한다. |
 | `act/trainer.py` | `train`, `_run_epoch`, `_optimizer` | seed를 고정하고 DataLoader·ACT·AdamW를 만든다. backbone과 나머지 parameter group에 별도 learning rate를 적용하고 매 epoch train/validation, logger, best/last checkpoint를 갱신한다. |
 | `act/training_output.py` | `write_metrics`, `plot_metric` | 전체 history를 CSV/JSONL로 다시 쓰고 Pillow만으로 loss·L1·KL·learning-rate PNG를 만든다. loss plot에는 best validation epoch를 표시한다. |
 
@@ -487,7 +486,7 @@ sampling한다. split의 test episode 목록은 `episode_splits.json`에 저장�
 |---|---|---|
 | `runtime/__init__.py` | `PolicyRun`, `discover_policy_runs` | UI에서 필요한 run catalog만 package API로 공개한다. runner와 evaluate는 해당 module에서 직접 import한다. |
 | `runtime/catalog.py` | `ACT_OUTPUT_DIR`, `PolicyRun`, `discover_policy_runs` | `outputs/act/<run>/checkpoints/*.ckpt`만 찾는다. run은 checkpoint 수정 시각 최신순, checkpoint는 best → last → 나머지 이름순이다. |
-| `runtime/runner.py` | `ACTPolicyRunner`, `TemporalAggregator` | checkpoint의 architecture/camera/policy index와 같은 run의 통계를 복원한다. 16D 관측을 정규화하고 예측 8D를 역정규화해 16D chunk로 확장한 뒤 동일 target timestep 후보를 지수 가중 평균한다. |
+| `runtime/runner.py` | `ACTPolicyRunner`, `TemporalAggregator` | checkpoint의 Joint/Task 표현과 통계를 복원한다. 동일 target timestep 후보를 ensemble하고 Joint는 16D로 확장하며 Task는 EE target을 반환한다. |
 | `runtime/evaluation.py` | `evaluate` | seed를 episode마다 1씩 늘려 새 환경을 reset한다. 매 rollout을 max steps까지 수행하고 성공률, 최종 오차, action 크기·변화를 `evaluation.json`에 저장한다. |
 
 `ACTPolicyRunner.reset()`은 timestep과 temporal candidate를 모두 지운다. 새 episode,
@@ -495,8 +494,6 @@ sampling한다. split의 test episode 목록은 `episode_splits.json`에 저장�
 작업에 섞일 수 있다.
 
 ### 기본 teleop에 삽입되는 경로
-
-이 경로는 `imitation/apps/policy.py`를 사용하지 않는다.
 
 1. `visualization/ui.py`가 `outputs/act`의 run/checkpoint와 max steps를 선택한다.
 2. `application/teleop.py`가 checkpoint 경로가 `outputs/act` 내부인지 검사한다.
@@ -518,9 +515,8 @@ sampling한다. split의 test episode 목록은 `episode_splits.json`에 저장�
 |---|---|---|
 | `apps/__init__.py` | package 설명 | 현재 별도 객체를 re-export하지 않는다. |
 | `apps/base.py` | `KeyEdge`, `render_operator_frame` | key가 눌리는 순간만 검출하고 MuJoCo scene → overlay → ImGui → swap 순서의 공통 frame을 그린다. |
-| `apps/leader.py` | `Leader`, `ReplayLeader`, `GizmoLeader` | leader interface를 정의한다. GizmoLeader는 양손 target을 arm-only DLS IK로 16D 절대 action에 바꾸며, 속도가 제한된 joint-space home return과 grasp toggle을 제공한다. |
+| `apps/leader.py` | `Leader`, `GizmoLeader` | leader interface를 정의한다. GizmoLeader는 양손 target을 arm-only DLS IK로 16D 절대 action에 바꾸며, 속도가 제한된 joint-space home return과 grasp toggle을 제공한다. |
 | `apps/recording.py` | `RecordEpisodesApp` | 자체 환경, GizmoLeader, EpisodeRecorder와 live Rerun logger를 조립한다. 매 frame `record(obs_t, action_t)` 후 `env.step(action_t)` 순서를 지킨다. `R`은 진행 중 episode를 버리고 로봇 home+캔을 reset한다. |
-| `apps/policy.py` | `ACTPolicyApp` | 자체 환경과 창에서 policy를 run/pause/single-step한다. max steps에서 정지하며 `R`은 독립 환경 전체를 reset한다. 기본 teleop의 policy→IK handoff는 담당하지 않는다. |
 
 ## IL 시각화와 외부 logger
 
@@ -562,7 +558,7 @@ sampling한다. split의 test episode 목록은 `episode_splits.json`에 저장�
 | `tests/test_il_env.py` | arm-only reset/step, 기존 teleop model 재사용과 can-only reset |
 | `tests/test_il_act.py` | ACT shape/loss, checkpoint 복원과 temporal ensemble |
 | `tests/test_il_training.py` | 1-epoch 학습과 output artifact 생성 |
-| `tests/test_il_policy_app.py` | rollout 종료·재시작·작업 계속 실행과 policy catalog |
+| `tests/test_il_policy_catalog.py` | 출력 디렉터리의 Joint/Task policy run 탐색 |
 | `tests/test_il_rerun.py` | Rerun optional dependency 경계 |
 | `tests/generate_can_label_mesh.py` | 원본 캔 STL에서 UV가 있는 side/cap OBJ를 만드는 일회성 asset 도구 |
 | `tests/measure_hand_meshes.py` | 손 mesh 크기와 기준점을 측정하는 개발 도구 |

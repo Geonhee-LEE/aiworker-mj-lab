@@ -48,9 +48,11 @@ def _append_pose_graph_sample(app, side):
 
     state = app.whole_body_solver.site_state(app.data, side)
     current_pos = np.asarray(
-        targets.world_to_target_pos(app, side, state.position), dtype=float)
+        targets.world_to_target_pos(app, side, state.position), dtype=float
+    )
     current_rpy = np.asarray(
-        targets.world_quat_to_target_rpy(app, side, state.quaternion), dtype=float)
+        targets.world_quat_to_target_rpy(app, side, state.quaternion), dtype=float
+    )
 
     rate_hz = 1.0 / max(float(getattr(app, "frame_dt", 1.0 / 60.0)), 1e-6)
     max_samples = max(32, int(rate_hz * POSE_GRAPH_HISTORY_SECONDS))
@@ -65,9 +67,11 @@ def _append_pose_graph_sample(app, side):
             _trim_series(graph[key][axis], max_samples)
 
     graph["position_error_mm"].append(
-        float(np.linalg.norm(target_pos - current_pos) * 1000.0))
+        float(np.linalg.norm(target_pos - current_pos) * 1000.0)
+    )
     graph["orientation_error_deg"].append(
-        float(np.linalg.norm(target_rpy - current_rpy)))
+        float(np.linalg.norm(target_rpy - current_rpy))
+    )
     _trim_series(graph["position_error_mm"], max_samples)
     _trim_series(graph["orientation_error_deg"], max_samples)
 
@@ -84,8 +88,9 @@ def _plot_series_or_wait(label, values, unit):
     )
 
 
-def _draw_pose_axis_group(title, axis_names, target_series, current_series,
-                          value_fmt, unit, error_scale=1.0):
+def _draw_pose_axis_group(
+    title, axis_names, target_series, current_series, value_fmt, unit, error_scale=1.0
+):
     """축별 target/current 시계열과 최신 오차를 묶어서 그린다."""
     imgui.separator_text(title)
     for axis, axis_name in enumerate(axis_names):
@@ -100,9 +105,11 @@ def _draw_pose_axis_group(title, axis_names, target_series, current_series,
                 f"err {value_fmt.format(axis_error)}{error_unit}"
             )
         _plot_series_or_wait(
-            f"target##{title}_target_{axis_name}", target_series[axis], unit)
+            f"target##{title}_target_{axis_name}", target_series[axis], unit
+        )
         _plot_series_or_wait(
-            f"current##{title}_current_{axis_name}", current_series[axis], unit)
+            f"current##{title}_current_{axis_name}", current_series[axis], unit
+        )
 
 
 def draw_pose_graph_panel(app):
@@ -122,24 +129,36 @@ def draw_pose_graph_panel(app):
     _append_pose_graph_sample(app, side)
     graph = app.pose_graph_state[side]
     _draw_pose_axis_group(
-        "Position (m)", POS_AXES,
-        graph["target_pos"], graph["current_pos"],
-        value_fmt="{:+.3f}", unit=" m", error_scale=1000.0)
+        "Position (m)",
+        POS_AXES,
+        graph["target_pos"],
+        graph["current_pos"],
+        value_fmt="{:+.3f}",
+        unit=" m",
+        error_scale=1000.0,
+    )
     _draw_pose_axis_group(
-        "Orientation (deg)", RPY_AXES,
-        graph["target_rpy"], graph["current_rpy"],
-        value_fmt="{:+.1f}", unit=" deg", error_scale=1.0)
+        "Orientation (deg)",
+        RPY_AXES,
+        graph["target_rpy"],
+        graph["current_rpy"],
+        value_fmt="{:+.1f}",
+        unit=" deg",
+        error_scale=1.0,
+    )
 
     imgui.separator_text("Pose error norm")
     if graph["position_error_mm"]:
         imgui.text(
             f"Position error: {graph['position_error_mm'][-1]:.1f} mm   "
-            f"Orientation error: {graph['orientation_error_deg'][-1]:.2f} deg")
+            f"Orientation error: {graph['orientation_error_deg'][-1]:.2f} deg"
+        )
     _plot_series_or_wait(
-        "position error##pose_graph_pos_norm", graph["position_error_mm"], "mm")
+        "position error##pose_graph_pos_norm", graph["position_error_mm"], "mm"
+    )
     _plot_series_or_wait(
-        "orientation error##pose_graph_ori_norm",
-        graph["orientation_error_deg"], "deg")
+        "orientation error##pose_graph_ori_norm", graph["orientation_error_deg"], "deg"
+    )
 
 
 def draw_joint_monitor(app, data):
@@ -148,11 +167,9 @@ def draw_joint_monitor(app, data):
     for name, qpos_address in app.bindings.monitor_qpos.items():
         value = float(data.qpos[qpos_address])
         lower, upper = app.bindings.monitor_ranges[name]
-        fraction = ((value - lower) / (upper - lower)
-                    if upper > lower else 0.0)
+        fraction = (value - lower) / (upper - lower) if upper > lower else 0.0
         fraction = min(1.0, max(0.0, fraction))
-        imgui.progress_bar(
-            fraction, (200, 0), f"{name} {math.degrees(value):+.1f}deg")
+        imgui.progress_bar(fraction, (200, 0), f"{name} {math.degrees(value):+.1f}deg")
     imgui.end_child()
 
 
@@ -193,20 +210,21 @@ def _joint_state_text(app, joint):
     return "multi-DOF state"
 
 
-def _draw_kinematic_body(app, body_id, visible_body_ids,
-                         controlled_joint_ids, target_site_ids):
+def _draw_kinematic_body(
+    app, body_id, visible_body_ids, controlled_joint_ids, target_site_ids
+):
     """Body와 소속 joint/site, 표시 대상 자식 body를 재귀적으로 그린다."""
     tree = app.whole_body_solver.kinematic_tree
     body = tree.bodies[body_id]
     body_name = body.name or "world"
     flags = (
-        imgui.TreeNodeFlags_.span_avail_width
-        | imgui.TreeNodeFlags_.draw_lines_to_nodes
+        imgui.TreeNodeFlags_.span_avail_width | imgui.TreeNodeFlags_.draw_lines_to_nodes
     )
     if not app.kinematic_tree_show_full or body_id == 0:
         flags |= imgui.TreeNodeFlags_.default_open
     expanded = imgui.tree_node_ex(
-        f"{body_name}  [body {body_id}]##kinbody{body_id}", flags)
+        f"{body_name}  [body {body_id}]##kinbody{body_id}", flags
+    )
     if not expanded:
         return
 
@@ -215,7 +233,8 @@ def _draw_kinematic_body(app, body_id, visible_body_ids,
         marker = "[controlled] " if joint_id in controlled_joint_ids else ""
         name = joint.name or f"joint {joint_id}"
         imgui.bullet_text(
-            f"{marker}{name} <{joint.kind_name}>  {_joint_state_text(app, joint)}")
+            f"{marker}{name} <{joint.kind_name}>  {_joint_state_text(app, joint)}"
+        )
     for site_id in tree.sites_by_body[body_id]:
         site = tree.sites[site_id]
         marker = "[IK target] " if site_id in target_site_ids else ""
@@ -224,8 +243,8 @@ def _draw_kinematic_body(app, body_id, visible_body_ids,
     for child_id in tree.children_by_body[body_id]:
         if child_id in visible_body_ids:
             _draw_kinematic_body(
-                app, child_id, visible_body_ids,
-                controlled_joint_ids, target_site_ids)
+                app, child_id, visible_body_ids, controlled_joint_ids, target_site_ids
+            )
     imgui.tree_pop()
 
 
@@ -235,15 +254,17 @@ def draw_kinematic_tree(app):
     tree = app.whole_body_solver.kinematic_tree
     imgui.text("Scope")
     for index, (scope, label) in enumerate(
-            (("both", "Both arms"), ("r", "Right"), ("l", "Left"))):
+        (("both", "Both arms"), ("r", "Right"), ("l", "Left"))
+    ):
         if index:
             imgui.same_line()
         if imgui.radio_button(
-                f"{label}##tree_scope_{scope}",
-                app.kinematic_tree_scope == scope):
+            f"{label}##tree_scope_{scope}", app.kinematic_tree_scope == scope
+        ):
             app.kinematic_tree_scope = scope
     changed, show_full = imgui.checkbox(
-        "Show full MJCF tree", app.kinematic_tree_show_full)
+        "Show full MJCF tree", app.kinematic_tree_show_full
+    )
     if changed:
         app.kinematic_tree_show_full = show_full
 
@@ -252,12 +273,12 @@ def draw_kinematic_tree(app):
     target_site_ids = set(app.whole_body_solver.site_ids.values())
     imgui.text(
         f"Showing {len(visible)}/{len(tree.bodies)} bodies  |  "
-        f"{len(controlled_joint_ids)} controlled joints")
+        f"{len(controlled_joint_ids)} controlled joints"
+    )
     imgui.text("[controlled] solver column   [IK target] grasp site")
     imgui.separator()
     imgui.begin_child("kinematic_tree_scroll", (0, 0), True)
-    _draw_kinematic_body(
-        app, 0, visible, controlled_joint_ids, target_site_ids)
+    _draw_kinematic_body(app, 0, visible, controlled_joint_ids, target_site_ids)
     imgui.end_child()
 
 

@@ -21,22 +21,6 @@ class Leader(ABC):
         """Return one canonical 16D absolute joint target."""
 
 
-class ReplayLeader(Leader):
-    def __init__(self, actions):
-        self.actions = np.asarray(actions, dtype=float)
-        self.index = 0
-
-    def reset(self):
-        self.index = 0
-
-    def get_action(self):
-        if self.index >= len(self.actions):
-            raise StopIteration
-        action = self.actions[self.index].copy()
-        self.index += 1
-        return action
-
-
 class GizmoLeader(Leader):
     """Arm-only differential IK leader driven by externally edited EE targets.
 
@@ -45,35 +29,44 @@ class GizmoLeader(Leader):
     ACT. No whole-body solver is imported or invoked.
     """
 
-    def __init__(self, env, *, linear_speed=None, angular_speed=None,
-                 joint_speed=None, position_gain=None,
-                 orientation_gain=None):
+    def __init__(
+        self,
+        env,
+        *,
+        linear_speed=None,
+        angular_speed=None,
+        joint_speed=None,
+        position_gain=None,
+        orientation_gain=None,
+    ):
         self.env = env
         self.model = env.model
         self.tree = KinematicTree(self.model)
         self.solver = DifferentialIKSolver(method="dls")
         self.adapter = ActionAdapter(self.model)
-        self.linear_speed = self._positive_setting(
-            "max_linear_speed_m_s", linear_speed)
+        self.linear_speed = self._positive_setting("max_linear_speed_m_s", linear_speed)
         self.angular_speed = self._positive_setting(
-            "max_angular_speed_rad_s", angular_speed)
-        self.joint_speed = self._positive_setting(
-            "max_joint_speed_rad_s", joint_speed)
-        self.position_gain = self._positive_setting(
-            "position_gain", position_gain)
+            "max_angular_speed_rad_s", angular_speed
+        )
+        self.joint_speed = self._positive_setting("max_joint_speed_rad_s", joint_speed)
+        self.position_gain = self._positive_setting("position_gain", position_gain)
         self.orientation_gain = self._positive_setting(
-            "orientation_gain", orientation_gain)
+            "orientation_gain", orientation_gain
+        )
         self.site_ids = {
             side: mujoco.mj_name2id(
-                self.model, mujoco.mjtObj.mjOBJ_SITE, f"grasp_target_{side}")
+                self.model, mujoco.mjtObj.mjOBJ_SITE, f"grasp_target_{side}"
+            )
             for side in SIDES
         }
         self.joint_ids = {
-            side: np.array([
-                mujoco.mj_name2id(
-                    self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
-                for name in ARM_JOINTS[side]
-            ], dtype=int)
+            side: np.array(
+                [
+                    mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+                    for name in ARM_JOINTS[side]
+                ],
+                dtype=int,
+            )
             for side in SIDES
         }
         self.qpos_adrs = {
@@ -86,8 +79,8 @@ class GizmoLeader(Leader):
         }
         self.home_arms = {
             side: np.asarray(
-                self.model.key_qpos[env.home_key, self.qpos_adrs[side]],
-                dtype=float).copy()
+                self.model.key_qpos[env.home_key, self.qpos_adrs[side]], dtype=float
+            ).copy()
             for side in SIDES
         }
         if self.env.left_arm_fixed:
@@ -102,15 +95,15 @@ class GizmoLeader(Leader):
     @staticmethod
     def _positive_setting(name, override):
         teleop_settings = SETTINGS.get("imitation.teleop")
-        value = (float(teleop_settings[name])
-                 if override is None else float(override))
+        value = float(teleop_settings[name]) if override is None else float(override)
         if value <= 0.0:
             raise ValueError(f"{name} must be positive")
         return value
 
     def _current_site(self, side):
         return self.tree.forward_site(
-            self.env.data.qpos, self.site_ids[side], self.joint_ids[side])
+            self.env.data.qpos, self.site_ids[side], self.joint_ids[side]
+        )
 
     def reset(self):
         self.returning_home = {side: False for side in SIDES}
@@ -153,9 +146,9 @@ class GizmoLeader(Leader):
         home_qpos = np.asarray(self.env.data.qpos, dtype=float).copy()
         home_qpos[self.qpos_adrs[side]] = self.home_arms[side]
         home_state = self.tree.forward_site(
-            home_qpos, self.site_ids[side], self.joint_ids[side])
-        self.targets[side] = (
-            home_state.position.copy(), home_state.quaternion.copy())
+            home_qpos, self.site_ids[side], self.joint_ids[side]
+        )
+        self.targets[side] = (home_state.position.copy(), home_state.quaternion.copy())
         self.returning_home[side] = True
 
     def set_grasp(self, side, value):
@@ -182,35 +175,38 @@ class GizmoLeader(Leader):
             if side == "l" and self.env.left_arm_fixed:
                 arms[side] = self.env.left_arm_park_position.copy()
                 continue
-            current = np.asarray(
-                self.env.data.qpos[self.qpos_adrs[side]], dtype=float)
+            current = np.asarray(self.env.data.qpos[self.qpos_adrs[side]], dtype=float)
             if self.returning_home[side]:
                 max_step = self.joint_speed * dt
                 arms[side] = np.clip(
-                    current + np.clip(
-                        self.home_arms[side] - current, -max_step, max_step),
-                    self.ranges[side][:, 0], self.ranges[side][:, 1])
+                    current
+                    + np.clip(self.home_arms[side] - current, -max_step, max_step),
+                    self.ranges[side][:, 0],
+                    self.ranges[side][:, 1],
+                )
                 continue
             state = self._current_site(side)
             target_position, target_quaternion = self.targets[side]
             error = pose_error(
-                state.position, state.quaternion,
-                target_position, target_quaternion)
+                state.position, state.quaternion, target_position, target_quaternion
+            )
             velocity = pose_velocity_command(
-                error, position_gain=self.position_gain,
+                error,
+                position_gain=self.position_gain,
                 orientation_gain=self.orientation_gain,
                 max_linear_speed=self.linear_speed,
-                max_angular_speed=self.angular_speed)
+                max_angular_speed=self.angular_speed,
+            )
             lower = np.full(7, -self.joint_speed)
             upper = np.full(7, self.joint_speed)
             qdot = self.solver.solve(state.jacobian, velocity, lower, upper)
             arms[side] = np.clip(
-                current + dt * qdot,
-                self.ranges[side][:, 0], self.ranges[side][:, 1])
-        left_grasp = (self.env.left_grasp_fixed
-                      if self.env.left_arm_fixed else self.grasp["l"])
-        return self.adapter.encode(
-            arms["l"], left_grasp, arms["r"], self.grasp["r"])
+                current + dt * qdot, self.ranges[side][:, 0], self.ranges[side][:, 1]
+            )
+        left_grasp = (
+            self.env.left_grasp_fixed if self.env.left_arm_fixed else self.grasp["l"]
+        )
+        return self.adapter.encode(arms["l"], left_grasp, arms["r"], self.grasp["r"])
 
 
-__all__ = ["GizmoLeader", "Leader", "ReplayLeader"]
+__all__ = ["GizmoLeader", "Leader"]

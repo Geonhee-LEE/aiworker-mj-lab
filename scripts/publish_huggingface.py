@@ -75,6 +75,22 @@ def _upload_text(api, repo_id, repo_type, path_in_repo, text, message):
     )
 
 
+def set_revision_tag(api, repo_id, repo_type, tag):
+    """Move a release tag to the final main commit after all uploads settle."""
+    refs = api.list_repo_refs(repo_id, repo_type=repo_type)
+    if any(item.name == tag for item in refs.tags):
+        api.delete_tag(repo_id, tag=tag, repo_type=repo_type)
+    revision = api.repo_info(repo_id, repo_type=repo_type).sha
+    api.create_tag(
+        repo_id,
+        tag=tag,
+        tag_message=f"Release {tag}",
+        revision=revision,
+        repo_type=repo_type,
+    )
+    return revision
+
+
 def publish_dataset(api, repo_id, dataset_dir, release_dir, *, private):
     api.create_repo(repo_id, repo_type="dataset", private=private, exist_ok=True)
     _upload_text(
@@ -149,6 +165,10 @@ def main(argv=None):
     parser.add_argument("--dataset-only", action="store_true")
     parser.add_argument("--model-only", action="store_true")
     parser.add_argument(
+        "--revision-tag",
+        help="optional Hub tag created at the uploaded revision, for example v3.1.0",
+    )
+    parser.add_argument(
         "--public", action="store_true", help="create public repositories"
     )
     parser.add_argument("--dry-run", action="store_true")
@@ -173,6 +193,7 @@ def main(argv=None):
         "private": not args.public,
         "upload_dataset": not args.model_only,
         "upload_models": not args.dataset_only,
+        "revision_tag": args.revision_tag,
         **_planned_files(args.dataset_dir, args.outputs_dir),
         "validated_episodes": summary["episode_count"],
         "models": [item["name"] for item in models],
@@ -202,6 +223,22 @@ def main(argv=None):
             args.release_dir,
             private=private,
         )
+    tagged_revisions = {}
+    if args.revision_tag:
+        if not args.model_only:
+            tagged_revisions["dataset"] = set_revision_tag(
+                api,
+                args.dataset_repo_id,
+                "dataset",
+                args.revision_tag,
+            )
+        if not args.dataset_only:
+            tagged_revisions["model"] = set_revision_tag(
+                api,
+                args.model_repo_id,
+                "model",
+                args.revision_tag,
+            )
     print(
         json.dumps(
             {
@@ -210,6 +247,7 @@ def main(argv=None):
                 ),
                 "model_url": f"https://huggingface.co/{args.model_repo_id}",
                 "private": private,
+                "tagged_revisions": tagged_revisions,
             },
             indent=2,
         )

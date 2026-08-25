@@ -20,8 +20,16 @@ class VelocityBarrier:
     lower: float
 
 
-def joint_velocity_bounds(current_position, velocity_limits, position_limited,
-                          position_ranges, dt, *, margin, gain):
+def joint_velocity_bounds(
+    current_position,
+    velocity_limits,
+    position_limited,
+    position_ranges,
+    dt,
+    *,
+    margin,
+    gain,
+):
     """물리 속도 상한과 joint-limit CBF를 결합한 box bound를 만든다."""
     current_position = np.asarray(current_position, dtype=float)
     velocity_limits = np.asarray(velocity_limits, dtype=float)
@@ -46,13 +54,17 @@ def joint_velocity_bounds(current_position, velocity_limits, position_limited,
         safe_margin = min(margin, max(0.0, 0.25 * (hi - lo)))
         safe_lo, safe_hi = lo + safe_margin, hi - safe_margin
         lower[index] = max(
-            lower[index], -barrier_gain * (current_position[index] - safe_lo))
+            lower[index], -barrier_gain * (current_position[index] - safe_lo)
+        )
         upper[index] = min(
-            upper[index], barrier_gain * (safe_hi - current_position[index]))
+            upper[index], barrier_gain * (safe_hi - current_position[index])
+        )
         if lower[index] > upper[index]:
-            recovery = (velocity_limits[index]
-                        if current_position[index] < safe_lo
-                        else -velocity_limits[index])
+            recovery = (
+                velocity_limits[index]
+                if current_position[index] < safe_lo
+                else -velocity_limits[index]
+            )
             lower[index] = upper[index] = recovery
     return lower, upper
 
@@ -61,7 +73,9 @@ def collision_velocity_barriers(distance_constraints, dt, *, safe_distance, gain
     """거리/gradient 결과를 충돌 접근 속도 CBF 목록으로 변환한다."""
     safe_distance, gain = float(safe_distance), float(gain)
     if safe_distance < 0.0 or gain <= 0.0:
-        raise ValueError("collision safe distance must be non-negative and gain positive")
+        raise ValueError(
+            "collision safe distance must be non-negative and gain positive"
+        )
     barrier_gain = min(gain, 1.0 / max(float(dt), 1e-5))
     barriers = []
     for constraint in distance_constraints:
@@ -71,12 +85,14 @@ def collision_velocity_barriers(distance_constraints, dt, *, safe_distance, gain
         if np.linalg.norm(gradient) < 1e-10:
             continue
         distance = float(constraint.distance)
-        barriers.append(VelocityBarrier(
-            name=str(constraint.name),
-            distance=distance,
-            gradient=gradient,
-            lower=-barrier_gain * (distance - safe_distance),
-        ))
+        barriers.append(
+            VelocityBarrier(
+                name=str(constraint.name),
+                distance=distance,
+                gradient=gradient,
+                lower=-barrier_gain * (distance - safe_distance),
+            )
+        )
     return tuple(barriers)
 
 
@@ -87,8 +103,7 @@ def clip_joint_positions(position, position_limited, position_ranges):
     ranges = np.asarray(position_ranges, dtype=float)
     if limited.shape != result.shape or ranges.shape != (result.size, 2):
         raise ValueError("incompatible joint position-limit shapes")
-    result[limited] = np.clip(
-        result[limited], ranges[limited, 0], ranges[limited, 1])
+    result[limited] = np.clip(result[limited], ranges[limited, 0], ranges[limited, 1])
     return result
 
 

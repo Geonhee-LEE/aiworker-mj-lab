@@ -14,22 +14,25 @@ def main(argv=None):
     parser.add_argument("--dataset-dir", type=Path)
     parser.add_argument("--episode-idx", type=int, default=0)
     parser.add_argument("--atol", type=float, default=5e-4)
-    parser.add_argument("--viewer", action="store_true",
-                        help="show the replayed robot in the MuJoCo viewer")
+    parser.add_argument(
+        "--viewer",
+        action="store_true",
+        help="show the replayed robot in the MuJoCo viewer",
+    )
     args = parser.parse_args(argv)
-    path = resolve_episode_path(
-        args.episode, args.dataset_dir, args.episode_idx)
+    path = resolve_episode_path(args.episode, args.dataset_dir, args.episode_idx)
     from ffw_sh5_grasp.imitation.data.episode import load_episode
     from ffw_sh5_grasp.imitation.data.replay import replay_episode
     from ffw_sh5_grasp.imitation.simulation.environment import AIWorkerMujocoEnv
 
     episode = load_episode(path)
     task_name = episode.attrs.get(
-        "scenario_name", episode.attrs.get("task_name", "can_to_box"))
-    with AIWorkerMujocoEnv(
-            render_images=False, task_name=task_name) as env:
+        "scenario_name", episode.attrs.get("task_name", "can_to_box")
+    )
+    with AIWorkerMujocoEnv(render_images=False, task_name=task_name) as env:
         if args.viewer:
             import mujoco.viewer
+
             with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
                 viewer.sync()
 
@@ -41,7 +44,8 @@ def main(argv=None):
                     return True
 
                 result = replay_episode(
-                    env, episode, atol=args.atol, step_callback=show_frame)
+                    env, episode, atol=args.atol, step_callback=show_frame
+                )
                 viewer.sync()
         else:
             result = replay_episode(env, episode, atol=args.atol)

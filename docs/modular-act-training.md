@@ -1,7 +1,7 @@
-# Modular joint/task ACT training
+# Joint/Task ACT training
 
-이 경로는 기존 `trainer.py`와 `outputs/act`를 건드리지 않고 오른팔 정책의 좌표
-표현만 바꿔 비교한다.
+하나의 `trainer.py`가 YAML의 `representation`에 따라 오른팔 정책의 좌표 표현만
+바꿔 학습한다.
 
 | representation | state (8D) | action (8D) |
 |---|---|---|
@@ -17,19 +17,19 @@ quaternion 순서가 현재 모델과 맞지 않으면 학습을 거부한다.
 시간과 처리량이 왜곡되므로 순차 실행한다.
 
 ```bash
-python3 src/il.py train-modular \
+python3 src/il.py train \
   --config config/imitation/act_color_sort_joint.yaml
 
-python3 src/il.py train-modular \
+python3 src/il.py train \
   --config config/imitation/act_color_sort_task.yaml
 ```
 
 150 episode 조건은 기존 run을 덮어쓰지 않는 별도 설정을 사용한다.
 
 ```bash
-python3 src/il.py train-modular \
+python3 src/il.py train \
   --config config/imitation/act_color_sort_joint_aug150.yaml
-python3 src/il.py train-modular \
+python3 src/il.py train \
   --config config/imitation/act_color_sort_task_aug150.yaml
 ```
 
@@ -113,3 +113,6 @@ MUJOCO_GL=egl python3 src/il.py evaluate-color-sort \
 D97/D150 비교는 순수한 표본 수뿐 아니라 후반에 추가한 주황·파랑 색상 비율도 함께
 달라지는 실험이라는 한계가 있다. 공개 checkpoint와 전체 CSV는
 [Hugging Face 배포](huggingface.md)에서 받을 수 있다.
+
+성공률 신뢰구간, 동일 seed paired 비교, 색상별 ID/OOD 성능, penalized time과 IK
+안전 지표까지 포함한 분석은 [캔 색상 분류 평가 결과](evaluation-results.md)에서 본다.

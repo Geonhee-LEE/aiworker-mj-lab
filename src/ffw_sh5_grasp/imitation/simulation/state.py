@@ -21,19 +21,21 @@ class PolicyStateAdapter:
         self.arm_dofs = {}
         self.synergy = {}
         for side in SIDES:
-            joint_ids = np.array([
-                mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
-                for name in ARM_JOINTS[side]
-            ], dtype=int)
+            joint_ids = np.array(
+                [
+                    mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+                    for name in ARM_JOINTS[side]
+                ],
+                dtype=int,
+            )
             if np.any(joint_ids < 0):
                 raise ValueError(f"missing {side} arm joint for policy state")
-            self.arm_qpos[side] = np.asarray(
-                model.jnt_qposadr[joint_ids], dtype=int)
-            self.arm_dofs[side] = np.asarray(
-                model.jnt_dofadr[joint_ids], dtype=int)
+            self.arm_qpos[side] = np.asarray(model.jnt_qposadr[joint_ids], dtype=int)
+            self.arm_dofs[side] = np.asarray(model.jnt_dofadr[joint_ids], dtype=int)
 
             actuator_ids, offsets, grasp_slopes, thumb_slopes = (
-                grasp._command_coefficients(model, side))
+                grasp._command_coefficients(model, side)
+            )
             slopes = grasp_slopes + thumb_slopes
             joint_ids = np.asarray(model.actuator_trnid[actuator_ids, 0], dtype=int)
             qpos = np.asarray(model.jnt_qposadr[joint_ids], dtype=int)
@@ -41,7 +43,10 @@ class PolicyStateAdapter:
             active = np.abs(slopes) > 1e-12
             slopes = slopes[active]
             self.synergy[side] = (
-                qpos[active], dofs[active], offsets[active], slopes,
+                qpos[active],
+                dofs[active],
+                offsets[active],
+                slopes,
                 float(np.dot(slopes, slopes)),
             )
 
@@ -54,20 +59,28 @@ class PolicyStateAdapter:
     def get_qpos(self, data):
         left_grasp, _ = self._read_synergy(data, "l")
         right_grasp, _ = self._read_synergy(data, "r")
-        result = np.concatenate((
-            data.qpos[self.arm_qpos["l"]], [left_grasp],
-            data.qpos[self.arm_qpos["r"]], [right_grasp],
-        )).astype(np.float32)
+        result = np.concatenate(
+            (
+                data.qpos[self.arm_qpos["l"]],
+                [left_grasp],
+                data.qpos[self.arm_qpos["r"]],
+                [right_grasp],
+            )
+        ).astype(np.float32)
         assert result.shape == (ACTION_DIM,)
         return result
 
     def get_qvel(self, data):
         _, left_grasp = self._read_synergy(data, "l")
         _, right_grasp = self._read_synergy(data, "r")
-        result = np.concatenate((
-            data.qvel[self.arm_dofs["l"]], [left_grasp],
-            data.qvel[self.arm_dofs["r"]], [right_grasp],
-        )).astype(np.float32)
+        result = np.concatenate(
+            (
+                data.qvel[self.arm_dofs["l"]],
+                [left_grasp],
+                data.qvel[self.arm_dofs["r"]],
+                [right_grasp],
+            )
+        ).astype(np.float32)
         assert result.shape == (ACTION_DIM,)
         return result
 

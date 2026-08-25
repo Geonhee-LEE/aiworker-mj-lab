@@ -18,15 +18,27 @@ from .leader import GizmoLeader
 class RecordEpisodesApp:
     """GLFW/ImGui app whose only motion source is an arm-only GizmoLeader."""
 
-    def __init__(self, dataset_dir, *, task_name="can_to_box", seed=None,
-                 width=1440, height=900, live_rerun=True, rerun_port=9876,
-                 object_variants=None):
+    def __init__(
+        self,
+        dataset_dir,
+        *,
+        task_name="can_to_box",
+        seed=None,
+        width=1440,
+        height=900,
+        live_rerun=True,
+        rerun_port=9876,
+        object_variants=None,
+    ):
         self.object_variants = (
-            None if object_variants is None else tuple(object_variants))
+            None if object_variants is None else tuple(object_variants)
+        )
         self.env = AIWorkerMujocoEnv(
-            seed=seed, task_name=task_name,
+            seed=seed,
+            task_name=task_name,
             object_variants=self.object_variants,
-            randomize_bin_colors=task_name == "can_color_sort")
+            randomize_bin_colors=task_name == "can_color_sort",
+        )
         self.model, self.data = self.env.model, self.env.data
         self.leader = GizmoLeader(self.env)
         self.recorder = EpisodeRecorder(dataset_dir, self.env, task_name=task_name)
@@ -42,7 +54,8 @@ class RecordEpisodesApp:
         render.setup_render(self, width, height)
         self.last_mouse = list(glfw.get_cursor_pos(self.window))
         self.live_rerun = LiveRecordingRerunLogger(
-            self.env.camera_names, enabled=live_rerun, port=rerun_port)
+            self.env.camera_names, enabled=live_rerun, port=rerun_port
+        )
         self.live_rerun.start()
 
     def reset(self):
@@ -72,8 +85,7 @@ class RecordEpisodesApp:
             self.toggle_recording()
         if self.keys.pressed(self.window, glfw.KEY_BACKSPACE):
             self.recorder.discard()
-        if (not self.env.left_arm_fixed
-                and self.keys.pressed(self.window, glfw.KEY_TAB)):
+        if not self.env.left_arm_fixed and self.keys.pressed(self.window, glfw.KEY_TAB):
             self.selected_side = "l" if self.selected_side == "r" else "r"
         if self.keys.pressed(self.window, glfw.KEY_Q):
             self.leader.toggle_grasp(self.selected_side)
@@ -88,10 +100,12 @@ class RecordEpisodesApp:
         if self.object_variants is not None:
             imgui.text(
                 "Collection filter: "
-                + ", ".join(name.upper() for name in self.object_variants))
+                + ", ".join(name.upper() for name in self.object_variants)
+            )
         imgui.text(
             f"Object: {self.env.task.object_variant.upper()} can -> "
-            f"{self.env.task.target_label.upper()} box")
+            f"{self.env.task.target_label.upper()} box"
+        )
         imgui.text("Control: arm-only (whole-body disabled)")
         imgui.separator()
         imgui.text(f"Recording: {'YES' if self.recorder.recording else 'NO'}")
@@ -99,7 +113,8 @@ class RecordEpisodesApp:
         imgui.text(f"Control Hz: {self.env.actual_control_hz:.1f}")
         imgui.text(
             f"IK max: {self.leader.linear_speed:.1f} m/s, "
-            f"{self.leader.angular_speed:.1f} rad/s")
+            f"{self.leader.angular_speed:.1f} rad/s"
+        )
         imgui.text(f"Dropped: {self.recorder.dropped}")
         imgui.text(f"Rerun live: {'ON' if self.live_rerun.enabled else 'OFF'}")
         imgui.text(f"Selected hand: {'LEFT' if self.selected_side == 'l' else 'RIGHT'}")
@@ -136,7 +151,8 @@ class RecordEpisodesApp:
     def _sync_markers(self):
         for side in ("l", "r"):
             body_id = mujoco.mj_name2id(
-                self.model, mujoco.mjtObj.mjOBJ_BODY, f"ik_target_{side}")
+                self.model, mujoco.mjtObj.mjOBJ_BODY, f"ik_target_{side}"
+            )
             mocap_id = int(self.model.body_mocapid[body_id])
             position, quaternion = self.leader.targets[side]
             self.data.mocap_pos[mocap_id] = position
@@ -151,24 +167,28 @@ class RecordEpisodesApp:
         gizmo.begin_frame()
         gizmo.set_drawlist(imgui.get_foreground_draw_list(main_viewport))
         gizmo.set_rect(
-            float(main_viewport.pos.x), float(main_viewport.pos.y),
-            float(main_viewport.size.x), float(main_viewport.size.y))
+            float(main_viewport.pos.x),
+            float(main_viewport.pos.y),
+            float(main_viewport.size.x),
+            float(main_viewport.size.y),
+        )
         gizmo.set_orthographic(False)
         # pyimgui-bundle의 OPERATION은 IntFlag처럼 보이지만 OR 결과는 Python int가
         # 되어 manipulate()의 enum 인자 검사를 통과하지 못한다. 기존 teleop Gizmo와
         # 같이 각 operation을 enum 값 그대로 따로 호출한다.
         changed_translate = gizmo.manipulate(
-            view, projection, gizmo.OPERATION.translate,
-            gizmo.MODE.world, matrix)
+            view, projection, gizmo.OPERATION.translate, gizmo.MODE.world, matrix
+        )
         changed_rotate = gizmo.manipulate(
-            view, projection, gizmo.OPERATION.rotate,
-            gizmo.MODE.local, matrix)
+            view, projection, gizmo.OPERATION.rotate, gizmo.MODE.local, matrix
+        )
         changed = changed_translate or changed_rotate
         self.gizmo_mouse_active = bool(gizmo.is_using_any() or gizmo.is_over())
         if changed:
             new_position, new_quaternion = render.imguizmo_matrix_to_pose(matrix)
             self.leader.set_target_pose(
-                self.selected_side, new_position, new_quaternion)
+                self.selected_side, new_position, new_quaternion
+            )
 
     def _render(self):
         render_operator_frame(

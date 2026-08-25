@@ -79,7 +79,9 @@ def run_trial(model, data, rng):
     lift_duration = LIFT_HEIGHT / LIFT_SPEED
     t = 0.0
     while t < lift_duration:
-        data.mocap_pos[mocap_id] = mocap_start + np.array([0, 0, min(t, lift_duration) * LIFT_SPEED])
+        data.mocap_pos[mocap_id] = mocap_start + np.array(
+            [0, 0, min(t, lift_duration) * LIFT_SPEED]
+        )
         grasp.apply_grasp(model, data, grasp=1.0, thumb=1.0, side="r")
         mujoco.mj_step(model, data)
         t += dt
@@ -103,7 +105,9 @@ def run_trial(model, data, rng):
         "grasped_before_lift": grasped_before_lift,
         "net_lift": net_lift,
         "slip": slip,
-        "success": grasped_before_lift and net_lift >= MIN_NET_LIFT and slip <= MAX_SLIP,
+        "success": grasped_before_lift
+        and net_lift >= MIN_NET_LIFT
+        and slip <= MAX_SLIP,
     }
 
 
@@ -119,13 +123,15 @@ def main():
         results.append(r)
         print(
             f"trial {trial}: grasped={r['grasped_before_lift']} "
-            f"net_lift={r['net_lift']*100:.2f}cm slip={r['slip']*1000:.2f}mm "
+            f"net_lift={r['net_lift'] * 100:.2f}cm slip={r['slip'] * 1000:.2f}mm "
             f"success={r['success']}"
         )
 
     n_success = sum(r["success"] for r in results)
     rate = n_success / N_TRIALS
-    print(f"\nSuccess rate: {n_success}/{N_TRIALS} ({rate*100:.0f}%), target >= {SUCCESS_RATE_TARGET*100:.0f}%")
+    print(
+        f"\nSuccess rate: {n_success}/{N_TRIALS} ({rate * 100:.0f}%), target >= {SUCCESS_RATE_TARGET * 100:.0f}%"
+    )
 
     ok = rate >= SUCCESS_RATE_TARGET
     print("PASS" if ok else "FAIL")

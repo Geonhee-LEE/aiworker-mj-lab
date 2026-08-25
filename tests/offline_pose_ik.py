@@ -13,14 +13,25 @@ def _clamp(solver, q):
     result[solver.joint_limited] = np.clip(
         result[solver.joint_limited],
         solver.joint_ranges[solver.joint_limited, 0],
-        solver.joint_ranges[solver.joint_limited, 1])
+        solver.joint_ranges[solver.joint_limited, 1],
+    )
     return result
 
 
-def solve_offline_pose(solver, q_init, target_pos, target_quat, *,
-                       max_iter=70, damping=0.05, max_joint_delta=0.07,
-                       pos_tol=1e-4, ori_tol=1e-3, ori_weight=0.3,
-                       context_qpos=None):
+def solve_offline_pose(
+    solver,
+    q_init,
+    target_pos,
+    target_quat,
+    *,
+    max_iter=70,
+    damping=0.05,
+    max_joint_delta=0.07,
+    pos_tol=1e-4,
+    ori_tol=1e-3,
+    ori_weight=0.3,
+    context_qpos=None,
+):
     """Position 우선 DLS/backtracking으로 한 오프라인 pose를 푼다."""
     q = _clamp(solver, q_init)
     if q.shape != (solver.n,):
@@ -35,13 +46,16 @@ def solve_offline_pose(solver, q_init, target_pos, target_quat, *,
         position_jacobian = state.jacobian[:3]
         rotation_jacobian = state.jacobian[3:]
         system = position_jacobian @ position_jacobian.T + damping_squared * np.eye(3)
-        position_delta = position_jacobian.T @ np.linalg.solve(
-            system, error.position)
+        position_delta = position_jacobian.T @ np.linalg.solve(system, error.position)
         orientation_gradient = rotation_jacobian.T @ error.orientation
-        orientation_delta = orientation_gradient - position_jacobian.T @ np.linalg.solve(
-            system, position_jacobian @ orientation_gradient)
+        orientation_delta = (
+            orientation_gradient
+            - position_jacobian.T
+            @ np.linalg.solve(system, position_jacobian @ orientation_gradient)
+        )
         delta = np.clip(
-            position_delta + orientation_delta, -max_joint_delta, max_joint_delta)
+            position_delta + orientation_delta, -max_joint_delta, max_joint_delta
+        )
 
         current_cost = error.position_norm + ori_weight * error.orientation_norm
         best = None
@@ -50,11 +64,15 @@ def solve_offline_pose(solver, q_init, target_pos, target_quat, *,
             candidate_q = _clamp(solver, q + step * delta)
             candidate_state = solver.forward(candidate_q, context_qpos)
             candidate_error = pose_error(
-                candidate_state.position, candidate_state.quaternion,
-                target_pos, target_quat)
+                candidate_state.position,
+                candidate_state.quaternion,
+                target_pos,
+                target_quat,
+            )
             cost = (
                 candidate_error.position_norm
-                + ori_weight * candidate_error.orientation_norm)
+                + ori_weight * candidate_error.orientation_norm
+            )
             if best is None or cost < best[0]:
                 best = cost, candidate_q, candidate_state, candidate_error
             if cost < current_cost:
@@ -65,26 +83,38 @@ def solve_offline_pose(solver, q_init, target_pos, target_quat, *,
 
 
 def solve_offline_pose_multistart(
-        solver, q_init, target_pos, target_quat, rng, *, n_restarts=8,
-        max_iter=250, success_pos_tol=0.005,
-        success_ori_tol=np.radians(5.0), context_qpos=None):
+    solver,
+    q_init,
+    target_pos,
+    target_quat,
+    rng,
+    *,
+    n_restarts=8,
+    max_iter=250,
+    success_pos_tol=0.005,
+    success_ori_tol=np.radians(5.0),
+    context_qpos=None,
+):
     """여러 초기값에서 test-only pose IK를 풀고 가장 좋은 해를 반환한다."""
     initial = np.asarray(q_init, dtype=float)
     if initial.shape != (solver.n,):
         raise ValueError(
-            f"expected {solver.n} initial joint positions, got {initial.shape}")
-    lower = np.where(
-        solver.joint_limited, solver.joint_ranges[:, 0], initial - np.pi)
-    upper = np.where(
-        solver.joint_limited, solver.joint_ranges[:, 1], initial + np.pi)
+            f"expected {solver.n} initial joint positions, got {initial.shape}"
+        )
+    lower = np.where(solver.joint_limited, solver.joint_ranges[:, 0], initial - np.pi)
+    upper = np.where(solver.joint_limited, solver.joint_ranges[:, 1], initial + np.pi)
     candidates = [initial]
-    candidates.extend(
-        rng.uniform(lower, upper) for _ in range(max(0, int(n_restarts))))
+    candidates.extend(rng.uniform(lower, upper) for _ in range(max(0, int(n_restarts))))
     best = None
     for candidate in candidates:
         q, position_error, orientation_error = solve_offline_pose(
-            solver, candidate, target_pos, target_quat,
-            max_iter=max_iter, context_qpos=context_qpos)
+            solver,
+            candidate,
+            target_pos,
+            target_quat,
+            max_iter=max_iter,
+            context_qpos=context_qpos,
+        )
         if position_error < success_pos_tol and orientation_error < success_ori_tol:
             return q, position_error, orientation_error, True
         if best is None or position_error + orientation_error < best[1] + best[2]:

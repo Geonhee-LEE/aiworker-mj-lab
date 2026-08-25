@@ -18,13 +18,13 @@ class TrainingRerunLogger:
             import rerun as rr
         except ImportError as error:
             raise RuntimeError(
-                "config rerun=true requires: pip install rerun-sdk") from error
+                "config rerun=true requires: pip install rerun-sdk"
+            ) from error
         self.rr = rr
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.recording = rr.RecordingStream("aiworker_act_training")
         self.recording.__enter__()
-        self.recording.save(
-            self.path, default_blueprint=training_blueprint())
+        self.recording.save(self.path, default_blueprint=training_blueprint())
         return self
 
     def log_epoch(self, metrics):
@@ -36,10 +36,11 @@ class TrainingRerunLogger:
                 key = f"{split}/{name}"
                 if key in metrics:
                     self.recording.log(
-                        f"training/{name}/{split}",
-                        self.rr.Scalars(metrics[key]))
+                        f"training/{name}/{split}", self.rr.Scalars(metrics[key])
+                    )
         self.recording.log(
-            "training/learning_rate", self.rr.Scalars(metrics["learning_rate"]))
+            "training/learning_rate", self.rr.Scalars(metrics["learning_rate"])
+        )
 
     def __exit__(self, type_, value, traceback):
         if self.recording is not None:

@@ -13,8 +13,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--episode", required=True, type=Path)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--live", action="store_true",
-                        help="stream directly to Rerun without writing an .rrd")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="stream directly to Rerun without writing an .rrd",
+    )
     parser.add_argument("--port", type=int, default=9877)
     args = parser.parse_args(argv)
     if args.live:

@@ -27,8 +27,7 @@ def set_home_references(app):
     XYZ/RPY 슬라이더의 0은 이 시점의 손 pose를 뜻한다.
     """
     site_states = {
-        side: app.whole_body_solver.site_state(app.data, side)
-        for side in SIDES
+        side: app.whole_body_solver.site_state(app.data, side) for side in SIDES
     }
     for side, state in site_states.items():
         setattr(app, f"home_quat_{side}", state.quaternion.copy())
@@ -68,14 +67,17 @@ def carry_world_targets_with_base(app, previous_base_pose, current_base_pose):
         """이전 베이스 기준 월드 점을 현재 베이스의 동일한 상대 위치로 옮긴다."""
         result = np.asarray(position, dtype=float).copy()
         relative = result[:2] - old_xy
-        result[:2] = new_xy + np.array([
-            c * relative[0] - s * relative[1],
-            s * relative[0] + c * relative[1],
-        ])
+        result[:2] = new_xy + np.array(
+            [
+                c * relative[0] - s * relative[1],
+                s * relative[0] + c * relative[1],
+            ]
+        )
         return result
 
-    delta_quat = np.array([math.cos(delta_yaw / 2.0), 0.0, 0.0,
-                           math.sin(delta_yaw / 2.0)])
+    delta_quat = np.array(
+        [math.cos(delta_yaw / 2.0), 0.0, 0.0, math.sin(delta_yaw / 2.0)]
+    )
     app.target_anchor_xy = transform_position(app.target_anchor_xy)[:2]
     app.target_anchor_yaw += delta_yaw
     anchor_quat = np.zeros(4)
@@ -117,11 +119,13 @@ def anchor_local_to_world_pos(app, p_local):
     """움직이는 현재 베이스가 아니라 시작 시점의 베이스 자세를 통해 변환한다."""
     cy, sy = math.cos(app.target_anchor_yaw), math.sin(app.target_anchor_yaw)
     x, y, z = p_local
-    return np.array([
-        app.target_anchor_xy[0] + cy * x - sy * y,
-        app.target_anchor_xy[1] + sy * x + cy * y,
-        z,
-    ])
+    return np.array(
+        [
+            app.target_anchor_xy[0] + cy * x - sy * y,
+            app.target_anchor_xy[1] + sy * x + cy * y,
+            z,
+        ]
+    )
 
 
 def world_to_anchor_local_pos(app, p_world):
@@ -141,14 +145,17 @@ def target_pos_to_world_pos(app, side, pos_target):
     if getattr(app, "whole_body_enabled", False):
         offset = np.asarray(pos_target, dtype=float)
         cy, sy = math.cos(app.target_anchor_yaw), math.sin(app.target_anchor_yaw)
-        rotated = np.array([
-            cy * offset[0] - sy * offset[1],
-            sy * offset[0] + cy * offset[1],
-            offset[2],
-        ])
+        rotated = np.array(
+            [
+                cy * offset[0] - sy * offset[1],
+                sy * offset[0] + cy * offset[1],
+                offset[2],
+            ]
+        )
         return app.home_pos_world[side] + rotated
     return local_to_world_pos(
-        app, app.home_pos_local[side] + np.asarray(pos_target, dtype=float))
+        app, app.home_pos_local[side] + np.asarray(pos_target, dtype=float)
+    )
 
 
 def world_to_target_pos(app, side, world_pos):
@@ -156,8 +163,11 @@ def world_to_target_pos(app, side, world_pos):
     if getattr(app, "whole_body_enabled", False):
         delta = np.asarray(world_pos, dtype=float) - app.home_pos_world[side]
         cy, sy = math.cos(app.target_anchor_yaw), math.sin(app.target_anchor_yaw)
-        return [cy * delta[0] + sy * delta[1],
-                -sy * delta[0] + cy * delta[1], float(delta[2])]
+        return [
+            cy * delta[0] + sy * delta[1],
+            -sy * delta[0] + cy * delta[1],
+            float(delta[2]),
+        ]
     return (world_to_base_pos(app, world_pos) - app.home_pos_local[side]).tolist()
 
 
@@ -233,7 +243,9 @@ def sync_virtual_object_to_hand_targets(app):
     pos_l, _quat_l = target_world_pose(app, "l")
     midpoint = 0.5 * (pos_r + pos_l)
     if getattr(app, "whole_body_enabled", False):
-        app.targets["virtual_object_pos"] = world_to_anchor_local_pos(app, midpoint).tolist()
+        app.targets["virtual_object_pos"] = world_to_anchor_local_pos(
+            app, midpoint
+        ).tolist()
     else:
         app.targets["virtual_object_pos"] = world_to_base_pos(app, midpoint).tolist()
     app.targets["virtual_object_rpy"] = [0.0, 0.0, 0.0]
@@ -283,8 +295,9 @@ def sync_marker_visibility(app):
     if bindings is None:
         return
     markers = bindings.markers
-    visible = (getattr(app, "cyclo_controller", "movel") == "bimanual_movel"
-               and bool(getattr(app, "cyclo_grasp_captured", False)))
+    visible = getattr(app, "cyclo_controller", "movel") == "bimanual_movel" and bool(
+        getattr(app, "cyclo_grasp_captured", False)
+    )
     alpha_scale = float(visible)
     geom_rgba = markers.virtual_geom_rgba.copy()
     site_rgba = markers.virtual_site_rgba.copy()
@@ -316,9 +329,13 @@ def set_gizmo_target_world_pose(app, target, world_pos, world_quat):
     """
     if target == "virtual":
         if getattr(app, "whole_body_enabled", False):
-            app.targets["virtual_object_pos"] = world_to_anchor_local_pos(app, world_pos).tolist()
+            app.targets["virtual_object_pos"] = world_to_anchor_local_pos(
+                app, world_pos
+            ).tolist()
         else:
-            app.targets["virtual_object_pos"] = world_to_base_pos(app, world_pos).tolist()
+            app.targets["virtual_object_pos"] = world_to_base_pos(
+                app, world_pos
+            ).tolist()
         app.targets["virtual_object_rpy"] = world_quat_to_virtual_rpy(app, world_quat)
         apply_virtual_object_target(app)
     else:

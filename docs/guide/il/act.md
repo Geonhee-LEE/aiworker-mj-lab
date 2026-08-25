@@ -38,15 +38,40 @@ ALOHA 논문의 50 Hz 기준 90 step은 1.8초이므로, step 수가 같아도 �
 
 ```mermaid
 flowchart TB
-    subgraph Observation["현재 관측"]
+    subgraph Source["HDF5 원본 — 항상 함께 저장"]
         RGB["선택한 RGB camera"]
-        Q["8D qpos"]
+        Q16["16D qpos"]
+        A16["16D joint action chunk"]
+        EE["right EE pose — world xyz + wxyz"]
     end
+
+    subgraph Representation["YAML representation으로 선택"]
+        MODE{"joint / task"}
+        JS["Joint state<br/>right qpos 7 + grasp"]
+        JA["Joint target<br/>right joint 7 + grasp"]
+        TS["Task state<br/>right EE pose 7 + grasp"]
+        FK["recorded joint target를 FK"]
+        TA["Task target<br/>right EE pose 7 + grasp"]
+    end
+    Q16 --> MODE
+    A16 --> MODE
+    MODE -->|joint| JS
+    MODE -->|joint| JA
+    EE --> TS
+    Q16 --> TS
+    MODE -->|task| TS
+    MODE -->|task| FK
+    A16 --> FK --> TA
+    JS --> Q["공통 8D policy state"]
+    TS --> Q
+    JA --> GT["공통 K × 8 target chunk"]
+    TA --> GT
+
     RGB --> R["공유 ResNet18"]
     R --> S["spatial feature + 2D position"]
 
     subgraph Posterior["학습 시에만 사용하는 CVAE posterior"]
-        GT["정답 action chunk"] --> PENC["Transformer encoder"]
+        GT --> PENC["Transformer encoder"]
         Q --> PENC
         PENC --> DIST["mu, logvar"]
         DIST --> Z["latent z"]
@@ -69,16 +94,24 @@ global pooling하지 않기 때문에 물체 위치를 위한 공간 격자가 �
 ## 추론과 temporal ensemble
 
 ```mermaid
-sequenceDiagram
-    participant E as Environment
-    participant P as ACT policy
-    participant T as Temporal ensemble
-    loop 매 control tick
-        E->>P: 현재 qpos + RGB
-        P->>P: z=0으로 K-step chunk 예측
-        P->>T: 미래 시점별 action 후보 등록
-        T->>E: 선택한 t+f 시점 후보들의 가중 평균 실행
-    end
+flowchart LR
+    E["Environment<br/>RGB + 16D qpos + right EE pose"]
+    R{"checkpoint<br/>representation"}
+    JI["Joint input<br/>right qpos + grasp"]
+    TI["Task input<br/>right EE pose + grasp"]
+    P["ACT z=0<br/>K × 8 chunk"]
+    T["Temporal ensemble<br/>t+f 후보 가중 평균"]
+    JO["8D joint → 16D action 확장"]
+    TO["8D EE target → right-arm IK"]
+    C["MuJoCo joint/grasp controller"]
+
+    E --> R
+    R -->|joint| JI --> P
+    R -->|task| TI --> P
+    P --> T
+    T -->|joint| JO --> C
+    T -->|task| TO --> C
+    C --> E
 ```
 
 예를 들어 실행 시점 12의 행동은 시점 10에서 예측한 chunk의 세 번째 값, 시점 11에서
@@ -100,27 +133,29 @@ policy가 끝나거나 사용자가 중단하면 runner의 chunk history를 비�
 
 | 값 | shape | 설명 |
 |---|---|---|
-| qpos | `[B, 8]` | 오른팔 7축 + grasp |
+| policy state | `[B, 8]` | Joint: 오른팔 7축+grasp, Task: 오른팔 EE pose 7+grasp |
 | images | `[B, N, 3, H, W]` | 현재 `N=2`, RGB |
-| target actions | `[B, K, 8]` | 학습 시 정답 chunk |
+| target actions | `[B, K, 8]` | Joint target 또는 FK로 변환한 Task target chunk |
 | is_pad | `[B, K]` | episode 끝 이후 padding |
 | latent | `[B, 32]` | CVAE style |
 | prediction | `[B, K, 8]` | 정규화된 action chunk |
 
-저장된 HDF5의 16차원 qpos/action에서 오른팔 `8..15`를 선택한 뒤 위 8차원 계약을
-만든다. 모델 출력은 dataset 통계로 역정규화되고, 실행 환경의 16차원 action 계약으로
-다시 확장된다.
+Joint는 저장된 HDF5의 16차원 qpos/action에서 오른팔 `8..15`를 선택한다. Task는
+기록된 오른팔 EE pose를 상태로 쓰고, 같은 timestep의 joint action을 FK한 EE target을
+정답으로 쓴다. Joint 출력은 16차원 action으로 확장되고 Task 출력은 오른팔 IK를 거쳐
+동일한 joint/grasp controller로 전달된다.
 
 ## 코드 읽기 순서
 
 | 순서 | 모듈 | 확인할 내용 |
 |---:|---|---|
 | 1 | `imitation/act/dataset_loader.py` | sample timestep, chunk, padding, normalization |
-| 2 | `imitation/act/backbone.py` | ResNet18 feature와 2D position |
-| 3 | `imitation/act/transformer.py` | encoder/decoder attention |
-| 4 | `imitation/act/policy.py` | posterior, latent, action query, loss |
-| 5 | `imitation/act/trainer.py` | optimizer와 checkpoint lifecycle |
-| 6 | `imitation/runtime/runner.py` | 복원, 역정규화, temporal ensemble |
+| 2 | `imitation/act/representations.py` | Joint/Task state·action 변환 계약 |
+| 3 | `imitation/act/backbone.py` | ResNet18 feature와 2D position |
+| 4 | `imitation/act/transformer.py` | encoder/decoder attention |
+| 5 | `imitation/act/policy.py` | posterior, latent, action query, loss |
+| 6 | `imitation/act/trainer.py` | 공통 optimizer와 checkpoint lifecycle |
+| 7 | `imitation/runtime/runner.py` | 복원, 역정규화, temporal ensemble·IK 분기 |
 
 실제 import root는 `src/ffw_sh5_grasp/imitation/`이다. 상세한 파일 책임은
 [IL 코드 구조](../imitation-code-structure.md), 논문 설정과 현재 로봇의 정확한 차이는

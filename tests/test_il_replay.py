@@ -24,8 +24,13 @@ def test_deterministic_replay():
             actions.append(action)
             observation = env.step(action)
         episode = EpisodeData(
-            qpos=np.stack(qpos), qvel=np.stack(qvel), images={},
-            action=np.stack(actions), debug={}, attrs={"seed": 19})
+            qpos=np.stack(qpos),
+            qvel=np.stack(qvel),
+            images={},
+            action=np.stack(actions),
+            debug={},
+            attrs={"seed": 19},
+        )
         result = replay_episode(env, episode, atol=1e-7)
     assert result["reproduced"]
     assert result["maximum_qpos_error"] <= 1e-7

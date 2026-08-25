@@ -79,49 +79,69 @@ def run_fk_jacobian_test(solver):
         minus = solver.forward_kinematics(q_minus)
         numerical[:3, index] = (plus.position - minus.position) / (2.0 * epsilon)
         numerical[3:, index] = kinematics.shortest_orientation_error(
-            plus.quaternion, minus.quaternion) / (2.0 * epsilon)
+            plus.quaternion, minus.quaternion
+        ) / (2.0 * epsilon)
 
     max_error = float(np.max(np.abs(state.jacobian - numerical)))
     quaternion_unit = abs(np.linalg.norm(state.quaternion) - 1.0) < 1e-12
     double_cover_error = np.linalg.norm(
-        kinematics.shortest_orientation_error(state.quaternion, -state.quaternion))
+        kinematics.shortest_orientation_error(state.quaternion, -state.quaternion)
+    )
     reference = mujoco.MjData(solver.model)
     reference.qpos[:] = solver.tree.qpos0
     reference.qpos[solver.qpos_adrs] = HOME_Q
     mujoco.mj_forward(solver.model, reference)
     engine_position = np.asarray(reference.site_xpos[solver.site_id]).copy()
     engine_quaternion = np.zeros(4)
-    mujoco.mju_mat2Quat(
-        engine_quaternion, reference.site_xmat[solver.site_id])
+    mujoco.mju_mat2Quat(engine_quaternion, reference.site_xmat[solver.site_id])
     engine_error = max(
         float(np.max(np.abs(state.position - engine_position))),
-        float(np.linalg.norm(kinematics.shortest_orientation_error(
-            state.quaternion, engine_quaternion))),
+        float(
+            np.linalg.norm(
+                kinematics.shortest_orientation_error(
+                    state.quaternion, engine_quaternion
+                )
+            )
+        ),
     )
     tree_ok = (
         solver.tree.site_by_name[solver.site_name].id == solver.site_id
         and all(name in solver.tree.joint_by_name for name in solver.joint_names)
         and not hasattr(solver, "data")
     )
-    ok = (max_error < 1e-5 and engine_error < 1e-10 and tree_ok
-          and quaternion_unit and double_cover_error < 1e-12)
-    print(f"FK/Jacobian test: max_fd_error={max_error:.2e} quaternion_unit={quaternion_unit} "
-          f"engine_pose_error={engine_error:.2e} parsed_tree={tree_ok} "
-          f"double_cover={double_cover_error:.1e}: {'OK' if ok else 'FAIL'}")
+    ok = (
+        max_error < 1e-5
+        and engine_error < 1e-10
+        and tree_ok
+        and quaternion_unit
+        and double_cover_error < 1e-12
+    )
+    print(
+        f"FK/Jacobian test: max_fd_error={max_error:.2e} quaternion_unit={quaternion_unit} "
+        f"engine_pose_error={engine_error:.2e} parsed_tree={tree_ok} "
+        f"double_cover={double_cover_error:.1e}: {'OK' if ok else 'FAIL'}"
+    )
     return ok
 
 
 def run_ik_unit_test(model, solver, rng):
     """도달 가능한 무작위 pose에서 단일 팔 IK 수렴률과 오차 분포를 검사한다."""
-    joint_ranges = np.array([model.jnt_range[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]
-                              for n in ARM_JOINTS])
+    joint_ranges = np.array(
+        [
+            model.jnt_range[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]
+            for n in ARM_JOINTS
+        ]
+    )
     scratch = mujoco.MjData(model)
 
     successes = 0
     pos_errs, ori_errs = [], []
     for _ in range(N_IK_SAMPLES):
-        q_target = np.clip(HOME_Q + rng.uniform(-IK_TEST_SPREAD, IK_TEST_SPREAD, size=7),
-                            joint_ranges[:, 0], joint_ranges[:, 1])
+        q_target = np.clip(
+            HOME_Q + rng.uniform(-IK_TEST_SPREAD, IK_TEST_SPREAD, size=7),
+            joint_ranges[:, 0],
+            joint_ranges[:, 1],
+        )
         for qadr, val in zip(solver.qpos_adrs, q_target):
             scratch.qpos[qadr] = val
         mujoco.mj_forward(model, scratch)
@@ -130,28 +150,50 @@ def run_ik_unit_test(model, solver, rng):
         mujoco.mju_mat2Quat(target_quat, scratch.site_xmat[solver.site_id])
 
         _, pos_err, ori_err, converged = solve_offline_pose_multistart(
-            solver, HOME_Q, target_pos, target_quat, rng,
-            success_pos_tol=POS_TOL, success_ori_tol=np.radians(ORI_TOL_DEG))
+            solver,
+            HOME_Q,
+            target_pos,
+            target_quat,
+            rng,
+            success_pos_tol=POS_TOL,
+            success_ori_tol=np.radians(ORI_TOL_DEG),
+        )
         pos_errs.append(pos_err)
         ori_errs.append(np.degrees(ori_err))
         if converged:
             successes += 1
 
     rate = successes / N_IK_SAMPLES
-    print(f"IK unit test: {successes}/{N_IK_SAMPLES} converged ({rate*100:.0f}%), "
-          f"target >= {IK_SUCCESS_RATE_TARGET*100:.0f}%")
-    print(f"  pos_err: median={np.median(pos_errs)*1000:.3f}mm max={np.max(pos_errs)*1000:.3f}mm")
-    print(f"  ori_err: median={np.median(ori_errs):.3f}deg max={np.max(ori_errs):.3f}deg")
+    print(
+        f"IK unit test: {successes}/{N_IK_SAMPLES} converged ({rate * 100:.0f}%), "
+        f"target >= {IK_SUCCESS_RATE_TARGET * 100:.0f}%"
+    )
+    print(
+        f"  pos_err: median={np.median(pos_errs) * 1000:.3f}mm max={np.max(pos_errs) * 1000:.3f}mm"
+    )
+    print(
+        f"  ori_err: median={np.median(ori_errs):.3f}deg max={np.max(ori_errs):.3f}deg"
+    )
     return rate >= IK_SUCCESS_RATE_TARGET
 
 
 def _read_arm_q(model, data):
     """오른팔 7개 관절의 현재 qpos를 solver 순서로 반환한다."""
-    return np.array([data.qpos[model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]]
-                      for n in ARM_JOINTS])
+    return np.array(
+        [
+            data.qpos[
+                model.jnt_qposadr[
+                    mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)
+                ]
+            ]
+            for n in ARM_JOINTS
+        ]
+    )
 
 
-def _hold(model, data, controller, q_des, duration, dt, grasp_frac=None, thumb_frac=None):
+def _hold(
+    model, data, controller, q_des, duration, dt, grasp_frac=None, thumb_frac=None
+):
     """``duration``초 동안 매 스텝 팔을 토크 제어해 ``q_des``로 구동한다.
 
     motor 액추에이터는 이전 position 액추에이터와 달리 오래된 ctrl 값을 유지하는
@@ -162,20 +204,28 @@ def _hold(model, data, controller, q_des, duration, dt, grasp_frac=None, thumb_f
     for _ in range(n):
         controller.apply(data, q_des)
         if grasp_frac is not None:
-            grasp.apply_grasp(
-                model, data, grasp=grasp_frac, thumb=thumb_frac, side="r")
+            grasp.apply_grasp(model, data, grasp=grasp_frac, thumb=thumb_frac, side="r")
         mujoco.mj_step(model, data)
 
 
-def _move(model, data, controller, q_from, q_to, duration, dt, grasp_frac=None, thumb_frac=None):
+def _move(
+    model,
+    data,
+    controller,
+    q_from,
+    q_to,
+    duration,
+    dt,
+    grasp_frac=None,
+    thumb_frac=None,
+):
     """``_hold``와 같지만 ``duration``초 동안 q_des를 q_from에서 q_to로 선형 보간한다."""
     n = int(duration / dt)
     for i in range(n):
         frac = i / n
         controller.apply(data, q_from + frac * (q_to - q_from))
         if grasp_frac is not None:
-            grasp.apply_grasp(
-                model, data, grasp=grasp_frac, thumb=thumb_frac, side="r")
+            grasp.apply_grasp(model, data, grasp=grasp_frac, thumb=thumb_frac, side="r")
         mujoco.mj_step(model, data)
 
 
@@ -190,7 +240,9 @@ def run_pick_trial(model, data, solver, controller, rng):
     data.qpos[can_qadr : can_qadr + 3] = can_pos0
     mujoco.mj_forward(model, data)
 
-    target_quat = np.array([0.5, 0.5, 0.5, 0.5])  # hand_only.xml에서 검증한 파지 자세다.
+    target_quat = np.array(
+        [0.5, 0.5, 0.5, 0.5]
+    )  # hand_only.xml에서 검증한 파지 자세다.
     dt = model.opt.timestep
 
     # 접근 축에서 뒤로 물러난 사전 파지와 최종 파지 자세의 IK를 푼다. grasp_target_pos는
@@ -199,9 +251,11 @@ def run_pick_trial(model, data, solver, controller, rng):
     grasp_target_pos = can_pos0 + GRASP_TARGET_OFFSET
     pregrasp_pos = grasp_target_pos + PRE_GRASP_OFFSET
     q_pregrasp, perr, oerr, ok1 = solve_offline_pose_multistart(
-        solver, HOME_Q, pregrasp_pos, target_quat, rng)
+        solver, HOME_Q, pregrasp_pos, target_quat, rng
+    )
     q_grasp, perr2, oerr2, ok2 = solve_offline_pose_multistart(
-        solver, q_pregrasp, grasp_target_pos, target_quat, rng)
+        solver, q_pregrasp, grasp_target_pos, target_quat, rng
+    )
     if not (ok1 and ok2):
         return {"success": False, "reason": "ik_failed", "net_lift": 0.0}
 
@@ -210,14 +264,34 @@ def run_pick_trial(model, data, solver, controller, rng):
     # 1) 중력·코리올리 전향 보상과 PD 토크 제어로 팔을 사전 파지 자세로 옮긴다.
     # 기존 position 액추에이터에서 약 15~20 mm의 site 잔류 오차를 확인한 뒤 이 방식으로
     # 교체했다.
-    _move(model, data, controller, q_home, q_pregrasp, 3.0, dt, grasp_frac=0.0, thumb_frac=0.0)
+    _move(
+        model,
+        data,
+        controller,
+        q_home,
+        q_pregrasp,
+        3.0,
+        dt,
+        grasp_frac=0.0,
+        thumb_frac=0.0,
+    )
     _hold(model, data, controller, q_pregrasp, 1.0, dt, grasp_frac=0.0, thumb_frac=0.0)
 
     # 2) 사전 파지에서 파지 자세까지 APPROACH_SPEED로 직선에 가깝게 접근한다. 같은 목표
     # 자세를 공유하고 가까이 있는 두 IK 해를 관절 공간에서 보간한다.
     approach_dist = np.linalg.norm(PRE_GRASP_OFFSET)
     approach_time = approach_dist / APPROACH_SPEED
-    _move(model, data, controller, q_pregrasp, q_grasp, approach_time, dt, grasp_frac=0.0, thumb_frac=0.0)
+    _move(
+        model,
+        data,
+        controller,
+        q_pregrasp,
+        q_grasp,
+        approach_time,
+        dt,
+        grasp_frac=0.0,
+        thumb_frac=0.0,
+    )
     _hold(model, data, controller, q_grasp, 1.0, dt, grasp_frac=0.0, thumb_frac=0.0)
 
     # 3) Phase 2 파지 순서대로 서서히 닫고 정착시키며 팔은 q_grasp를 유지한다.
@@ -227,7 +301,16 @@ def run_pick_trial(model, data, solver, controller, rng):
         controller.apply(data, q_grasp)
         grasp.apply_grasp(model, data, grasp=frac, thumb=frac, side="r")
         mujoco.mj_step(model, data)
-    _hold(model, data, controller, q_grasp, SETTLE_TIME, dt, grasp_frac=1.0, thumb_frac=1.0)
+    _hold(
+        model,
+        data,
+        controller,
+        q_grasp,
+        SETTLE_TIME,
+        dt,
+        grasp_frac=1.0,
+        thumb_frac=1.0,
+    )
 
     grasped = grasp.is_grasped(model, data, side="r")
     can_z_before_lift = data.qpos[can_qadr + 2]
@@ -235,10 +318,30 @@ def run_pick_trial(model, data, solver, controller, rng):
     # 4) IK 목표 자체를 LIFT_HEIGHT만큼 올려 다시 풀고 새 자세로 서보 제어한다.
     lift_target_pos = grasp_target_pos + np.array([0, 0, LIFT_HEIGHT])
     q_lift, _, _, _ = solve_offline_pose_multistart(
-        solver, q_grasp, lift_target_pos, target_quat, rng)
+        solver, q_grasp, lift_target_pos, target_quat, rng
+    )
     lift_time = LIFT_HEIGHT / LIFT_SPEED
-    _move(model, data, controller, q_grasp, q_lift, lift_time, dt, grasp_frac=1.0, thumb_frac=1.0)
-    _hold(model, data, controller, q_lift, POST_LIFT_HOLD, dt, grasp_frac=1.0, thumb_frac=1.0)
+    _move(
+        model,
+        data,
+        controller,
+        q_grasp,
+        q_lift,
+        lift_time,
+        dt,
+        grasp_frac=1.0,
+        thumb_frac=1.0,
+    )
+    _hold(
+        model,
+        data,
+        controller,
+        q_lift,
+        POST_LIFT_HOLD,
+        dt,
+        grasp_frac=1.0,
+        thumb_frac=1.0,
+    )
 
     net_lift = data.qpos[can_qadr + 2] - can_z_before_lift
     return {
@@ -255,18 +358,21 @@ def run_pick_test(model, solver, controller, rng):
     for trial in range(N_PICK_TRIALS):
         r = run_pick_trial(model, data, solver, controller, rng)
         results.append(r)
-        print(f"  pick trial {trial}: success={r['success']} net_lift={r['net_lift']*100:.2f}cm reason={r['reason']}")
+        print(
+            f"  pick trial {trial}: success={r['success']} net_lift={r['net_lift'] * 100:.2f}cm reason={r['reason']}"
+        )
     n_success = sum(r["success"] for r in results)
     rate = n_success / N_PICK_TRIALS
-    print(f"Pick test: {n_success}/{N_PICK_TRIALS} ({rate*100:.0f}%), target >= {PICK_SUCCESS_RATE_TARGET*100:.0f}%")
+    print(
+        f"Pick test: {n_success}/{N_PICK_TRIALS} ({rate * 100:.0f}%), target >= {PICK_SUCCESS_RATE_TARGET * 100:.0f}%"
+    )
     return rate >= PICK_SUCCESS_RATE_TARGET
 
 
 def main():
     """자체 FK/Jacobian, 단일 팔 IK와 물리 pick Phase 3 gate를 실행한다."""
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
-    solver = kinematics.JointSpaceKinematics(
-        model, "grasp_target", ARM_JOINTS)
+    solver = kinematics.JointSpaceKinematics(model, "grasp_target", ARM_JOINTS)
     controller = arm_control.ArmTorqueController(model, ARM_JOINTS)
     rng = np.random.default_rng(0)
 

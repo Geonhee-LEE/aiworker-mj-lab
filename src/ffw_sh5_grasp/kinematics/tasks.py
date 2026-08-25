@@ -45,31 +45,35 @@ class VelocityTask:
     target: np.ndarray
 
 
-def pose_error(current_position, current_quaternion,
-               target_position, target_quaternion):
+def pose_error(
+    current_position, current_quaternion, target_position, target_quaternion
+):
     """현재와 목표 pose로부터 공통 world-frame :class:`PoseError`를 계산한다.
 
     위치는 목표에서 현재를 빼고, 회전은 quaternion double-cover와 최단 회전을
     처리하는 :func:`rotations.shortest_orientation_error`에 위임한다. 입력 배열은
     수정하지 않는다.
     """
-    position = (
-        np.asarray(target_position, dtype=float)
-        - np.asarray(current_position, dtype=float)
+    position = np.asarray(target_position, dtype=float) - np.asarray(
+        current_position, dtype=float
     )
-    orientation = shortest_orientation_error(
-        target_quaternion, current_quaternion)
+    orientation = shortest_orientation_error(target_quaternion, current_quaternion)
     if position.shape != (3,) or orientation.shape != (3,):
         raise ValueError("pose position/orientation error must have shape (3,)")
     return PoseError(position=position, orientation=orientation)
 
 
-def pose_velocity_command(error, *, position_gain, orientation_gain,
-                          current_twist=None,
-                          linear_velocity_damping=0.0,
-                          angular_velocity_damping=0.0,
-                          max_linear_speed=np.inf,
-                          max_angular_speed=np.inf):
+def pose_velocity_command(
+    error,
+    *,
+    position_gain,
+    orientation_gain,
+    current_twist=None,
+    linear_velocity_damping=0.0,
+    angular_velocity_damping=0.0,
+    max_linear_speed=np.inf,
+    max_angular_speed=np.inf,
+):
     """pose 오차를 norm 제한된 world-frame 6차원 목표 twist로 변환한다.
 
     선속도와 각속도에 각각 ``gain * error - damping * measured_velocity``를 적용한 뒤
@@ -157,7 +161,9 @@ def stack_velocity_tasks(task_list, variable_count):
         if task.matrix.ndim != 2 or task.matrix.shape[1] != variable_count:
             raise ValueError(f"task {task.name!r} has an incompatible variable count")
         if task.target.shape != (task.matrix.shape[0],):
-            raise ValueError(f"task {task.name!r} has incompatible matrix/target shapes")
+            raise ValueError(
+                f"task {task.name!r} has incompatible matrix/target shapes"
+            )
     return (
         np.vstack([task.matrix for task in task_list]),
         np.concatenate([task.target for task in task_list]),

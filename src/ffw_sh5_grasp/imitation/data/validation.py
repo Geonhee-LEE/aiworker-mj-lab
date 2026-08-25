@@ -27,7 +27,8 @@ class DatasetInspection:
     @property
     def valid(self):
         return bool(self.episodes) and not any(
-            episode.errors for episode in self.episodes)
+            episode.errors for episode in self.episodes
+        )
 
     def as_dict(self):
         return {
@@ -42,7 +43,7 @@ class DatasetInspection:
 
 def _finite(dataset, block_size=1024):
     for start in range(0, len(dataset), block_size):
-        if not np.all(np.isfinite(dataset[start:start + block_size])):
+        if not np.all(np.isfinite(dataset[start : start + block_size])):
             return False
     return True
 
@@ -57,13 +58,17 @@ def inspect_episode(path, *, required_cameras=()):
     try:
         with h5py.File(path, "r") as root:
             required_paths = (
-                "observations/qpos", "observations/qvel",
-                "observations/images", "action")
+                "observations/qpos",
+                "observations/qvel",
+                "observations/images",
+                "action",
+            )
             missing_paths = [name for name in required_paths if name not in root]
             if missing_paths:
                 errors.append(f"missing datasets: {missing_paths}")
                 return EpisodeInspection(
-                    str(path), frames, success, camera_names, tuple(errors))
+                    str(path), frames, success, camera_names, tuple(errors)
+                )
             action = root["action"]
             qpos = root["observations/qpos"]
             qvel = root["observations/qvel"]
@@ -72,49 +77,50 @@ def inspect_episode(path, *, required_cameras=()):
             success = bool(root.attrs.get("success", False))
             camera_names = tuple(sorted(images.keys()))
             expected_shape = (frames, ACTION_DIM)
-            for name, dataset in (
-                    ("qpos", qpos), ("qvel", qvel), ("action", action)):
+            for name, dataset in (("qpos", qpos), ("qvel", qvel), ("action", action)):
                 if dataset.shape != expected_shape:
                     errors.append(
-                        f"{name} shape {dataset.shape}, expected {expected_shape}")
+                        f"{name} shape {dataset.shape}, expected {expected_shape}"
+                    )
                 elif not _finite(dataset):
                     errors.append(f"{name} contains NaN or infinity")
             missing_cameras = set(required_cameras) - set(camera_names)
             if missing_cameras:
-                errors.append(
-                    f"missing required cameras: {sorted(missing_cameras)}")
+                errors.append(f"missing required cameras: {sorted(missing_cameras)}")
             for name, image in images.items():
-                if (image.ndim != 4 or image.shape[0] != frames
-                        or image.shape[-1] != 3 or image.dtype != np.uint8):
+                if (
+                    image.ndim != 4
+                    or image.shape[0] != frames
+                    or image.shape[-1] != 3
+                    or image.dtype != np.uint8
+                ):
                     errors.append(
                         f"camera {name} must be uint8 [T,H,W,3], "
-                        f"got {image.shape} {image.dtype}")
+                        f"got {image.shape} {image.dtype}"
+                    )
             schema = str(root.attrs.get("schema_version", "missing"))
             if schema not in SUPPORTED_SCHEMA_VERSIONS:
                 errors.append(
                     f"schema_version is {schema}, expected one of "
-                    f"{SUPPORTED_SCHEMA_VERSIONS}")
+                    f"{SUPPORTED_SCHEMA_VERSIONS}"
+                )
             ee_pose_path = "observations/ee_pose"
             if schema == SCHEMA_VERSION and ee_pose_path not in root:
-                errors.append(
-                    f"schema {SCHEMA_VERSION} requires {ee_pose_path}")
+                errors.append(f"schema {SCHEMA_VERSION} requires {ee_pose_path}")
             elif ee_pose_path in root:
                 ee_pose = root[ee_pose_path]
                 if set(ee_pose) != {"left", "right"}:
-                    errors.append(
-                        "ee_pose must contain exactly left and right")
+                    errors.append("ee_pose must contain exactly left and right")
                 for name, pose in ee_pose.items():
                     if pose.shape != (frames, 7):
                         errors.append(
-                            f"ee_pose/{name} shape {pose.shape}, "
-                            f"expected {(frames, 7)}")
+                            f"ee_pose/{name} shape {pose.shape}, expected {(frames, 7)}"
+                        )
                     elif not _finite(pose):
-                        errors.append(
-                            f"ee_pose/{name} contains NaN or infinity")
+                        errors.append(f"ee_pose/{name} contains NaN or infinity")
     except (OSError, KeyError, ValueError) as error:
         errors.append(str(error))
-    return EpisodeInspection(
-        str(path), frames, success, camera_names, tuple(errors))
+    return EpisodeInspection(str(path), frames, success, camera_names, tuple(errors))
 
 
 def inspect_dataset(dataset_dir, *, required_cameras=()):
@@ -127,6 +133,8 @@ def inspect_dataset(dataset_dir, *, required_cameras=()):
 
 
 __all__ = [
-    "DatasetInspection", "EpisodeInspection", "inspect_dataset",
+    "DatasetInspection",
+    "EpisodeInspection",
+    "inspect_dataset",
     "inspect_episode",
 ]

@@ -25,9 +25,17 @@ RTF_TARGET = 0.5
 # 엄지 MCP pitch·IP와 각 손가락 PIP·DIP·tip 굽힘 관절만 포함한다.
 CURL_JOINTS = {"finger_r_joint3", "finger_r_joint4"}
 for base in (5, 9, 13, 17):
-    CURL_JOINTS.update({f"finger_r_joint{base+1}", f"finger_r_joint{base+2}", f"finger_r_joint{base+3}"})
+    CURL_JOINTS.update(
+        {
+            f"finger_r_joint{base + 1}",
+            f"finger_r_joint{base + 2}",
+            f"finger_r_joint{base + 3}",
+        }
+    )
 
-CAN_INIT_POS = np.array([0.105, 0.065, 0.16])  # ``hand_only.xml``의 Phase 2 캔 위치와 같다.
+CAN_INIT_POS = np.array(
+    [0.105, 0.065, 0.16]
+)  # ``hand_only.xml``의 Phase 2 캔 위치와 같다.
 CAN_INIT_QUAT = np.array([1.0, 0.0, 0.0, 0.0])
 
 
@@ -76,7 +84,10 @@ def worst_finger_can_penetration(model, data):
         if can_gid not in (c.geom1, c.geom2):
             continue
         other = c.geom1 if c.geom2 == can_gid else c.geom2
-        bname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, model.geom_bodyid[other]) or ""
+        bname = (
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, model.geom_bodyid[other])
+            or ""
+        )
         if not (bname.startswith("finger_r_") or bname == "hx5_r_base"):
             continue  # 캔이 떨어진 뒤의 바닥 접촉은 무시하고 손과 캔 접촉만 본다.
         if c.dist < worst:
@@ -109,7 +120,9 @@ def main():
     rtf = sim_seconds_total / total_wall
 
     print(f"Trials: {N_TRIALS}, {n_steps} steps each ({SIM_SECONDS}s sim)")
-    print(f"Max finger-can penetration depth: {max_penetration * 1000:.3f} mm (limit {PENETRATION_LIMIT*1000:.1f} mm)")
+    print(
+        f"Max finger-can penetration depth: {max_penetration * 1000:.3f} mm (limit {PENETRATION_LIMIT * 1000:.1f} mm)"
+    )
     print(f"Real-time factor: {rtf:.2f} (target >= {RTF_TARGET})")
 
     ok = max_penetration < PENETRATION_LIMIT

@@ -4,6 +4,7 @@ import h5py
 import numpy as np
 
 from scripts.prepare_huggingface_release import inspect_episode
+from scripts.publish_huggingface import set_revision_tag
 
 
 def test_release_inspection_reads_episode_metadata(tmp_path: Path):
@@ -34,3 +35,39 @@ def test_release_inspection_reads_episode_metadata(tmp_path: Path):
     assert result["object_variant"] == "orange"
     assert result["target_label"] == "red"
     assert len(result["sha256"]) == 64
+
+
+def test_release_tag_moves_to_final_main_revision():
+    class Api:
+        def __init__(self):
+            self.deleted = []
+            self.created = []
+
+        def list_repo_refs(self, _repo_id, *, repo_type):
+            tag = type("Tag", (), {"name": "v3.1.0"})()
+            return type("Refs", (), {"tags": [tag]})()
+
+        def delete_tag(self, repo_id, *, tag, repo_type):
+            self.deleted.append((repo_id, tag, repo_type))
+
+        def repo_info(self, _repo_id, *, repo_type):
+            return type("Info", (), {"sha": "final-main-sha"})()
+
+        def create_tag(self, repo_id, **kwargs):
+            self.created.append((repo_id, kwargs))
+
+    api = Api()
+    revision = set_revision_tag(api, "owner/repo", "dataset", "v3.1.0")
+    assert revision == "final-main-sha"
+    assert api.deleted == [("owner/repo", "v3.1.0", "dataset")]
+    assert api.created == [
+        (
+            "owner/repo",
+            {
+                "tag": "v3.1.0",
+                "tag_message": "Release v3.1.0",
+                "revision": "final-main-sha",
+                "repo_type": "dataset",
+            },
+        )
+    ]

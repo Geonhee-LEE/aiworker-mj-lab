@@ -14,8 +14,12 @@ from .schema import ACTION_DIM
 def _git_commit(repository):
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=repository,
-            check=True, capture_output=True, text=True)
+            ["git", "rev-parse", "HEAD"],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         return result.stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return "unknown"
@@ -44,10 +48,12 @@ class EpisodeBuffer:
             for name, values in observation["ee_pose"].items()
         }
         if set(ee_pose) != {"left", "right"} or any(
-                values.shape != (7,) or not np.all(np.isfinite(values))
-                for values in ee_pose.values()):
+            values.shape != (7,) or not np.all(np.isfinite(values))
+            for values in ee_pose.values()
+        ):
             raise ValueError(
-                "observation ee_pose must contain finite left/right 7D poses")
+                "observation ee_pose must contain finite left/right 7D poses"
+            )
         image_names = tuple(observation["images"])
         if self.images and set(image_names) != set(self.images):
             raise ValueError("camera set changed during the episode")
@@ -69,14 +75,12 @@ class EpisodeBuffer:
         if not self.actions:
             raise ValueError("cannot save an empty episode")
         return EpisodeData(
-            qpos=np.stack(self.qpos), qvel=np.stack(self.qvel),
-            ee_pose={name: np.stack(values)
-                     for name, values in self.ee_pose.items()},
-            images={name: np.stack(values)
-                    for name, values in self.images.items()},
+            qpos=np.stack(self.qpos),
+            qvel=np.stack(self.qvel),
+            ee_pose={name: np.stack(values) for name, values in self.ee_pose.items()},
+            images={name: np.stack(values) for name, values in self.images.items()},
             action=np.stack(self.actions),
-            debug={name: np.stack(values)
-                   for name, values in self.debug.items()},
+            debug={name: np.stack(values) for name, values in self.debug.items()},
             attrs={} if attrs is None else dict(attrs),
         )
 
@@ -119,8 +123,9 @@ class EpisodeRecorder:
             raise RuntimeError("no active episode recording")
         metrics = self.env.task.metrics(self.env.data)
         attrs = {
-            "episode_id": int(next_episode_path(
-                self.dataset_dir).stem.rsplit("_", 1)[1]),
+            "episode_id": int(
+                next_episode_path(self.dataset_dir).stem.rsplit("_", 1)[1]
+            ),
             "seed": -1 if self.env.last_seed is None else self.env.last_seed,
             "control_hz": self.env.actual_control_hz,
             "model_hash": self.env.model_hash,

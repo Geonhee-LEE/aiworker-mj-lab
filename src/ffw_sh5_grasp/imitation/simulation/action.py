@@ -35,26 +35,35 @@ class ActionAdapter:
     def __init__(self, model):
         self.model = model
         self.arm_ranges = {
-            side: np.asarray([
-                model.jnt_range[_joint_id(model, name)]
-                for name in ARM_JOINTS[side]
-            ], dtype=float)
+            side: np.asarray(
+                [model.jnt_range[_joint_id(model, name)] for name in ARM_JOINTS[side]],
+                dtype=float,
+            )
             for side in SIDES
         }
-        self.lower = np.concatenate((
-            self.arm_ranges["l"][:, 0], [0.0],
-            self.arm_ranges["r"][:, 0], [0.0],
-        ))
-        self.upper = np.concatenate((
-            self.arm_ranges["l"][:, 1], [1.0],
-            self.arm_ranges["r"][:, 1], [1.0],
-        ))
+        self.lower = np.concatenate(
+            (
+                self.arm_ranges["l"][:, 0],
+                [0.0],
+                self.arm_ranges["r"][:, 0],
+                [0.0],
+            )
+        )
+        self.upper = np.concatenate(
+            (
+                self.arm_ranges["l"][:, 1],
+                [1.0],
+                self.arm_ranges["r"][:, 1],
+                [1.0],
+            )
+        )
 
     def validate(self, action, *, clip=False):
         values = np.asarray(action, dtype=float)
         if values.shape != (ACTION_DIM,):
             raise ValueError(
-                f"action must have shape ({ACTION_DIM},), got {values.shape}")
+                f"action must have shape ({ACTION_DIM},), got {values.shape}"
+            )
         if not np.all(np.isfinite(values)):
             raise ValueError("action contains NaN or infinity")
         if clip:
@@ -74,10 +83,14 @@ class ActionAdapter:
 
     @staticmethod
     def encode(left_arm, left_grasp, right_arm, right_grasp):
-        result = np.concatenate((
-            np.asarray(left_arm, dtype=float), [float(left_grasp)],
-            np.asarray(right_arm, dtype=float), [float(right_grasp)],
-        ))
+        result = np.concatenate(
+            (
+                np.asarray(left_arm, dtype=float),
+                [float(left_grasp)],
+                np.asarray(right_arm, dtype=float),
+                [float(right_grasp)],
+            )
+        )
         if result.shape != (ACTION_DIM,):
             raise ValueError(f"encoded action must have shape ({ACTION_DIM},)")
         return result

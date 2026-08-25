@@ -5,10 +5,14 @@ import numpy as np
 from .episode import load_episode
 
 
-def replay_episode(env, episode_or_path, *, compare=True, atol=5e-4,
-                   step_callback=None):
-    episode = (load_episode(episode_or_path)
-               if not hasattr(episode_or_path, "action") else episode_or_path)
+def replay_episode(
+    env, episode_or_path, *, compare=True, atol=5e-4, step_callback=None
+):
+    episode = (
+        load_episode(episode_or_path)
+        if not hasattr(episode_or_path, "action")
+        else episode_or_path
+    )
     seed = int(episode.attrs.get("seed", -1))
     observation = env.reset(seed=None if seed < 0 else seed)
     qpos = []
@@ -20,8 +24,8 @@ def replay_episode(env, episode_or_path, *, compare=True, atol=5e-4,
         qpos.append(current.copy())
         if compare:
             maximum_error = max(
-                maximum_error,
-                float(np.max(np.abs(current - episode.qpos[frame]))))
+                maximum_error, float(np.max(np.abs(current - episode.qpos[frame])))
+            )
         observation = env.step(action)
     return {
         "qpos": np.stack(qpos),

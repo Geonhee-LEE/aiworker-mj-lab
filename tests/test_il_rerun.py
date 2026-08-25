@@ -74,47 +74,41 @@ class _BrokenRecording:
 
 
 def test_live_rerun_logs_three_cameras_and_ee_pose():
-    logger = LiveRecordingRerunLogger((
-        "cam_high", "cam_left_wrist", "cam_right_wrist"))
+    logger = LiveRecordingRerunLogger(("cam_high", "cam_left_wrist", "cam_right_wrist"))
     logger.rr = _FakeRerun
     logger.recording = _FakeRecording()
     observation = {
-        "images": {
-            name: np.zeros((8, 8, 3), np.uint8)
-            for name in logger.camera_names
-        },
+        "images": {name: np.zeros((8, 8, 3), np.uint8) for name in logger.camera_names},
         "qpos": np.zeros(16),
         "qvel": np.zeros(16),
         "ee_pose": {"left": np.zeros(7), "right": np.ones(7)},
         "task": {"success": False, "object_position_error": 0.2},
     }
-    logger.log(
-        observation, np.zeros(16), recording=False, episode_frame=0)
+    logger.log(observation, np.zeros(16), recording=False, episode_frame=0)
     assert all(
-        f"cameras/{name}" in logger.recording.paths
-        for name in logger.camera_names)
+        f"cameras/{name}" in logger.recording.paths for name in logger.camera_names
+    )
     assert "state/ee_pose/left/qw" in logger.recording.paths
     assert "state/ee_pose/right/qz" in logger.recording.paths
     assert logger.recording.flushes == [2.0]
 
 
 def test_task_rollout_rerun_separates_pose_and_executed_joint_action():
-    logger = RolloutRerunLogger(
-        "unused.rrd", ("cam_high",), frame_stride=5)
+    logger = RolloutRerunLogger("unused.rrd", ("cam_high",), frame_stride=5)
     logger.rr = _FakeRerun
     logger.recording = _FakeRecording()
     observation = {
         "images": {"cam_high": np.zeros((8, 8, 3), np.uint8)},
         "qpos": np.zeros(16),
-        "ee_pose": {"right": np.array(
-            [0.4, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0])},
+        "ee_pose": {"right": np.array([0.4, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0])},
         "task": {"success": False, "object_position_error": 0.2},
     }
     logger.log(
-        0, observation, np.ones(16),
+        0,
+        observation,
+        np.ones(16),
         predicted_chunk=np.zeros((90, 8)),
-        task_action=np.array(
-            [0.5, 0.1, 0.8, 1.0, 0.0, 0.0, 0.0, 0.75]),
+        task_action=np.array([0.5, 0.1, 0.8, 1.0, 0.0, 0.0, 0.0, 0.75]),
         representation="task",
         ik_metrics={"position_error_mm": 12.0},
         temporal_metrics={
@@ -169,32 +163,45 @@ def test_rerun_dependency_boundary():
                 qpos=np.zeros((1, 16), np.float32),
                 qvel=np.zeros((1, 16), np.float32),
                 images={"cam_high": np.zeros((1, 8, 8, 3), np.uint8)},
-                action=np.zeros((1, 16), np.float32), debug={}, attrs={})
+                action=np.zeros((1, 16), np.float32),
+                debug={},
+                attrs={},
+            )
             log_episode(episode, root / "dataset.rrd")
             with TrainingRerunLogger(root / "training.rrd") as logger:
-                logger.log_epoch({
-                    "epoch": 0, "train/loss": 1.0, "val/loss": 0.9,
-                    "train/l1": 0.5, "val/l1": 0.4,
-                    "train/kl": 0.1, "val/kl": 0.1,
-                    "train/pad": 0.2, "val/pad": 0.2,
-                    "learning_rate": 1e-4,
-                })
+                logger.log_epoch(
+                    {
+                        "epoch": 0,
+                        "train/loss": 1.0,
+                        "val/loss": 0.9,
+                        "train/l1": 0.5,
+                        "val/l1": 0.4,
+                        "train/kl": 0.1,
+                        "val/kl": 0.1,
+                        "train/pad": 0.2,
+                        "val/pad": 0.2,
+                        "learning_rate": 1e-4,
+                    }
+                )
             observation = {
                 "qpos": np.zeros(16),
                 "images": {"cam_high": np.zeros((8, 8, 3), np.uint8)},
                 "task": {"success": False, "object_position_error": 0.2},
             }
-            with RolloutRerunLogger(
-                    root / "rollout.rrd", ("cam_high",)) as logger:
+            with RolloutRerunLogger(root / "rollout.rrd", ("cam_high",)) as logger:
                 logger.log(
-                    0, observation, np.zeros(16),
+                    0,
+                    observation,
+                    np.zeros(16),
                     predicted_chunk=np.zeros((2, 8)),
-                    task_action=np.array(
-                        [0.4, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 0.5]),
+                    task_action=np.array([0.4, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 0.5]),
                     representation="task",
-                    ik_metrics={"position_error_mm": 1.0})
-            assert all((root / name).stat().st_size > 0 for name in (
-                "dataset.rrd", "training.rrd", "rollout.rrd"))
+                    ik_metrics={"position_error_mm": 1.0},
+                )
+            assert all(
+                (root / name).stat().st_size > 0
+                for name in ("dataset.rrd", "training.rrd", "rollout.rrd")
+            )
 
 
 if __name__ == "__main__":

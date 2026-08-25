@@ -45,8 +45,16 @@ GIF_FRAME_MS = 90  # 약 11 fps로 재생한다.
 
 def _read_arm_q(model, data, joint_names):
     """관절 이름 순서에 맞춰 현재 팔 qpos를 NumPy 벡터로 반환한다."""
-    return np.array([data.qpos[model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)]]
-                      for n in joint_names])
+    return np.array(
+        [
+            data.qpos[
+                model.jnt_qposadr[
+                    mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)
+                ]
+            ]
+            for n in joint_names
+        ]
+    )
 
 
 class FrameGrabber:
@@ -79,13 +87,33 @@ class FrameGrabber:
         # 평평한 로봇 shading, 격자 바닥과 적은 색으로 구성되어 적응형 palette 양자화를
         # 적용해도 시각적 손실이 거의 없다. PIL 기본 프레임별 full-color GIF보다 용량을
         # 몇 배 줄일 수 있다.
-        quantized = [f.quantize(colors=128, method=Image.MEDIANCUT) for f in self.frames]
-        quantized[0].save(path, save_all=True, append_images=quantized[1:],
-                           duration=GIF_FRAME_MS, loop=0, optimize=False)
+        quantized = [
+            f.quantize(colors=128, method=Image.MEDIANCUT) for f in self.frames
+        ]
+        quantized[0].save(
+            path,
+            save_all=True,
+            append_images=quantized[1:],
+            duration=GIF_FRAME_MS,
+            loop=0,
+            optimize=False,
+        )
         print(f"wrote {len(self.frames)} frames to {path}")
 
 
-def _move(model, data, ctrl_r, ctrl_l, grabber, q_from, q_to, duration, dt, grasp_frac=None, thumb_frac=None):
+def _move(
+    model,
+    data,
+    ctrl_r,
+    ctrl_l,
+    grabber,
+    q_from,
+    q_to,
+    duration,
+    dt,
+    grasp_frac=None,
+    thumb_frac=None,
+):
     """오른팔 목표를 선형 보간하며 물리 진행·선택적 파지·촬영을 수행한다."""
     n = int(duration / dt)
     for i in range(n):
@@ -98,7 +126,18 @@ def _move(model, data, ctrl_r, ctrl_l, grabber, q_from, q_to, duration, dt, gras
         grabber.maybe_capture(data)
 
 
-def _hold(model, data, ctrl_r, ctrl_l, grabber, q_des, duration, dt, grasp_frac=None, thumb_frac=None):
+def _hold(
+    model,
+    data,
+    ctrl_r,
+    ctrl_l,
+    grabber,
+    q_des,
+    duration,
+    dt,
+    grasp_frac=None,
+    thumb_frac=None,
+):
     """오른팔 목표를 유지하며 물리 진행·선택적 파지·촬영을 수행한다."""
     n = int(duration / dt)
     for _ in range(n):
@@ -112,7 +151,11 @@ def _hold(model, data, ctrl_r, ctrl_l, grabber, q_des, duration, dt, grasp_frac=
 
 def main():
     """접근·파지·들기 동작을 자동 실행해 문서용 GIF 데모를 생성한다."""
-    out_path = sys.argv[1] if len(sys.argv) > 1 else str(REPO_ROOT / "docs" / "assets" / "demo.gif")
+    out_path = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else str(REPO_ROOT / "docs" / "assets" / "demo.gif")
+    )
     pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
 
     model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
@@ -130,28 +173,76 @@ def main():
 
     can_jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "can_free")
     can_qadr = model.jnt_qposadr[can_jid]
-    can_pos0 = data.qpos[can_qadr:can_qadr + 3].copy()
+    can_pos0 = data.qpos[can_qadr : can_qadr + 3].copy()
     target_quat = np.array([0.5, 0.5, 0.5, 0.5])
 
     ctx = data.qpos.copy()
     pregrasp_pos = can_pos0 + PRE_GRASP_OFFSET
     q_pregrasp, _, _, ok1 = solve_offline_pose_multistart(
-        solver, HOME_Q_R, pregrasp_pos, target_quat, rng, context_qpos=ctx)
+        solver, HOME_Q_R, pregrasp_pos, target_quat, rng, context_qpos=ctx
+    )
     q_grasp, _, _, ok2 = solve_offline_pose_multistart(
-        solver, q_pregrasp, can_pos0, target_quat, rng, context_qpos=ctx)
+        solver, q_pregrasp, can_pos0, target_quat, rng, context_qpos=ctx
+    )
     assert ok1 and ok2, "IK failed to set up demo -- check models/full_scene.xml"
 
     q_home = _read_arm_q(model, data, ARM_R)
     grabber.maybe_capture(data)
 
     print("move -> pre-grasp")
-    _move(model, data, ctrl_r, ctrl_l, grabber, q_home, q_pregrasp, 3.0, dt, grasp_frac=0.0, thumb_frac=0.0)
-    _hold(model, data, ctrl_r, ctrl_l, grabber, q_pregrasp, 0.5, dt, grasp_frac=0.0, thumb_frac=0.0)
+    _move(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        grabber,
+        q_home,
+        q_pregrasp,
+        3.0,
+        dt,
+        grasp_frac=0.0,
+        thumb_frac=0.0,
+    )
+    _hold(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        grabber,
+        q_pregrasp,
+        0.5,
+        dt,
+        grasp_frac=0.0,
+        thumb_frac=0.0,
+    )
 
     print("approach")
     approach_time = np.linalg.norm(PRE_GRASP_OFFSET) / APPROACH_SPEED
-    _move(model, data, ctrl_r, ctrl_l, grabber, q_pregrasp, q_grasp, approach_time, dt, grasp_frac=0.0, thumb_frac=0.0)
-    _hold(model, data, ctrl_r, ctrl_l, grabber, q_grasp, 0.5, dt, grasp_frac=0.0, thumb_frac=0.0)
+    _move(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        grabber,
+        q_pregrasp,
+        q_grasp,
+        approach_time,
+        dt,
+        grasp_frac=0.0,
+        thumb_frac=0.0,
+    )
+    _hold(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        grabber,
+        q_grasp,
+        0.5,
+        dt,
+        grasp_frac=0.0,
+        thumb_frac=0.0,
+    )
 
     print("grasp")
     n = int(RAMP_TIME / dt)
@@ -162,18 +253,55 @@ def main():
         grasp.apply_grasp(model, data, grasp=frac, thumb=frac, side="r")
         mujoco.mj_step(model, data)
         grabber.maybe_capture(data)
-    _hold(model, data, ctrl_r, ctrl_l, grabber, q_grasp, SETTLE_TIME, dt, grasp_frac=1.0, thumb_frac=1.0)
+    _hold(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        grabber,
+        q_grasp,
+        SETTLE_TIME,
+        dt,
+        grasp_frac=1.0,
+        thumb_frac=1.0,
+    )
 
     print("lift")
     lift_target_pos = can_pos0 + np.array([0, 0, LIFT_HEIGHT])
     q_lift, _, _, _ = solve_offline_pose_multistart(
-        solver, q_grasp, lift_target_pos, target_quat, rng, context_qpos=ctx)
+        solver, q_grasp, lift_target_pos, target_quat, rng, context_qpos=ctx
+    )
     lift_time = LIFT_HEIGHT / LIFT_SPEED
-    _move(model, data, ctrl_r, ctrl_l, grabber, q_grasp, q_lift, lift_time, dt, grasp_frac=1.0, thumb_frac=1.0)
-    _hold(model, data, ctrl_r, ctrl_l, grabber, q_lift, POST_LIFT_HOLD, dt, grasp_frac=1.0, thumb_frac=1.0)
+    _move(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        grabber,
+        q_grasp,
+        q_lift,
+        lift_time,
+        dt,
+        grasp_frac=1.0,
+        thumb_frac=1.0,
+    )
+    _hold(
+        model,
+        data,
+        ctrl_r,
+        ctrl_l,
+        grabber,
+        q_lift,
+        POST_LIFT_HOLD,
+        dt,
+        grasp_frac=1.0,
+        thumb_frac=1.0,
+    )
 
     net_lift = data.qpos[can_qadr + 2] - can_pos0[2]
-    print(f"net_lift={net_lift*100:.2f}cm grasped={grasp.is_grasped(model, data, side='r')}")
+    print(
+        f"net_lift={net_lift * 100:.2f}cm grasped={grasp.is_grasped(model, data, side='r')}"
+    )
     grabber.save(out_path)
 
 

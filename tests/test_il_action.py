@@ -55,8 +55,7 @@ def test_locked_left_leader_action():
 def test_right_arm_bounded_home_return():
     with AIWorkerMujocoEnv(render_images=False, seed=3) as env:
         right_qpos = env.state_adapter.arm_qpos["r"]
-        env.data.qpos[right_qpos] += np.asarray(
-            [0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2])
+        env.data.qpos[right_qpos] += np.asarray([0.2, -0.2, 0.2, -0.2, 0.2, -0.2, 0.2])
         mujoco.mj_forward(env.model, env.data)
         leader = GizmoLeader(env)
         current = env.data.qpos[right_qpos].copy()

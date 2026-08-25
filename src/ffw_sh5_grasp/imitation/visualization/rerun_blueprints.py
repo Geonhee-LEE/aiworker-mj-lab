@@ -6,16 +6,15 @@ def _blueprint_module():
         import rerun.blueprint as rrb
     except ImportError as error:
         raise RuntimeError(
-            "Rerun visualization requires: pip install rerun-sdk") from error
+            "Rerun visualization requires: pip install rerun-sdk"
+        ) from error
     return rrb
 
 
-def dataset_blueprint(camera_names=(
-    "cam_high", "cam_left_wrist", "cam_right_wrist")):
+def dataset_blueprint(camera_names=("cam_high", "cam_left_wrist", "cam_right_wrist")):
     rrb = _blueprint_module()
     camera_views = [
-        rrb.Spatial2DView(origin=f"/cameras/{name}", name=name)
-        for name in camera_names
+        rrb.Spatial2DView(origin=f"/cameras/{name}", name=name) for name in camera_names
     ]
     return rrb.Blueprint(
         rrb.Vertical(
@@ -30,12 +29,12 @@ def dataset_blueprint(camera_names=(
     )
 
 
-def live_recording_blueprint(camera_names=(
-    "cam_high", "cam_left_wrist", "cam_right_wrist")):
+def live_recording_blueprint(
+    camera_names=("cam_high", "cam_left_wrist", "cam_right_wrist"),
+):
     rrb = _blueprint_module()
     camera_views = [
-        rrb.Spatial2DView(origin=f"/cameras/{name}", name=name)
-        for name in camera_names
+        rrb.Spatial2DView(origin=f"/cameras/{name}", name=name) for name in camera_names
     ]
     return rrb.Blueprint(
         rrb.Vertical(
@@ -43,8 +42,7 @@ def live_recording_blueprint(camera_names=(
             rrb.Horizontal(
                 rrb.TimeSeriesView(origin="/state", name="Joint state"),
                 rrb.TimeSeriesView(origin="/expert", name="Expert action"),
-                rrb.TimeSeriesView(
-                    origin="/task", name="Task / recording status"),
+                rrb.TimeSeriesView(origin="/task", name="Task / recording status"),
             ),
         ),
         collapse_panels=True,
@@ -60,19 +58,18 @@ def training_blueprint():
                 rrb.TimeSeriesView(origin="/training/l1", name="L1"),
                 rrb.TimeSeriesView(origin="/training/kl", name="KL"),
                 rrb.TimeSeriesView(
-                    origin="/training/learning_rate", name="Learning rate"),
+                    origin="/training/learning_rate", name="Learning rate"
+                ),
             ),
         ),
         collapse_panels=True,
     )
 
 
-def rollout_blueprint(camera_names=(
-    "cam_high", "cam_right_wrist")):
+def rollout_blueprint(camera_names=("cam_high", "cam_right_wrist")):
     rrb = _blueprint_module()
     camera_views = [
-        rrb.Spatial2DView(origin=f"/cameras/{name}", name=name)
-        for name in camera_names
+        rrb.Spatial2DView(origin=f"/cameras/{name}", name=name) for name in camera_names
     ]
     return rrb.Blueprint(
         rrb.Vertical(

@@ -19,8 +19,7 @@ def test_obs_action_alignment():
                 "left": np.full(7, frame, dtype=np.float32),
                 "right": np.full(7, frame + 10, dtype=np.float32),
             },
-            "images": {"cam_high": np.full(
-                (2, 3, 3), frame, dtype=np.uint8)},
+            "images": {"cam_high": np.full((2, 3, 3), frame, dtype=np.uint8)},
             "debug": {},
         }
         action = np.full(16, 100 + frame, dtype=np.float32)
@@ -29,8 +28,7 @@ def test_obs_action_alignment():
     assert np.array_equal(episode.qpos[:, 0], np.arange(4))
     assert np.array_equal(episode.action[:, 0], 100 + np.arange(4))
     assert np.array_equal(episode.ee_pose["left"][:, 0], np.arange(4))
-    assert np.array_equal(
-        episode.ee_pose["right"][:, 0], 10 + np.arange(4))
+    assert np.array_equal(episode.ee_pose["right"][:, 0], 10 + np.arange(4))
     assert np.array_equal(episode.images["cam_high"][:, 0, 0, 0], np.arange(4))
 
 

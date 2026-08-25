@@ -45,12 +45,14 @@ def rpy_deg_to_quat(rpy_deg):
     cr, sr = math.cos(roll / 2.0), math.sin(roll / 2.0)
     cp, sp = math.cos(pitch / 2.0), math.sin(pitch / 2.0)
     cy, sy = math.cos(yaw / 2.0), math.sin(yaw / 2.0)
-    return np.array([
-        cr * cp * cy + sr * sp * sy,
-        sr * cp * cy - cr * sp * sy,
-        cr * sp * cy + sr * cp * sy,
-        cr * cp * sy - sr * sp * cy,
-    ])
+    return np.array(
+        [
+            cr * cp * cy + sr * sp * sy,
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+        ]
+    )
 
 
 def quat_to_rpy_deg(quaternion):
@@ -84,14 +86,13 @@ def shortest_orientation_error(target_quaternion, current_quaternion):
 def rotation_from_quaternion(quaternion):
     """MuJoCo 쿼터니언을 3×3 회전 행렬로 변환한다."""
     w, x, y, z = normalize_quaternion(quaternion)
-    return np.array([
-        [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w),
-         2.0 * (x * z + y * w)],
-        [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z),
-         2.0 * (y * z - x * w)],
-        [2.0 * (x * z - y * w), 2.0 * (y * z + x * w),
-         1.0 - 2.0 * (x * x + y * y)],
-    ])
+    return np.array(
+        [
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+            [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
+            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
+        ]
+    )
 
 
 def quaternion_from_rotation(rotation):
@@ -100,42 +101,53 @@ def quaternion_from_rotation(rotation):
     trace = float(np.trace(matrix))
     if trace > 0.0:
         scale = 2.0 * np.sqrt(max(trace + 1.0, 0.0))
-        quaternion = np.array([
-            0.25 * scale,
-            (matrix[2, 1] - matrix[1, 2]) / scale,
-            (matrix[0, 2] - matrix[2, 0]) / scale,
-            (matrix[1, 0] - matrix[0, 1]) / scale,
-        ])
+        quaternion = np.array(
+            [
+                0.25 * scale,
+                (matrix[2, 1] - matrix[1, 2]) / scale,
+                (matrix[0, 2] - matrix[2, 0]) / scale,
+                (matrix[1, 0] - matrix[0, 1]) / scale,
+            ]
+        )
     else:
         diagonal = np.diag(matrix)
         index = int(np.argmax(diagonal))
         if index == 0:
-            scale = 2.0 * np.sqrt(max(
-                1.0 + matrix[0, 0] - matrix[1, 1] - matrix[2, 2], 0.0))
-            quaternion = np.array([
-                (matrix[2, 1] - matrix[1, 2]) / scale,
-                0.25 * scale,
-                (matrix[0, 1] + matrix[1, 0]) / scale,
-                (matrix[0, 2] + matrix[2, 0]) / scale,
-            ])
+            scale = 2.0 * np.sqrt(
+                max(1.0 + matrix[0, 0] - matrix[1, 1] - matrix[2, 2], 0.0)
+            )
+            quaternion = np.array(
+                [
+                    (matrix[2, 1] - matrix[1, 2]) / scale,
+                    0.25 * scale,
+                    (matrix[0, 1] + matrix[1, 0]) / scale,
+                    (matrix[0, 2] + matrix[2, 0]) / scale,
+                ]
+            )
         elif index == 1:
-            scale = 2.0 * np.sqrt(max(
-                1.0 + matrix[1, 1] - matrix[0, 0] - matrix[2, 2], 0.0))
-            quaternion = np.array([
-                (matrix[0, 2] - matrix[2, 0]) / scale,
-                (matrix[0, 1] + matrix[1, 0]) / scale,
-                0.25 * scale,
-                (matrix[1, 2] + matrix[2, 1]) / scale,
-            ])
+            scale = 2.0 * np.sqrt(
+                max(1.0 + matrix[1, 1] - matrix[0, 0] - matrix[2, 2], 0.0)
+            )
+            quaternion = np.array(
+                [
+                    (matrix[0, 2] - matrix[2, 0]) / scale,
+                    (matrix[0, 1] + matrix[1, 0]) / scale,
+                    0.25 * scale,
+                    (matrix[1, 2] + matrix[2, 1]) / scale,
+                ]
+            )
         else:
-            scale = 2.0 * np.sqrt(max(
-                1.0 + matrix[2, 2] - matrix[0, 0] - matrix[1, 1], 0.0))
-            quaternion = np.array([
-                (matrix[1, 0] - matrix[0, 1]) / scale,
-                (matrix[0, 2] + matrix[2, 0]) / scale,
-                (matrix[1, 2] + matrix[2, 1]) / scale,
-                0.25 * scale,
-            ])
+            scale = 2.0 * np.sqrt(
+                max(1.0 + matrix[2, 2] - matrix[0, 0] - matrix[1, 1], 0.0)
+            )
+            quaternion = np.array(
+                [
+                    (matrix[1, 0] - matrix[0, 1]) / scale,
+                    (matrix[0, 2] + matrix[2, 0]) / scale,
+                    (matrix[1, 2] + matrix[2, 1]) / scale,
+                    0.25 * scale,
+                ]
+            )
     return normalize_quaternion(quaternion)
 
 
@@ -148,17 +160,25 @@ def axis_rotation(axis, angle):
     x, y, z = axis / norm
     sine, cosine = np.sin(angle), np.cos(angle)
     one_minus_cosine = 1.0 - cosine
-    return np.array([
-        [cosine + x * x * one_minus_cosine,
-         x * y * one_minus_cosine - z * sine,
-         x * z * one_minus_cosine + y * sine],
-        [y * x * one_minus_cosine + z * sine,
-         cosine + y * y * one_minus_cosine,
-         y * z * one_minus_cosine - x * sine],
-        [z * x * one_minus_cosine - y * sine,
-         z * y * one_minus_cosine + x * sine,
-         cosine + z * z * one_minus_cosine],
-    ])
+    return np.array(
+        [
+            [
+                cosine + x * x * one_minus_cosine,
+                x * y * one_minus_cosine - z * sine,
+                x * z * one_minus_cosine + y * sine,
+            ],
+            [
+                y * x * one_minus_cosine + z * sine,
+                cosine + y * y * one_minus_cosine,
+                y * z * one_minus_cosine - x * sine,
+            ],
+            [
+                z * x * one_minus_cosine - y * sine,
+                z * y * one_minus_cosine + x * sine,
+                cosine + z * z * one_minus_cosine,
+            ],
+        ]
+    )
 
 
 def clip_norm(vector, limit):

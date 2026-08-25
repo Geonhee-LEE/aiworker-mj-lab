@@ -75,12 +75,10 @@ def read_base_feedback(app):
 def update_manual_drive(app, drive_keys, *, stop_linear_speed, stop_angular_speed):
     """키 입력과 실제 차체 속도로 수동 우선권 및 target 운반 상태를 갱신한다."""
     feedback = read_base_feedback(app)
-    command = app.base_drive.base.update_body(
-        drive_keys, app.frame_dt)
+    command = app.base_drive.base.update_body(drive_keys, app.frame_dt)
     keys_active = any(drive_keys.values())
     measured_motion_active = (
-        math.hypot(feedback.body_twist.vx, feedback.body_twist.vy)
-        > stop_linear_speed
+        math.hypot(feedback.body_twist.vx, feedback.body_twist.vy) > stop_linear_speed
         or abs(feedback.body_twist.wz) > stop_angular_speed
     )
 
@@ -91,7 +89,8 @@ def update_manual_drive(app, drive_keys, *, stop_linear_speed, stop_angular_spee
     if carry_targets:
         # 키를 놓은 직후 물리 제동으로 움직이는 구간까지 world 목표를 함께 운반한다.
         targets.carry_world_targets_with_base(
-            app, app._manual_reference_base_pose, feedback.pose)
+            app, app._manual_reference_base_pose, feedback.pose
+        )
     app._manual_reference_base_pose = feedback.pose.copy()
 
     return ManualDriveState(
@@ -114,8 +113,7 @@ def apply_whole_body_solution(app, task_command, *, sides, arm_nominal):
         arm_nominal=arm_nominal,
         lift_nominal=task_command.lift_position,
         rigid_grasp=(
-            app.cyclo_controller == "bimanual_movel"
-            and app.cyclo_grasp_captured
+            app.cyclo_controller == "bimanual_movel" and app.cyclo_grasp_captured
         ),
         whole_body_enabled=app.whole_body_enabled,
     )
@@ -124,8 +122,7 @@ def apply_whole_body_solution(app, task_command, *, sides, arm_nominal):
     app.collision_min_distance = command.minimum_collision_distance
     app.collision_constraint_violation = command.collision_constraint_violation
     app.lift_cmd = (
-        command.lift_position
-        if app.whole_body_enabled else task_command.lift_position
+        command.lift_position if app.whole_body_enabled else task_command.lift_position
     )
     for side in sides:
         if side in command.arm_positions:

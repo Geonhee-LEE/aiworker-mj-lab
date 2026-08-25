@@ -80,11 +80,13 @@ HOME_Q_R = np.asarray(SETTINGS.get("application.home_arm_position_rad"), dtype=f
 HOME_Q_L = HOME_Q_R.copy()
 LIFT_RANGE = tuple(float(value) for value in SETTINGS.get("application.lift_range_m"))
 VIRTUAL_OBJECT_HOME_POS = np.asarray(
-    SETTINGS.get("application.virtual_object_home_position_m"), dtype=float)
+    SETTINGS.get("application.virtual_object_home_position_m"), dtype=float
+)
 HOME_KEYFRAME = SETTINGS.get("application.home_keyframe")
 # 패널의 "Joint position monitor"에 진행률 막대로 표시할 관절 전체 목록.
 MONITOR_JOINTS = (
-    [f"arm_r_joint{i}" for i in range(1, 8)] + [f"arm_l_joint{i}" for i in range(1, 8)]
+    [f"arm_r_joint{i}" for i in range(1, 8)]
+    + [f"arm_l_joint{i}" for i in range(1, 8)]
     + [f"finger_r_joint{i}" for i in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)]
     + [f"finger_l_joint{i}" for i in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)]
     + ["lift_joint", "head_joint1", "head_joint2"]
@@ -96,25 +98,31 @@ LOOP_HZ = SETTINGS.number("application.loop_hz", positive=True)
 ENV_TASK_NAMES = {0: "can_to_box", 1: "can_color_sort"}
 POLICY_REPRESENTATION_NAMES = ("auto", "joint", "task")
 DEFAULT_TASK_POLICY_IK_SPEED_SCALE = SETTINGS.number(
-    "imitation.policy.task_ik_speed_scale", positive=True)
-DEFAULT_POLICY_PTE_STEPS = SETTINGS.integer(
-    "imitation.policy.pte_steps", minimum=0)
+    "imitation.policy.task_ik_speed_scale", positive=True
+)
+DEFAULT_POLICY_PTE_STEPS = SETTINGS.integer("imitation.policy.pte_steps", minimum=0)
 DEFAULT_POLICY_RERUN_LOG_HZ = SETTINGS.number(
-    "imitation.policy.rerun_log_hz", positive=True)
+    "imitation.policy.rerun_log_hz", positive=True
+)
 # 목표 변화율 제한은 원시 슬라이더 값의 급격한 변화와 무관하게 실제 IK 목표가
 # 렌더링 한 프레임에서 이동할 수 있는 거리를 제한한다. 25 Hz에서 프레임당 0.03 m는
 # 0.75 m/s, 프레임당 8도는 200 deg/s에 해당해 빠르지만 추종 가능한 범위다.
 MAX_POS_STEP_PER_FRAME = SETTINGS.number(
-    "application.max_position_step_per_frame_m", positive=True)
+    "application.max_position_step_per_frame_m", positive=True
+)
 MAX_RPY_STEP_PER_FRAME_DEG = SETTINGS.number(
-    "application.max_rotation_step_per_frame_deg", positive=True)
+    "application.max_rotation_step_per_frame_deg", positive=True
+)
 LIFT_JOG_SPEED = SETTINGS.number("application.lift_jog_speed_m_s", positive=True)
 GRASP_COMMAND_RATE = SETTINGS.number(
-    "application.grasp_command_rate_per_s", positive=True)
+    "application.grasp_command_rate_per_s", positive=True
+)
 MANUAL_STOP_LINEAR_SPEED = SETTINGS.number(
-    "application.manual_stop_linear_speed_m_s", minimum=0.0)
+    "application.manual_stop_linear_speed_m_s", minimum=0.0
+)
 MANUAL_STOP_ANGULAR_SPEED = SETTINGS.number(
-    "application.manual_stop_angular_speed_rad_s", minimum=0.0)
+    "application.manual_stop_angular_speed_rad_s", minimum=0.0
+)
 if LIFT_RANGE[0] >= LIFT_RANGE[1]:
     raise ValueError("application.lift_range_m은 [최솟값, 최댓값] 순서여야 합니다.")
 
@@ -165,36 +173,46 @@ class TeleopApp:
     순서대로 실행한다: 마우스 카메라 -> 엣지 키(R/G/V/C) -> 연속 키(주행/리프트) ->
     UI 패널 -> 물리 스텝 -> 렌더링. 상태는 전부 인스턴스 속성(self.*)에 있다."""
 
-    def __init__(self, *, policy_checkpoint=None, policy_stats=None,
-                 policy_device="auto", policy_seed=1000,
-                 policy_max_steps=500, task_name="can_to_box",
-                 policy_representation="auto", policy_rerun=False,
-                 policy_rerun_port=9877,
-                 policy_ik_speed_scale=DEFAULT_TASK_POLICY_IK_SPEED_SCALE,
-                 policy_pte_steps=DEFAULT_POLICY_PTE_STEPS,
-                 policy_rerun_hz=DEFAULT_POLICY_RERUN_LOG_HZ):
+    def __init__(
+        self,
+        *,
+        policy_checkpoint=None,
+        policy_stats=None,
+        policy_device="auto",
+        policy_seed=1000,
+        policy_max_steps=500,
+        task_name="can_to_box",
+        policy_representation="auto",
+        policy_rerun=False,
+        policy_rerun_port=9877,
+        policy_ik_speed_scale=DEFAULT_TASK_POLICY_IK_SPEED_SCALE,
+        policy_pte_steps=DEFAULT_POLICY_PTE_STEPS,
+        policy_rerun_hz=DEFAULT_POLICY_RERUN_LOG_HZ,
+    ):
         """시뮬레이션·렌더링·루프 상태를 순서대로 구성해 실행 가능한 앱을 만든다."""
         self.act_policy_device = policy_device
         self.act_policy_stats = policy_stats
         self.act_policy_seed = int(policy_seed)
         self.act_policy_representation = str(policy_representation).lower()
         if self.act_policy_representation not in POLICY_REPRESENTATION_NAMES:
-            raise ValueError(
-                "policy representation must be auto, joint, or task")
+            raise ValueError("policy representation must be auto, joint, or task")
         self.act_policy_rerun_enabled = bool(policy_rerun)
         self.act_policy_rerun_port = int(policy_rerun_port)
         self.act_policy_rerun_hz = float(policy_rerun_hz)
-        if (not np.isfinite(self.act_policy_rerun_hz)
-                or self.act_policy_rerun_hz <= 0.0):
+        if not np.isfinite(self.act_policy_rerun_hz) or self.act_policy_rerun_hz <= 0.0:
             raise ValueError("policy Rerun frequency must be finite and positive")
         self.act_policy_ik_speed_scale = float(policy_ik_speed_scale)
-        if (not np.isfinite(self.act_policy_ik_speed_scale)
-                or self.act_policy_ik_speed_scale <= 0.0):
+        if (
+            not np.isfinite(self.act_policy_ik_speed_scale)
+            or self.act_policy_ik_speed_scale <= 0.0
+        ):
             raise ValueError("policy IK speed scale must be finite and positive")
         self.act_policy_pte_steps = int(policy_pte_steps)
-        if (isinstance(policy_pte_steps, bool)
-                or self.act_policy_pte_steps != policy_pte_steps
-                or self.act_policy_pte_steps < 0):
+        if (
+            isinstance(policy_pte_steps, bool)
+            or self.act_policy_pte_steps != policy_pte_steps
+            or self.act_policy_pte_steps < 0
+        ):
             raise ValueError("policy PTE steps must be a non-negative integer")
         if task_name not in TASK_NAMES:
             raise ValueError(f"unsupported teleop environment: {task_name}")
@@ -214,8 +232,7 @@ class TeleopApp:
         self.imitation_task = create_task(self.model, self.task_name)
         # WholeBodyIK builds its collision-pair catalog at construction time.
         # Enable the task bin first so both physics and the CBF include it.
-        enable_task_collisions(
-            self.model, self.imitation_task.bin_body_names)
+        enable_task_collisions(self.model, self.imitation_task.bin_body_names)
         self._setup_control_systems()
         self._bind_model_entities()
         self._setup_target_state()
@@ -277,13 +294,17 @@ class TeleopApp:
         wheel_bindings = {
             wheel: state.WheelBinding(
                 steer_actuator=_named_id(
-                    model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{wheel}_steer"),
+                    model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{wheel}_steer"
+                ),
                 drive_actuator=_named_id(
-                    model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{wheel}_drive"),
+                    model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{wheel}_drive"
+                ),
                 steer_qpos=_joint_address(
-                    model, f"{wheel}_steer_joint", model.jnt_qposadr),
+                    model, f"{wheel}_steer_joint", model.jnt_qposadr
+                ),
                 drive_dof=_joint_address(
-                    model, f"{wheel}_drive_joint", model.jnt_dofadr),
+                    model, f"{wheel}_drive_joint", model.jnt_dofadr
+                ),
             )
             for wheel in WHEELS
         }
@@ -299,29 +320,25 @@ class TeleopApp:
             name: model.jnt_range[joint_id]
             for name, joint_id in monitor_joint_ids.items()
         }
-        self.rng = np.random.default_rng(
-            getattr(self, "act_policy_seed", 1000))
+        self.rng = np.random.default_rng(getattr(self, "act_policy_seed", 1000))
 
         hand_mocap_ids = {
             side: model.body_mocapid[
-                _named_id(
-                    model, mujoco.mjtObj.mjOBJ_BODY, f"ik_target_{side}"
-                )
+                _named_id(model, mujoco.mjtObj.mjOBJ_BODY, f"ik_target_{side}")
             ]
             for side in SIDES
         }
         virtual_mocap_id = model.body_mocapid[
-            _named_id(
-                model, mujoco.mjtObj.mjOBJ_BODY, "virtual_object_marker"
-            )
+            _named_id(model, mujoco.mjtObj.mjOBJ_BODY, "virtual_object_marker")
         ]
         virtual_geom_id = _named_id(
-            model, mujoco.mjtObj.mjOBJ_GEOM, "virtual_object_marker_geom")
+            model, mujoco.mjtObj.mjOBJ_GEOM, "virtual_object_marker_geom"
+        )
         virtual_site_id = _named_id(
-            model, mujoco.mjtObj.mjOBJ_SITE, "virtual_object_marker_site")
+            model, mujoco.mjtObj.mjOBJ_SITE, "virtual_object_marker_site"
+        )
         self.bindings = state.ModelBindings(
-            lift_actuator=_named_id(
-                model, mujoco.mjtObj.mjOBJ_ACTUATOR, "lift_joint"),
+            lift_actuator=_named_id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "lift_joint"),
             lift_qpos=_joint_address(model, "lift_joint", model.jnt_qposadr),
             base=base_bindings,
             wheels=wheel_bindings,
@@ -335,10 +352,8 @@ class TeleopApp:
                 virtual_geom_rgba=model.geom_rgba[virtual_geom_id],
                 virtual_site_rgba=model.site_rgba[virtual_site_id],
             ),
-            can_joint=_named_id(
-                model, mujoco.mjtObj.mjOBJ_JOINT, "can_free"),
-            can_geom=_named_id(
-                model, mujoco.mjtObj.mjOBJ_GEOM, "can_geom"),
+            can_joint=_named_id(model, mujoco.mjtObj.mjOBJ_JOINT, "can_free"),
+            can_geom=_named_id(model, mujoco.mjtObj.mjOBJ_GEOM, "can_geom"),
         )
         self._apply_default_imitation_pose()
         targets.set_home_references(self)
@@ -346,34 +361,37 @@ class TeleopApp:
     def _apply_default_imitation_pose(self):
         """Apply the policy collection pose before teleop targets are created."""
         self.arm_qpos_indices = {
-            side: np.asarray([
-                _joint_address(self.model, name, self.model.jnt_qposadr)
-                for name in ARM_JOINTS[side]
-            ], dtype=int)
+            side: np.asarray(
+                [
+                    _joint_address(self.model, name, self.model.jnt_qposadr)
+                    for name in ARM_JOINTS[side]
+                ],
+                dtype=int,
+            )
             for side in SIDES
         }
         left_park = np.asarray(
-            SETTINGS.get("imitation.left_arm_park_position_rad"), dtype=float)
+            SETTINGS.get("imitation.left_arm_park_position_rad"), dtype=float
+        )
         head_fixed = np.asarray(
-            SETTINGS.get("imitation.head_fixed_position_rad"), dtype=float)
+            SETTINGS.get("imitation.head_fixed_position_rad"), dtype=float
+        )
         self.data.qpos[self.arm_qpos_indices["l"]] = left_park
         right_start = self.imitation_task.scenario.right_arm_start_position
         if right_start is not None:
             self.data.qpos[self.arm_qpos_indices["r"]] = right_start
         for name, value in zip(("head_joint1", "head_joint2"), head_fixed):
-            joint_id = _named_id(
-                self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            joint_id = _named_id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
             qpos = int(self.model.jnt_qposadr[joint_id])
             dof = int(self.model.jnt_dofadr[joint_id])
-            actuator = _named_id(
-                self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+            actuator = _named_id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
             self.data.qpos[qpos] = value
             self.data.qvel[dof] = 0.0
             self.data.ctrl[actuator] = value
         self.home_arm_positions = {
             "r": np.asarray(
-                self.data.qpos[self.arm_qpos_indices["r"]],
-                dtype=float).copy(),
+                self.data.qpos[self.arm_qpos_indices["r"]], dtype=float
+            ).copy(),
             "l": left_park.copy(),
         }
 
@@ -387,9 +405,7 @@ class TeleopApp:
                 for field in ("pos", "rpy")
             },
             **{
-                f"{field}_{side}": 0.0
-                for side in SIDES
-                for field in ("grasp", "thumb")
+                f"{field}_{side}": 0.0 for side in SIDES for field in ("grasp", "thumb")
             },
             "virtual_object_pos": VIRTUAL_OBJECT_HOME_POS.tolist(),
             "virtual_object_rpy": [0.0, 0.0, 0.0],
@@ -407,10 +423,14 @@ class TeleopApp:
         self.commanded_base_twist = base.BodyTwist()
         self._manual_override_active = False
         base_bindings = self.bindings.base
-        self._manual_reference_base_pose = np.array([
-            data.qpos[base_bindings.x_qpos], data.qpos[base_bindings.y_qpos],
-            data.qpos[base_bindings.yaw_qpos],
-        ], dtype=float)
+        self._manual_reference_base_pose = np.array(
+            [
+                data.qpos[base_bindings.x_qpos],
+                data.qpos[base_bindings.y_qpos],
+                data.qpos[base_bindings.yaw_qpos],
+            ],
+            dtype=float,
+        )
         targets.sync_ik_mocaps_from_targets(self)
         self.contact_viz = False
         self.collision_viz = False
@@ -429,7 +449,8 @@ class TeleopApp:
         """메인 루프에서만 쓰는 상태(IK 웜스타트 값, 타이밍, 입력 헬퍼)."""
         self.q_des = {
             side: np.asarray(
-                self.data.qpos[self.arm_qpos_indices[side]], dtype=float).copy()
+                self.data.qpos[self.arm_qpos_indices[side]], dtype=float
+            ).copy()
             for side in SIDES
         }
         # 손별 제어 모드: "ik"(EE 포즈 슬라이더 -> whole-body solver) 또는
@@ -440,8 +461,7 @@ class TeleopApp:
         # 리프트에 강체로 붙어 그대로 오르내리기만 해서 흔들림이 아예 없다.
         self.arm_mode = {"r": "ik", "l": "ik"}
         self.fk_q_deg = {
-            side: np.degrees(q_des).tolist()
-            for side, q_des in self.q_des.items()
+            side: np.degrees(q_des).tolist() for side, q_des in self.q_des.items()
         }
         self.frame_dt = 1.0 / LOOP_HZ
         self.steps_per_frame = max(1, round(self.frame_dt / self.model.opt.timestep))
@@ -455,7 +475,8 @@ class TeleopApp:
         self.act_policy_run_index = 0
         self.act_policy_checkpoint_index = 0
         self.act_policy_max_steps = max(
-            1, getattr(self, "_initial_policy_max_steps", 500))
+            1, getattr(self, "_initial_policy_max_steps", 500)
+        )
         self.act_policy_status = ""
         self.act_policy_load_request = None
         self.act_policy_env = None
@@ -476,19 +497,18 @@ class TeleopApp:
         self.act_policy_finish_request = None
         self._act_policy_base_hold_backup = None
         self.refresh_act_policies()
-        initial_checkpoint = getattr(
-            self, "_initial_policy_checkpoint", None)
+        initial_checkpoint = getattr(self, "_initial_policy_checkpoint", None)
         if initial_checkpoint is not None:
             self.request_act_policy_launch(
-                initial_checkpoint, self.act_policy_max_steps)
+                initial_checkpoint, self.act_policy_max_steps
+            )
 
     def refresh_act_policies(self):
         """Refresh checkpoints and apply the selected representation filter."""
         selected_run = None
         selected_checkpoint = None
         if self.act_policy_runs:
-            run_index = min(
-                self.act_policy_run_index, len(self.act_policy_runs) - 1)
+            run_index = min(self.act_policy_run_index, len(self.act_policy_runs) - 1)
             selected = self.act_policy_runs[run_index]
             selected_run = selected.name
             if selected.checkpoints:
@@ -499,29 +519,38 @@ class TeleopApp:
                 selected_checkpoint = selected.checkpoints[checkpoint_index].name
 
         discovered_runs = discover_policy_runs()
-        requested_representation = getattr(
-            self, "act_policy_representation", "auto")
+        requested_representation = getattr(self, "act_policy_representation", "auto")
         self.act_policy_runs = tuple(
-            run for run in discovered_runs
-            if (requested_representation == "auto"
-                or run.representation == requested_representation)
+            run
+            for run in discovered_runs
+            if (
+                requested_representation == "auto"
+                or run.representation == requested_representation
+            )
         )
         self.act_policy_run_index = next(
-            (index for index, run in enumerate(self.act_policy_runs)
-             if run.name == selected_run),
+            (
+                index
+                for index, run in enumerate(self.act_policy_runs)
+                if run.name == selected_run
+            ),
             0,
         )
         self.act_policy_checkpoint_index = 0
         if self.act_policy_runs:
             run = self.act_policy_runs[self.act_policy_run_index]
             self.act_policy_checkpoint_index = next(
-                (index for index, checkpoint in enumerate(run.checkpoints)
-                 if checkpoint.name == selected_checkpoint),
+                (
+                    index
+                    for index, checkpoint in enumerate(run.checkpoints)
+                    if checkpoint.name == selected_checkpoint
+                ),
                 0,
             )
             self.act_policy_status = (
                 f"Found {len(self.act_policy_runs)} "
-                f"{requested_representation.upper()} policy run(s)")
+                f"{requested_representation.upper()} policy run(s)"
+            )
         else:
             roots = ", ".join(str(path) for path in ACT_OUTPUT_DIRS)
             self.act_policy_status = f"No ACT checkpoints found in {roots}"
@@ -530,8 +559,7 @@ class TeleopApp:
         """Change the checkpoint-list filter and next-load representation."""
         representation = str(representation).lower()
         if representation not in POLICY_REPRESENTATION_NAMES:
-            raise ValueError(
-                "policy representation must be auto, joint, or task")
+            raise ValueError("policy representation must be auto, joint, or task")
         if representation == self.act_policy_representation:
             return False
         self.act_policy_representation = representation
@@ -557,18 +585,19 @@ class TeleopApp:
         if runner is not None:
             seconds = steps / self.act_policy_env.actual_control_hz
             self.act_policy_status = (
-                f"PTE f={steps} ({seconds:.3f}s); temporal buffer reset")
+                f"PTE f={steps} ({seconds:.3f}s); temporal buffer reset"
+            )
         return True
 
     def request_act_policy_launch(self, checkpoint, max_steps):
         """Validate and queue a checkpoint for loading in the current window."""
         checkpoint = Path(checkpoint).resolve()
         if not any(
-                _is_relative_to(checkpoint, root.resolve())
-                for root in ACT_OUTPUT_DIRS):
+            _is_relative_to(checkpoint, root.resolve()) for root in ACT_OUTPUT_DIRS
+        ):
             self.act_policy_status = (
-                "Checkpoint must be inside outputs/act or "
-                "outputs/act_modular")
+                "Checkpoint must be inside outputs/act or outputs/act_modular"
+            )
             return False
         if not checkpoint.is_file() or checkpoint.suffix != ".ckpt":
             self.act_policy_status = "Selected checkpoint is unavailable"
@@ -604,21 +633,22 @@ class TeleopApp:
     def _capture_base_hold_before_policy(self):
         backup = []
         for name in ("base_x", "base_y", "base_yaw"):
-            joint_id = _named_id(
-                self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+            joint_id = _named_id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
             dof = int(self.model.jnt_dofadr[joint_id])
-            backup.append((
-                joint_id, dof,
-                float(self.model.jnt_stiffness[joint_id]),
-                float(self.model.dof_damping[dof]),
-            ))
+            backup.append(
+                (
+                    joint_id,
+                    dof,
+                    float(self.model.jnt_stiffness[joint_id]),
+                    float(self.model.dof_damping[dof]),
+                )
+            )
         self._act_policy_base_hold_backup = tuple(backup)
 
     def _restore_base_hold_after_policy(self):
         if self._act_policy_base_hold_backup is None:
             return
-        for joint_id, dof, stiffness, damping in (
-                self._act_policy_base_hold_backup):
+        for joint_id, dof, stiffness, damping in self._act_policy_base_hold_backup:
             self.model.jnt_stiffness[joint_id] = stiffness
             self.model.dof_damping[dof] = damping
         self._act_policy_base_hold_backup = None
@@ -641,42 +671,53 @@ class TeleopApp:
             )
 
             runner = ACTPolicyRunner(
-                checkpoint, self.act_policy_stats,
+                checkpoint,
+                self.act_policy_stats,
                 device=self.act_policy_device,
-                representation=getattr(
-                    self, "act_policy_representation", "auto"),
+                representation=getattr(self, "act_policy_representation", "auto"),
                 proleptic_steps=getattr(
-                    self, "act_policy_pte_steps", DEFAULT_POLICY_PTE_STEPS))
+                    self, "act_policy_pte_steps", DEFAULT_POLICY_PTE_STEPS
+                ),
+            )
             self._capture_base_hold_before_policy()
             environment = AIWorkerMujocoEnv(
-                model_path=MODEL_PATH, model=self.model, data=self.data,
-                camera_names=runner.camera_names, render_images=True,
-                seed=self.act_policy_seed, reset_on_init=False,
+                model_path=MODEL_PATH,
+                model=self.model,
+                data=self.data,
+                camera_names=runner.camera_names,
+                render_images=True,
+                seed=self.act_policy_seed,
+                reset_on_init=False,
                 task=self.imitation_task,
                 render_context=self.context,
-                make_context_current=(
-                    lambda: glfw.make_context_current(self.window)))
-            if not np.isclose(
-                    environment.actual_control_hz, 1.0 / self.frame_dt):
-                raise ValueError(
-                    "ACT and teleop control frequencies must match")
+                make_context_current=(lambda: glfw.make_context_current(self.window)),
+            )
+            if not np.isclose(environment.actual_control_hz, 1.0 / self.frame_dt):
+                raise ValueError("ACT and teleop control frequencies must match")
             if getattr(self, "act_policy_rerun_enabled", False):
                 timestamp = time.strftime("%Y%m%d_%H%M%S")
                 suffix = time.time_ns() % 1_000_000_000
                 rerun_path = (
-                    checkpoint.parent.parent / "rerun"
-                    / (f"teleop_{runner.representation}_{timestamp}_"
-                       f"{suffix:09d}.rrd"))
+                    checkpoint.parent.parent
+                    / "rerun"
+                    / (f"teleop_{runner.representation}_{timestamp}_{suffix:09d}.rrd")
+                )
                 rerun_logger = RolloutRerunLogger(
-                    rerun_path, runner.camera_names,
+                    rerun_path,
+                    runner.camera_names,
                     application_id="aiworker_teleop_policy",
                     live=True,
                     port=getattr(self, "act_policy_rerun_port", 9877),
                     frame_stride=max(
-                        1, round(environment.actual_control_hz /
-                                 getattr(
-                                     self, "act_policy_rerun_hz",
-                                     DEFAULT_POLICY_RERUN_LOG_HZ))))
+                        1,
+                        round(
+                            environment.actual_control_hz
+                            / getattr(
+                                self, "act_policy_rerun_hz", DEFAULT_POLICY_RERUN_LOG_HZ
+                            )
+                        ),
+                    ),
+                )
                 rerun_logger.__enter__()
         except Exception as error:
             if rerun_logger is not None:
@@ -692,8 +733,7 @@ class TeleopApp:
         self.act_policy_env = environment
         self.act_policy_rerun_logger = rerun_logger
         self.act_policy_rerun_frame = 0
-        self.act_policy_rerun_path = (
-            None if rerun_logger is None else rerun_logger.path)
+        self.act_policy_rerun_path = None if rerun_logger is None else rerun_logger.path
         self.act_policy_checkpoint = checkpoint
         self.act_policy_observation = environment.get_observation()
         self.act_policy_info = None
@@ -703,15 +743,18 @@ class TeleopApp:
         self.act_policy_finish_request = None
         self.act_policy_status = (
             f"ACT {runner.representation}-space policy running; "
-            f"PTE f={runner.proleptic_steps}")
+            f"PTE f={runner.proleptic_steps}"
+        )
         if runner.representation == "task":
             self.act_policy_status += (
-                f"; IK speed {self.act_policy_ik_speed_scale:.2f}x")
+                f"; IK speed {self.act_policy_ik_speed_scale:.2f}x"
+            )
         if rerun_logger is not None:
             self.act_policy_status += (
                 f"; Rerun :{self.act_policy_rerun_port} -> "
                 f"{rerun_logger.path.name} "
-                f"(~{environment.actual_control_hz / rerun_logger.frame_stride:.1f}Hz)")
+                f"(~{environment.actual_control_hz / rerun_logger.frame_stride:.1f}Hz)"
+            )
         # Operator-only IK targets are not part of policy observations and are
         # distracting while the arm-only controller owns the robot.
         self.opt.geomgroup[5] = 0
@@ -747,11 +790,9 @@ class TeleopApp:
             return
         policy_qpos = self.act_policy_env.get_qpos()
         hand_poses = {
-            side: (
-                measured.position.copy(), measured.quaternion.copy())
+            side: (measured.position.copy(), measured.quaternion.copy())
             for side in SIDES
-            for measured in (
-                self.whole_body_solver.site_state(self.data, side),)
+            for measured in (self.whole_body_solver.site_state(self.data, side),)
         }
         self._close_act_policy()
         # ``mujoco.Renderer.close`` tears down an offscreen render context.
@@ -768,17 +809,20 @@ class TeleopApp:
             self.arm_mode[side] = "ik"
             position, quaternion = hand_poses[side]
             self.targets[f"pos_{side}"] = targets.world_to_target_pos(
-                self, side, position)
+                self, side, position
+            )
             self.targets[f"rpy_{side}"] = list(
-                targets.world_quat_to_target_rpy(
-                    self, side, quaternion))
+                targets.world_quat_to_target_rpy(self, side, quaternion)
+            )
             self.smoothed_pos[side] = np.asarray(
-                self.targets[f"pos_{side}"], dtype=float).copy()
+                self.targets[f"pos_{side}"], dtype=float
+            ).copy()
             self.smoothed_rpy[side] = np.asarray(
-                self.targets[f"rpy_{side}"], dtype=float).copy()
+                self.targets[f"rpy_{side}"], dtype=float
+            ).copy()
             measured_arm = np.asarray(
-                self.data.qpos[self.arm_qpos_indices[side]],
-                dtype=float).copy()
+                self.data.qpos[self.arm_qpos_indices[side]], dtype=float
+            ).copy()
             self.q_des[side] = measured_arm
             self.fk_q_deg[side] = np.degrees(measured_arm).tolist()
         self.targets["grasp_l"] = float(policy_qpos[7])
@@ -786,8 +830,7 @@ class TeleopApp:
         self.targets["grasp_r"] = float(policy_qpos[15])
         self.targets["thumb_r"] = float(policy_qpos[15])
         self.grab_state = dict.fromkeys(SIDES)
-        self.targets["lift"] = float(
-            self.data.qpos[self.bindings.lift_qpos])
+        self.targets["lift"] = float(self.data.qpos[self.bindings.lift_qpos])
         self.lift_cmd = self.targets["lift"]
         self.whole_body_solver.rebase(self.data, hand_poses)
         self.whole_body_base_twist = base.BodyTwist()
@@ -804,27 +847,32 @@ class TeleopApp:
             self.reset_act_policy()
         self.act_policy_running = not self.act_policy_running
         self.act_policy_status = (
-            "ACT policy running" if self.act_policy_running
-            else "ACT policy paused")
+            "ACT policy running" if self.act_policy_running else "ACT policy paused"
+        )
 
     def request_act_policy_step(self):
-        if (self.act_policy_env is not None
-                and self.act_policy_frame < self.act_policy_max_steps):
+        if (
+            self.act_policy_env is not None
+            and self.act_policy_frame < self.act_policy_max_steps
+        ):
             self.act_policy_step_requested = True
 
     def _task_policy_action_to_joint(self, task_action):
         """Convert one world-frame right EE pose action through arm-only IK."""
-        speed_scale = float(getattr(
-            self, "act_policy_ik_speed_scale",
-            DEFAULT_TASK_POLICY_IK_SPEED_SCALE))
+        speed_scale = float(
+            getattr(
+                self, "act_policy_ik_speed_scale", DEFAULT_TASK_POLICY_IK_SPEED_SCALE
+            )
+        )
         joint_action, diagnostics = task_action_to_joint(
-            self.act_policy_env, self.whole_body_solver, task_action,
-            speed_scale=speed_scale)
+            self.act_policy_env,
+            self.whole_body_solver,
+            task_action,
+            speed_scale=speed_scale,
+        )
         self.ik_err_mm["r"] = diagnostics.position_error_mm
-        self.collision_min_distance = (
-            diagnostics.minimum_collision_distance_m)
-        self.collision_constraint_violation = (
-            diagnostics.collision_constraint_violation)
+        self.collision_min_distance = diagnostics.minimum_collision_distance_m
+        self.collision_constraint_violation = diagnostics.collision_constraint_violation
         self.collision_active_pairs = diagnostics.active_collision_pairs
         return joint_action
 
@@ -851,7 +899,8 @@ class TeleopApp:
             return True
         try:
             action, self.act_policy_info = self.act_policy_runner.get_action(
-                self.act_policy_observation)
+                self.act_policy_observation
+            )
             if self.act_policy_runner.representation == "task":
                 task_action = action.copy()
                 action = self._task_policy_action_to_joint(task_action)
@@ -867,27 +916,27 @@ class TeleopApp:
                         "position_error_mm": self.ik_err_mm["r"],
                         "speed_scale": self.act_policy_ik_speed_scale,
                         "collision_constraint_violation": (
-                            self.collision_constraint_violation),
+                            self.collision_constraint_violation
+                        ),
                     }
                     if np.isfinite(self.collision_min_distance):
                         ik_metrics["minimum_collision_distance_m"] = (
-                            self.collision_min_distance)
+                            self.collision_min_distance
+                        )
                 try:
                     rerun_logger.log(
                         self.act_policy_rerun_frame,
                         self.act_policy_observation,
                         action,
-                        predicted_chunk=self.act_policy_info[
-                            "predicted_chunk"],
+                        predicted_chunk=self.act_policy_info["predicted_chunk"],
                         task_action=self.act_policy_info.get("task_action"),
                         representation=self.act_policy_runner.representation,
                         temporal_metrics={
-                            "proleptic_steps": self.act_policy_info[
-                                "proleptic_steps"],
-                            "target_timestep": self.act_policy_info[
-                                "target_timestep"],
+                            "proleptic_steps": self.act_policy_info["proleptic_steps"],
+                            "target_timestep": self.act_policy_info["target_timestep"],
                             "ensemble_candidate_count": self.act_policy_info[
-                                "ensemble_candidate_count"],
+                                "ensemble_candidate_count"
+                            ],
                         },
                         ik_metrics=ik_metrics,
                     )
@@ -898,7 +947,8 @@ class TeleopApp:
                     rerun_logger.__exit__(None, None, None)
                     self.act_policy_status = (
                         "Rerun disconnected; policy continues without live "
-                        f"logging ({type(error).__name__})")
+                        f"logging ({type(error).__name__})"
+                    )
                 else:
                     self.act_policy_rerun_frame += 1
             self.act_policy_observation = self.act_policy_env.step(action)
@@ -917,8 +967,8 @@ class TeleopApp:
     def reset_can(self):
         """학습과 같은 분포에서 캔만 재배치하고 로봇 자세는 유지한다."""
         self.initial_can_position = self.imitation_task.reset(
-            self.data, self.rng,
-            randomize_bin_colors=self.task_name == "can_color_sort")
+            self.data, self.rng, randomize_bin_colors=self.task_name == "can_color_sort"
+        )
         return self.initial_can_position
 
     def observe(self):
@@ -966,8 +1016,7 @@ class TeleopApp:
         else:
             state = self.whole_body_solver.site_state(self.data, side)
             target_pos = targets.world_to_target_pos(self, side, state.position)
-            rpy_deg = targets.world_quat_to_target_rpy(
-                self, side, state.quaternion)
+            rpy_deg = targets.world_quat_to_target_rpy(self, side, state.quaternion)
 
             self.targets[f"pos_{side}"] = target_pos
             self.targets[f"rpy_{side}"] = rpy_deg
@@ -989,23 +1038,26 @@ class TeleopApp:
             return
 
         hand_world_poses = {
-            side: tuple(
-                value.copy() for value in targets.target_world_pose(self, side))
+            side: tuple(value.copy() for value in targets.target_world_pose(self, side))
             for side in SIDES
         }
         virtual_world_pose = tuple(
-            value.copy() for value in targets.virtual_object_world_pose(self))
+            value.copy() for value in targets.virtual_object_world_pose(self)
+        )
         self.whole_body_enabled = enabled
 
         virtual_pos, virtual_quat = virtual_world_pose
         if enabled:
             self.targets["virtual_object_pos"] = targets.world_to_anchor_local_pos(
-                self, virtual_pos).tolist()
+                self, virtual_pos
+            ).tolist()
         else:
             self.targets["virtual_object_pos"] = targets.world_to_base_pos(
-                self, virtual_pos).tolist()
+                self, virtual_pos
+            ).tolist()
         self.targets["virtual_object_rpy"] = list(
-            targets.world_quat_to_virtual_rpy(self, virtual_quat))
+            targets.world_quat_to_virtual_rpy(self, virtual_quat)
+        )
 
         if self.cyclo_grasp_captured:
             # 양손 MoveL 모드에서는 캡처된 가상 물체가 최종 목표의 기준이다.
@@ -1013,19 +1065,23 @@ class TeleopApp:
         else:
             for side, (world_pos, world_quat) in hand_world_poses.items():
                 self.targets[f"pos_{side}"] = targets.world_to_target_pos(
-                    self, side, world_pos)
+                    self, side, world_pos
+                )
                 self.targets[f"rpy_{side}"] = list(
-                    targets.world_quat_to_target_rpy(
-                        self, side, world_quat))
+                    targets.world_quat_to_target_rpy(self, side, world_quat)
+                )
 
         for side in SIDES:
             self.smoothed_pos[side] = np.asarray(
-                self.targets[f"pos_{side}"], dtype=float).copy()
+                self.targets[f"pos_{side}"], dtype=float
+            ).copy()
             self.smoothed_rpy[side] = np.asarray(
-                self.targets[f"rpy_{side}"], dtype=float).copy()
+                self.targets[f"rpy_{side}"], dtype=float
+            ).copy()
 
         rebased_targets = {
-            side: targets.target_world_pose(self, side) for side in SIDES}
+            side: targets.target_world_pose(self, side) for side in SIDES
+        }
         self.whole_body_solver.rebase(self.data, rebased_targets)
         self.whole_body_base_twist = base.BodyTwist()
         self.commanded_base_twist = base.BodyTwist()
@@ -1115,23 +1171,40 @@ class TeleopApp:
         충돌하므로 사용하지 않는다. 좌우 이동도 회전 키나 보조키와 겹치지 않도록 별도
         대괄호 키에 배치했다.
         """
-        drive_keys = {"w": False, "a": False, "s": False, "d": False, "left": False, "right": False}
+        drive_keys = {
+            "w": False,
+            "a": False,
+            "s": False,
+            "d": False,
+            "left": False,
+            "right": False,
+        }
         lift_dir = 0.0
         if not io.want_capture_keyboard:
             drive_keys["w"] = glfw.get_key(self.window, glfw.KEY_UP) == glfw.PRESS
             drive_keys["s"] = glfw.get_key(self.window, glfw.KEY_DOWN) == glfw.PRESS
             drive_keys["left"] = glfw.get_key(self.window, glfw.KEY_LEFT) == glfw.PRESS
-            drive_keys["right"] = glfw.get_key(self.window, glfw.KEY_RIGHT) == glfw.PRESS
-            drive_keys["a"] = glfw.get_key(self.window, glfw.KEY_LEFT_BRACKET) == glfw.PRESS
-            drive_keys["d"] = glfw.get_key(self.window, glfw.KEY_RIGHT_BRACKET) == glfw.PRESS
+            drive_keys["right"] = (
+                glfw.get_key(self.window, glfw.KEY_RIGHT) == glfw.PRESS
+            )
+            drive_keys["a"] = (
+                glfw.get_key(self.window, glfw.KEY_LEFT_BRACKET) == glfw.PRESS
+            )
+            drive_keys["d"] = (
+                glfw.get_key(self.window, glfw.KEY_RIGHT_BRACKET) == glfw.PRESS
+            )
             if glfw.get_key(self.window, glfw.KEY_E) == glfw.PRESS:
                 lift_dir += 1.0
             if glfw.get_key(self.window, glfw.KEY_Q) == glfw.PRESS:
                 lift_dir -= 1.0
         if lift_dir != 0.0:
-            self.targets["lift"] = float(np.clip(
-                self.targets["lift"] + lift_dir * LIFT_JOG_SPEED * self.frame_dt,
-                LIFT_RANGE[0], LIFT_RANGE[1]))
+            self.targets["lift"] = float(
+                np.clip(
+                    self.targets["lift"] + lift_dir * LIFT_JOG_SPEED * self.frame_dt,
+                    LIFT_RANGE[0],
+                    LIFT_RANGE[1],
+                )
+            )
         return drive_keys
 
     def _update_grasp_targets(self):
@@ -1172,12 +1245,8 @@ class TeleopApp:
         """변화율이 제한된 UI 목표에서 월드 좌표계 자세를 만든다."""
         return {
             side: (
-                targets.target_pos_to_world_pos(
-                    self, side, self.smoothed_pos[side]
-                ),
-                targets.target_rpy_to_world_quat(
-                    self, side, self.smoothed_rpy[side]
-                ),
+                targets.target_pos_to_world_pos(self, side, self.smoothed_pos[side]),
+                targets.target_rpy_to_world_quat(self, side, self.smoothed_rpy[side]),
             )
             for side in SIDES
         }
@@ -1187,8 +1256,7 @@ class TeleopApp:
         data = self.data
         for _ in range(self.steps_per_frame):
             for side in SIDES:
-                self.arm_controllers[side].apply(
-                    data, command.arm_positions[side])
+                self.arm_controllers[side].apply(data, command.arm_positions[side])
             data.ctrl[self.bindings.lift_actuator] = command.lift_position
             for wheel, (steer_angle, drive_speed) in command.wheel_commands.items():
                 wheel_binding = self.bindings.wheels[wheel]
@@ -1230,8 +1298,7 @@ class TeleopApp:
             self._smoothed_target_poses(),
             self.targets["lift"],
             base_twist=(
-                manual_state.command if manual_state.keys_active
-                else base.BodyTwist()
+                manual_state.command if manual_state.keys_active else base.BodyTwist()
             ),
             grasp={side: self.targets[f"grasp_{side}"] for side in SIDES},
             thumb={side: self.targets[f"thumb_{side}"] for side in SIDES},
@@ -1251,71 +1318,113 @@ class TeleopApp:
         )
         wheel_cmds = control_loop.select_base_command(self, manual_state)
         control_command = control_loop.build_control_command(
-            self, task_command, wheel_cmds)
+            self, task_command, wheel_cmds
+        )
         self.last_control_command = control_command
         self._step_actuators(control_command)
         self.last_observation = self.observe()
+
 
 def _parse_args(argv):
     """텔레옵 CLI 인자를 파싱하고 설정 파일이 import 전에 적용됐는지 확인한다."""
     parser = argparse.ArgumentParser(description="FFW-SH5 teleop app")
     parser.add_argument(
-        "--config", metavar="YAML",
-        help=(f"설정 파일 경로. 실행 전에 {CONFIG_ENV_VAR} 환경 변수로 적용되며 "
-              "src/teleop_app.py 진입점을 사용할 때 지원됩니다."))
+        "--config",
+        metavar="YAML",
+        help=(
+            f"설정 파일 경로. 실행 전에 {CONFIG_ENV_VAR} 환경 변수로 적용되며 "
+            "src/teleop_app.py 진입점을 사용할 때 지원됩니다."
+        ),
+    )
     parser.add_argument(
-        "--env", type=int, choices=sorted(ENV_TASK_NAMES), default=0,
-        help=("실행 환경 번호입니다: 0=기존 초록 캔→파랑 상자, "
-              "1=네 색 캔 분류 (기본값: 0)."))
+        "--env",
+        type=int,
+        choices=sorted(ENV_TASK_NAMES),
+        default=0,
+        help=(
+            "실행 환경 번호입니다: 0=기존 초록 캔→파랑 상자, "
+            "1=네 색 캔 분류 (기본값: 0)."
+        ),
+    )
     parser.add_argument(
-        "--policy-checkpoint", metavar="CKPT",
-        help="ACT checkpoint를 현재 teleop 창에 바로 로드합니다.")
+        "--policy-checkpoint",
+        metavar="CKPT",
+        help="ACT checkpoint를 현재 teleop 창에 바로 로드합니다.",
+    )
     parser.add_argument(
-        "--policy-stats", metavar="PKL",
-        help="선택적인 ACT dataset_stats.pkl 경로입니다.")
+        "--policy-stats",
+        metavar="PKL",
+        help="선택적인 ACT dataset_stats.pkl 경로입니다.",
+    )
     parser.add_argument(
-        "--policy-device", default="auto",
-        help="ACT 추론 장치입니다 (기본값: auto).")
+        "--policy-device", default="auto", help="ACT 추론 장치입니다 (기본값: auto)."
+    )
     parser.add_argument(
-        "--policy-representation", choices=("auto", "joint", "task"),
+        "--policy-representation",
+        choices=("auto", "joint", "task"),
         default="auto",
-        help=("정책 입출력 표현입니다. auto는 checkpoint metadata에서 "
-              "자동 판별합니다 (기본값: auto)."))
+        help=(
+            "정책 입출력 표현입니다. auto는 checkpoint metadata에서 "
+            "자동 판별합니다 (기본값: auto)."
+        ),
+    )
     parser.add_argument(
-        "--policy-rerun", action="store_true",
-        help="정책 rollout을 Rerun Viewer로 열고 .rrd 파일로 저장합니다.")
+        "--policy-rerun",
+        action="store_true",
+        help="정책 rollout을 Rerun Viewer로 열고 .rrd 파일로 저장합니다.",
+    )
     parser.add_argument(
-        "--policy-rerun-port", type=int, default=9877,
-        help="정책 Rerun Viewer 포트입니다 (기본값: 9877).")
+        "--policy-rerun-port",
+        type=int,
+        default=9877,
+        help="정책 Rerun Viewer 포트입니다 (기본값: 9877).",
+    )
     parser.add_argument(
-        "--policy-rerun-hz", type=float,
+        "--policy-rerun-hz",
+        type=float,
         default=DEFAULT_POLICY_RERUN_LOG_HZ,
-        help=("정책 제어 주기와 독립적인 Rerun 기록 주기입니다 "
-              f"(기본값: {DEFAULT_POLICY_RERUN_LOG_HZ:g} Hz)."))
+        help=(
+            "정책 제어 주기와 독립적인 Rerun 기록 주기입니다 "
+            f"(기본값: {DEFAULT_POLICY_RERUN_LOG_HZ:g} Hz)."
+        ),
+    )
     parser.add_argument(
-        "--policy-ik-speed-scale", type=float,
+        "--policy-ik-speed-scale",
+        type=float,
         default=DEFAULT_TASK_POLICY_IK_SPEED_SCALE,
-        help=("task-space 정책의 오른팔 IK pose 추종 속도 배율입니다. "
-              "관절/충돌 안전 상한은 유지됩니다 (기본값: "
-              f"{DEFAULT_TASK_POLICY_IK_SPEED_SCALE:g})."))
+        help=(
+            "task-space 정책의 오른팔 IK pose 추종 속도 배율입니다. "
+            "관절/충돌 안전 상한은 유지됩니다 (기본값: "
+            f"{DEFAULT_TASK_POLICY_IK_SPEED_SCALE:g})."
+        ),
+    )
     parser.add_argument(
-        "--policy-pte-steps", type=int, default=DEFAULT_POLICY_PTE_STEPS,
-        help=("현재보다 몇 control step 미래의 ACT action을 실행할지 정합니다. "
-              "0은 기존 temporal ensemble입니다 (기본값: "
-              f"{DEFAULT_POLICY_PTE_STEPS})."))
+        "--policy-pte-steps",
+        type=int,
+        default=DEFAULT_POLICY_PTE_STEPS,
+        help=(
+            "현재보다 몇 control step 미래의 ACT action을 실행할지 정합니다. "
+            "0은 기존 temporal ensemble입니다 (기본값: "
+            f"{DEFAULT_POLICY_PTE_STEPS})."
+        ),
+    )
     parser.add_argument(
-        "--policy-seed", type=int, default=1000,
-        help="ACT policy UI reset seed입니다.")
+        "--policy-seed", type=int, default=1000, help="ACT policy UI reset seed입니다."
+    )
     parser.add_argument(
-        "--policy-max-steps", type=int, default=500,
-        help="ACT policy UI rollout 최대 step입니다 (기본값: 500).")
+        "--policy-max-steps",
+        type=int,
+        default=500,
+        help="ACT policy UI rollout 최대 step입니다 (기본값: 500).",
+    )
     args = parser.parse_args(argv)
     if args.config:
         requested = str(Path(args.config).expanduser().resolve())
         if requested != str(SETTINGS.path.resolve()):
             raise RuntimeError(
                 "--config는 모듈 import 전에 적용해야 합니다. "
-                "python3 src/teleop_app.py --config <파일>로 실행하세요.")
+                "python3 src/teleop_app.py --config <파일>로 실행하세요."
+            )
     return args
 
 

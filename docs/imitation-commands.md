@@ -32,10 +32,11 @@ W&B를 사용하지 않으면 `config/imitation/act.yaml`의 `wandb.enabled`를 
 | Rerun dataset 보기 | `python3 src/il.py rerun --episode datasets/can_to_box/episode_000000.hdf5` | `.rrd` |
 | physics replay | `python3 src/il.py replay --dataset-dir datasets/can_to_box --episode-idx 0` | qpos 재현 결과 |
 | ACT 학습 | `python3 src/il.py train --config config/imitation/act.yaml` | checkpoint, metric, W&B run |
-| Joint/Task ACT 학습 | `python3 src/il.py train-modular --config config/imitation/act_color_sort_joint.yaml` | 표현별 독립 checkpoint |
+| Joint/Task ACT 학습 | `python3 src/il.py train --config config/imitation/act_color_sort_joint.yaml` | 표현별 독립 checkpoint |
 | closed-loop 평가 | `python3 src/il.py evaluate --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt` | `evaluation.json` |
 | 색상 분류 평가 행렬 | `python3 src/il.py evaluate-color-sort` | 4 정책 × 5 PTE × 100회 CSV/JSON |
 | expert/policy 비교 | `python3 src/il.py compare --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt --episode datasets/can_to_box/episode_000000.hdf5` | comparison `.rrd` |
+| ACT Grad-CAM | `python3 src/il.py gradcam --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt --episode datasets/can_to_box/episode_000000.hdf5` | 카메라별 PNG overlay와 원본 `.npz` |
 | interactive policy UI | `python3 src/teleop_app.py` | UI에서 `outputs/act`의 ACT 모델 선택 |
 
 ## Record Demonstrations
@@ -117,16 +118,17 @@ metrics를 포함한다.
 새 데이터를 추가했다면 새 `run_name`을 지정하고 다시 학습한다. 현재 trainer는
 checkpoint resume을 제공하지 않으므로 새 전체 dataset으로 stats와 split을 다시 만든다.
 
-Joint/Task 표현 비교와 150 episode 설정은 별도의 modular 명령을 사용한다.
+Joint/Task 표현 비교와 150 episode 설정도 같은 `train` 명령을 사용한다. YAML의
+`representation: joint|task`만 달라진다.
 
 ```bash
-python3 src/il.py train-modular \
+python3 src/il.py train \
   --config config/imitation/act_color_sort_joint.yaml
-python3 src/il.py train-modular \
+python3 src/il.py train \
   --config config/imitation/act_color_sort_task.yaml
-python3 src/il.py train-modular \
+python3 src/il.py train \
   --config config/imitation/act_color_sort_joint_aug150.yaml
-python3 src/il.py train-modular \
+python3 src/il.py train \
   --config config/imitation/act_color_sort_task_aug150.yaml
 ```
 
@@ -156,6 +158,63 @@ python3 src/il.py compare \
 `evaluate`의 `--no-rerun`은 rollout Rerun 기록을 끈다. `--stats`는 checkpoint
 옆의 `dataset_stats.pkl` 대신 별도 통계 파일을 사용할 때만 지정한다.
 
+## Explain ACT Predictions with Grad-CAM
+
+ACT는 분류 logit이 아니라 연속 action chunk를 출력한다. 따라서 이 명령의 Grad-CAM은
+물체 class가 아니라 **선택한 action 출력에 영향을 준 이미지 영역**을 설명한다. 아래
+`--target chunk`는 한 checkpoint 안에서 전체 출력 민감도를 빠르게 확인하는 진단값이며,
+Joint와 Task 표현을 같은 물리 의미로 비교하는 target이 아니다.
+
+```bash
+python3 src/il.py gradcam \
+  --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt \
+  --episode datasets/can_color_sort/episode_000147.hdf5 \
+  --frames 0 120 200 280 350 \
+  --target chunk \
+  --output-dir outputs/analysis/gradcam/<run>_episode147
+```
+
+Task-space 정책의 특정 미래 운동을 분석할 수도 있다. Task action index는
+`0:3=world xyz`, `3:7=wxyz quaternion`, `7=grasp`다. 예시는 현재 frame에서
+89-step 뒤의 음의 world-y 이동을 설명한다.
+
+```bash
+python3 src/il.py gradcam \
+  --checkpoint outputs/act_modular/can_color_sort_act_task/checkpoints/policy_best.ckpt \
+  --episode datasets/can_color_sort/episode_000147.hdf5 \
+  --frames 120 200 \
+  --target action \
+  --chunk-step 89 \
+  --action-index 1 \
+  --target-sign -1 \
+  --output-dir outputs/analysis/gradcam/task_episode147_ee_y_negative
+```
+
+Joint action index는 오른팔 관절 `0:7`과 grasp `7`이므로 Joint의 한 관절과 Task의
+Cartesian 축을 직접 같은 의미로 비교하면 안 된다. 특정 Task 운동의 진단에는
+`--target action`을 사용한다. PNG는 RGB, Grad-CAM,
+overlay를 담고 `.npz`는 heatmap, 정규화 전 heatmap 최댓값, gradient 절댓값 평균,
+예측 chunk, target score를 보존한다. 정규화된 색만 비교하지 말고 원 신호 크기도 함께
+확인해야 매우 작은 gradient가 과장되어 보이는 것을 피할 수 있다.
+
+Joint/Task를 공정하게 비교할 때는 두 표현을 world-frame EE 방향으로 통일한다. 아래
+폐루프 분석은 Task 출력의 EE Y를 직접 사용하고, Joint 출력은 현재 MuJoCo Jacobian의
+Y row와 `action_std`로 투영한다. +Y/-Y를 모두 원본 저장하며 expert trajectory나 성공
+결과를 target 선택에 사용하지 않는다.
+
+```bash
+PYTHONPATH=src MUJOCO_GL=egl python3 scripts/analyze_closed_loop_ee_y_gradcam.py \
+  --output-dir outputs/analysis/closed_loop_gradcam_ee_y_<run>
+```
+
+정확한 target 정의와 해석 한계는
+[ACT 연구 보고서](research-report.md#8-closed-loop-signed-ee-y-grad-cam)를 참고한다.
+
+Grad-CAM은 상관 기반의 국소 설명이며 색상 사용의 인과적 증거는 아니다. 결론을 낼 때는
+성공/실패 episode와 색·상자 배치를 균형 있게 표본화하고, 동일 장면의 색상 가림 또는
+교체 실험과 함께 확인한다. 마지막 image feature map이 낮은 공간 해상도이므로 heatmap이
+물체 경계보다 넓게 나타나는 것도 정상이다.
+
 ## Run the Interactive Policy UI
 
 ```bash
@@ -184,21 +243,6 @@ python3 src/teleop_app.py \
   --policy-max-steps 500
 ```
 
-또는 직접 진입점을 사용한다.
-
-```bash
-python3 src/il.py policy \
-  --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt \
-  --device auto --seed 1000 --max-steps 500
-```
-
-UI의 `Max steps`에서 rollout 길이를 바꾸고 `Run policy` 버튼으로 시작한다. 정책은
-성공하거나 최대 step에 도달하면 자동으로 정지한다. 완료 후 버튼을 다시 누르면 환경과
-temporal aggregation을 reset한 뒤 새 rollout을 시작한다. `SPACE`는 실행/정지, `N`은
-한 action step, `R`은 robot, 고정 head, 고정 left arm, can pose와 temporal
-aggregation을 함께 reset한다. 이 UI는 checkpoint에 저장된 카메라 목록과 policy
-index를 사용한다.
-
 ## CLI Layout
 
 `src/il.py`가 가벼운 단일 dispatcher이며 선택된 command 모듈만 지연 import한다.
@@ -211,11 +255,11 @@ index를 사용한다.
 | `rerun` | `ffw_sh5_grasp.cli.rerun` | episode Rerun recording/stream |
 | `replay` | `ffw_sh5_grasp.cli.replay` | expert action physics replay |
 | `train` | `ffw_sh5_grasp.cli.train` | ACT train |
-| `train-modular` | `ffw_sh5_grasp.cli.train_modular` | Joint/Task ACT train |
+| `train-modular` | `ffw_sh5_grasp.cli.train` | 이전 명령 호환용 `train` 별칭 |
 | `evaluate` | `ffw_sh5_grasp.cli.evaluate` | closed-loop evaluation |
 | `evaluate-color-sort` | `ffw_sh5_grasp.cli.evaluate_color_sort` | 데이터/표현/PTE 평가 행렬 |
 | `compare` | `ffw_sh5_grasp.cli.compare` | expert와 policy action 비교 |
-| `policy` | `ffw_sh5_grasp.cli.policy` | 독립 ACT policy UI |
+| `gradcam` | `ffw_sh5_grasp.cli.gradcam` | ACT 연속 action target의 카메라별 Grad-CAM |
 
 기존 teleop의 진입점은 `src/teleop_app.py`로 분리되어 있다.
 
