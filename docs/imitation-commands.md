@@ -17,6 +17,11 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements-imitation.txt
 ```
 
+이 파일은 `requirements-runtime.txt`를 자동으로 포함한다. 공개 Hugging Face 자산도
+받을 때는 대신 `requirements-huggingface.txt`, 코드 수정과 전체 테스트까지 할 때는
+`requirements-dev.txt`를 설치한다. 프로필별 포함 관계와 CPU-only PyTorch 설치는
+[빠른 시작의 설치 프로필](getting-started.md#installation-profiles)을 참고한다.
+
 W&B를 사용할 때만 `wandb login`을 실행한다. 사용하지 않으면 학습 YAML의
 `wandb.enabled`를 `false`로 설정한다. GUI 앱은 Linux 데스크톱 OpenGL 세션에서
 실행하고, headless renderer가 필요한 명령은 NVIDIA 환경에서 `MUJOCO_GL=egl`, CI와

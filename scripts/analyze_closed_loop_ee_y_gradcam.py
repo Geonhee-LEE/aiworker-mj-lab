@@ -144,7 +144,7 @@ def _preflight(repo: Path) -> dict:
         split_path = run_dir / "episode_splits.json"
         if not checkpoint_path.is_file():
             raise FileNotFoundError(checkpoint_path)
-        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
         representation = spec["representation"]
         config = checkpoint["policy_config"]
         metadata = checkpoint.get("representation_metadata", {})

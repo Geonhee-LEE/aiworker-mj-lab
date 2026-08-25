@@ -38,7 +38,12 @@ ffw-sh5-grasp/
 ├── datasets/                          # 수집한 HDF5/Rerun 데이터, Git 제외
 ├── outputs/                           # 학습·평가 결과, Git 제외
 ├── mkdocs.yml                         # 문서 사이트 설정과 내비게이션
+├── requirements-runtime.txt           # 기본 teleop Python 의존성
 ├── requirements-imitation.txt         # IL 추가 Python 의존성
+├── requirements-huggingface.txt       # 공개 자산 다운로드·배포 의존성
+├── requirements-dev.txt               # pytest·Ruff 개발 의존성
+├── requirements-docs.txt              # MkDocs 문서 의존성
+├── requirements-presentation.txt      # 보고서·발표 자료 생성 의존성
 ├── README.md                          # 저장소 첫 안내
 ├── CHANGELOG.md                       # 변경 기록
 └── .gitignore                         # 생성물·로컬 상태 제외 규칙
@@ -227,7 +232,12 @@ flowchart LR
 | `.gitignore` | 가상환경, 캐시, dataset, output, Rerun, MuJoCo/ImGui 로컬 상태를 Git에서 제외한다. |
 | `README.md` | 설치, 실행과 프로젝트 개요를 제공하는 저장소 시작점이다. |
 | `CHANGELOG.md` | 기능·구조·동작 변경 이력을 기록한다. |
+| `requirements-runtime.txt` | MuJoCo, GLFW, ImGui, NumPy와 YAML 등 기본 teleop 의존성이다. |
 | `requirements-imitation.txt` | PyTorch, torchvision, HDF5, Rerun, W&B 등 IL 기능의 추가 의존성이다. |
+| `requirements-huggingface.txt` | IL 의존성에 Hugging Face Hub CLI를 추가한다. |
+| `requirements-dev.txt` | Hugging Face 프로필에 pytest와 Ruff를 추가한다. |
+| `requirements-docs.txt` | MkDocs와 Material theme를 설치한다. runtime과 독립적이다. |
+| `requirements-presentation.txt` | 평가 그래프와 PPTX를 다시 만드는 분석 도구를 설치한다. |
 | `mkdocs.yml` | Material 테마, Markdown 확장, 문서 메뉴와 배포 사이트 정보를 정의한다. |
 | `config/default.yaml` | teleop, 카메라, IK, 충돌 회피, arm/base/grasp 제어 기본값이다. |
 | `config/imitation/dataset.yaml` | task, 저장 경로, 주기, camera, 차원과 split의 참고 manifest다. 현재 Python 코드에서 읽지 않으므로 실제 수집 설정은 `default.yaml`, 학습 split은 `act.yaml`이 결정한다. |
@@ -375,7 +385,7 @@ dataset 검증만 할 때 PyTorch나 GLFW를 불필요하게 import하지 않는
 | 파일 | 핵심 객체·함수 | 실제 책임 |
 |---|---|---|
 | `imitation/__init__.py` | package 설명 | IL 하위 package의 경계를 설명한다. 구현 객체를 다시 export하지 않는다. |
-| `data/__init__.py` | `EpisodeData`, `load_episode`, `write_episode`, `resolve_episode_path`, `ACTION_*` | 자주 쓰는 episode I/O와 schema 이름만 공개한다. recorder·validator는 해당 module에서 직접 import한다. |
+| `data/__init__.py` | `EpisodeData`, `load_episode`, `write_episode`, `resolve_episode_path`, `ACTION_*` | 공개 API는 유지하되 HDF5 episode I/O는 최초 접근 시 지연 import한다. 일반 teleop의 schema import가 `h5py`를 요구하지 않는다. |
 | `data/schema.py` | `ACTION_NAMES`, `ACTION_DIM=16`, `RIGHT_POLICY_INDICES=8..15`, `ARM_JOINTS` | 저장 파일, leader, environment와 runner가 공유하는 left-first index 계약의 단일 출처다. |
 | `data/episode.py` | `EpisodeData`, `validate_episode`, `write_episode`, `load_episode`, `next_episode_path` | 배열 길이·16D shape·finite·RGB dtype을 검사한다. 임시 파일에 쓴 뒤 `os.replace`하여 episode를 원자적으로 저장하고, schema version과 attrs를 기록한다. |
 | `data/recording.py` | `EpisodeBuffer`, `EpisodeRecorder` | environment를 step하기 **전**의 `obs_t`와 그때 적용할 `action_t`를 복사해 정렬한다. 완료 시 seed, control Hz, model hash, Git commit, camera와 성공 여부를 attrs에 넣는다. |

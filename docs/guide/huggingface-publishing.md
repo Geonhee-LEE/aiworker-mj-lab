@@ -4,6 +4,13 @@
 검증하고 Hugging Face에 업로드하는 유지관리자 절차다. 정책 또는 데이터를 받으려는
 사용자는 [공개 정책·데이터셋](../huggingface.md)을 따른다.
 
+저장소 루트에서 Hugging Face 업로드 도구와 그 하위 runtime/imitation 의존성을 먼저
+설치한다.
+
+```bash
+python -m pip install -r requirements-huggingface.txt
+```
+
 ## 1. 로컬 release 검증
 
 업로드 전 release 디렉터리를 만들고 HDF5 schema, 모델 산출물과 hash manifest를

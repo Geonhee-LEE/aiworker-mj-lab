@@ -1,5 +1,6 @@
 -r requirements-runtime.txt
 
+h5py>=3.10
 imageio[ffmpeg]>=2.34
 matplotlib>=3.10,<4
 pillow>=10.0

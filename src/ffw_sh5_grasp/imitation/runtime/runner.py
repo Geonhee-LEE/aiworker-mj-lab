@@ -102,7 +102,7 @@ class ACTPolicyRunner:
             else device
         )
         checkpoint = torch.load(
-            checkpoint_path, map_location=self.device, weights_only=False
+            checkpoint_path, map_location=self.device, weights_only=True
         )
         requested_representation = str(representation).strip().lower()
         if requested_representation not in POLICY_REPRESENTATIONS:

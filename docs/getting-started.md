@@ -27,7 +27,7 @@ cd aiworker-mj-lab
 패널을 별도 OS 창에 띄운다. ROS2 workspace, `colcon`, MoveIt, controller manager는
 필요하지 않다.
 
-## 2. 가상환경과 설치
+## 2. 가상환경과 설치 프로필 { #installation-profiles }
 
 시스템 Python을 직접 수정하지 않도록 가상환경을 권장한다.
 
@@ -39,20 +39,44 @@ python -m pip install -r requirements-runtime.txt
 ```
 
 `requirements-runtime.txt`에는 일반 teleop 실행에 필요한 MuJoCo, GLFW, ImGui,
-NumPy, YAML과 앱의 ACT checkpoint 탐색 경로가 사용하는 HDF5 의존성이 포함된다.
-시스템 Python을 직접 수정하는 방식은 권장하지 않는다.
+NumPy와 YAML이 포함된다. HDF5, PyTorch와 시각화 패키지는 모방학습 기능을 설치할 때만
+추가된다. 시스템 Python을 직접 수정하는 방식은 권장하지 않는다.
+
+필요한 기능에 따라 아래 프로필 중 하나를 선택한다. 상위 프로필은 왼쪽의 하위
+프로필을 requirements 파일 안에서 자동으로 포함하므로 여러 개를 중복 설치할 필요가
+없다.
+
+| 목적 | 설치 명령 | 포함 관계 |
+|---|---|---|
+| 기본 teleop | `python -m pip install -r requirements-runtime.txt` | MuJoCo, GUI, NumPy, YAML |
+| 시연 기록·ACT 학습·평가 | `python -m pip install -r requirements-imitation.txt` | runtime + HDF5, PyTorch, 영상, Rerun, W&B |
+| 공개 정책·dataset 다운로드 | `python -m pip install -r requirements-huggingface.txt` | imitation + Hugging Face CLI |
+| 코드 개발·전체 테스트 | `python -m pip install -r requirements-dev.txt` | Hugging Face 프로필 + pytest, Ruff |
+| 문서 사이트 빌드 | `python -m pip install -r requirements-docs.txt` | MkDocs만 별도 설치 |
+| 발표 자료 생성 | `python -m pip install -r requirements-presentation.txt` | plot, HDF5, PPTX 도구만 별도 설치 |
 
 설치 확인:
 
 ```bash
-python -c "import glfw, h5py, mujoco, numpy, yaml; from imgui_bundle import imgui; print('runtime imports OK')"
+python -c "import glfw, mujoco, numpy, yaml; from imgui_bundle import imgui; print('runtime imports OK')"
 ```
 
-ACT 학습·평가 또는 공개 checkpoint와 dataset 다운로드까지 사용할 때는 같은
-가상환경에 모방학습/Hugging Face 의존성을 추가한다.
+ACT 학습·평가만 사용하면 `requirements-imitation.txt`, 공개 checkpoint와 dataset
+다운로드까지 사용하면 `requirements-huggingface.txt`를 설치한다.
 
 ```bash
 python -m pip install -r requirements-huggingface.txt
+```
+
+기본 명령은 PyPI의 PyTorch를 설치한다. GPU driver/CUDA 조합에 맞는 wheel이 필요한
+환경에서는 해당 PyTorch를 먼저 설치한 뒤 requirements 명령을 실행한다. CI와 CPU-only
+headless 환경은 다음 순서를 사용한다.
+
+```bash
+python -m pip install \
+  --index-url https://download.pytorch.org/whl/cpu \
+  torch torchvision
+python -m pip install -r requirements-imitation.txt
 ```
 
 공개 정책을 바로 실행하거나 공개 HDF5로 학습하는 절차는

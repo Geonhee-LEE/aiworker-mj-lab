@@ -3,6 +3,19 @@
 이 프로젝트는 창을 띄워 눈으로만 확인하지 않는다. 알고리즘 단위, kinematic 한 step,
 실제 actuator/contact 물리를 서로 다른 gate로 반복 검증한다.
 
+## 테스트 의존성 설치
+
+저장소 전체의 Python 검사와 문서 빌드를 실행하려면 개발 의존성과 문서 의존성을
+설치한다. `requirements-dev.txt`는 runtime, imitation, Hugging Face 의존성을 모두
+포함하고, MkDocs 도구는 `requirements-docs.txt`로 분리되어 있다.
+
+```bash
+python -m pip install -r requirements-dev.txt -r requirements-docs.txt
+```
+
+기본 텔레오퍼레이션만 실행한다면 이 전체 구성이 필요하지 않다. 용도별 최소 설치는
+[빠른 시작의 설치 프로필](getting-started.md#installation-profiles)을 참고한다.
+
 ## 어떤 테스트를 실행할까
 
 | 변경한 영역 | 최소 테스트 | 릴리스 전 추가 테스트 |

@@ -18,3 +18,4 @@ wandb/
 *.pptx
 .cache/
 huggingface/release/
+uv.lock

@@ -1,4 +1,3 @@
--r requirements-imitation.txt
 -r requirements-huggingface.txt
 
 pytest>=9.0,<10

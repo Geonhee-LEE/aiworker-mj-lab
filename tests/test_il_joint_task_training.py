@@ -134,12 +134,12 @@ def test_task_smoke_training_writes_representation_metadata():
         best = torch.load(
             run_dir / "checkpoints/policy_best.ckpt",
             map_location="cpu",
-            weights_only=False,
+            weights_only=True,
         )
         last = torch.load(
             run_dir / "checkpoints/policy_last.ckpt",
             map_location="cpu",
-            weights_only=False,
+            weights_only=True,
         )
         assert best["representation"] == "task"
         assert best["representation_metadata"]["ee_pose_frame"] == "world"

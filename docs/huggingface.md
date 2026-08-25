@@ -37,6 +37,11 @@ hf download ggh-png/ffw-sh5-act-color-sort \
 필수 파일이 함께 내려왔는지 확인한다. `dataset_stats.pkl` 없이 checkpoint만 복사하면
 정규화가 달라지므로 실행하지 않는다.
 
+!!! warning "직렬화 파일의 출처"
+    Checkpoint는 안전한 tensor 전용 모드로 읽지만 `dataset_stats.pkl`은 Python pickle
+    형식이다. 이 문서의 공식 저장소 또는 직접 생성해 신뢰할 수 있는 파일만 사용하고,
+    제3자가 수정한 checkpoint·통계 파일은 로드하지 않는다.
+
 ```bash
 test -f outputs/hf/ffw-sh5-act-color-sort/policies/d150_joint/checkpoints/policy_best.ckpt
 test -f outputs/hf/ffw-sh5-act-color-sort/policies/d150_joint/dataset_stats.pkl

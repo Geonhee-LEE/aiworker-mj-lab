@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- 모방학습 문서를 공개 자산 사용, 데이터·실행, 결과, 모델 이해와 개발 경로로 재구성
+- 기본 teleop과 HDF5/학습 의존성을 분리하고 episode I/O를 지연 import하도록 정리
+- ACT checkpoint를 PyTorch tensor 전용 안전 모드로 로드하고 직렬화 파일 신뢰 경계 문서화
+- CI dependency cache와 requirements 상속 중복을 정리하고 optional import 회귀 테스트 추가
+
 ## 3.1.0 — 2026-08-25
 
 - `IK_Teleoperation_v3.pdf`의 Task→IK teleoperation→dataset→ACT→PTE→평가 흐름을
