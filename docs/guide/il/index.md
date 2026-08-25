@@ -1,91 +1,97 @@
-# 모방학습(IL) 전체 안내
+# 모방학습 안내
 
-모방학습(Imitation Learning, IL)은 전문가가 수행한 관측과 행동을 데이터로 모아
-정책(policy)이 같은 행동을 재현하도록 학습하는 방법이다. 이 프로젝트의 목표는
-ALOHA 로봇 자체를 복제하는 것이 아니라, ALOHA 논문에서 제안한 ACT 학습 구조를
-FFW-SH5와 `can_to_box` 및 `can_color_sort` 작업에 적용하는 것이다.
+이 프로젝트는 ALOHA 논문의 ACT 구조를 FFW-SH5 MuJoCo의 `can_to_box`와
+`can_color_sort` 작업에 적용한다. 처음부터 모든 문서를 읽을 필요는 없다. 아래에서
+현재 목적에 맞는 경로 하나를 선택한다.
 
-문서 계층은 다음처럼 이해하면 된다.
+<div class="grid cards" markdown>
 
-```text
-모방학습(IL)
-├── 행동 복제와 데이터 계약
-├── 시각 encoder
-│   └── CNN / ResNet18
-├── 시계열 모델
-│   ├── RNN / LSTM / GRU
-│   └── Transformer
-├── 잠재변수 모델
-│   └── VAE / CVAE
-└── ACT
-    ├── ResNet18 시각 특징
-    ├── CVAE Transformer
-    ├── Action chunking
-    └── Temporal ensemble
-```
+-   :material-download: **학습된 정책을 바로 실행하고 싶다**
 
-ACT는 IL의 한 구현 방법이다. 따라서 문서 메뉴도 **IL → ACT**로 묶는 것이 맞다.
-RNN은 ACT의 구성 요소는 아니지만, 로봇 시계열 정책에서 Transformer를 사용하는
-이유와 차이를 이해하기 위한 기반 지식으로 함께 다룬다.
+    D97/D150 Joint·Task checkpoint를 받은 뒤 closed-loop 평가 또는 GUI를 실행한다.
 
-## 권장 학습 순서
+    [공개 정책 다운로드](../../huggingface.md#2-d97d150)
 
-| 순서 | 문서 | 이해할 질문 |
-|---:|---|---|
-| 1 | [행동 복제와 데이터](foundations.md) | 무엇을 입력하고 어떤 행동을 정답으로 학습하는가? |
-| 2 | [CNN과 ResNet18](vision-encoder.md) | RGB가 어떻게 공간 feature token이 되는가? |
-| 3 | [RNN과 Transformer](sequence-models.md) | 시간 문맥을 어떻게 표현하며 ACT는 왜 Transformer를 쓰는가? |
-| 4 | [VAE와 CVAE](cvae.md) | 같은 상황에서 여러 올바른 행동이 있을 때 어떻게 표현하는가? |
-| 5 | [ACT 아키텍처](act.md) | 위 요소가 어떻게 하나의 action-chunk 정책이 되는가? |
-| 6 | [논문과 현재 구현 대응](../act-implementation.md) | 논문과 FFW-SH5 구현에서 같은 점과 다른 점은 무엇인가? |
-| 7 | [IL 코드 구조](../imitation-code-structure.md) | 수정하려는 책임이 어느 Python 모듈에 있는가? |
-| 8 | [Joint/Task 학습과 PTE 평가](../../modular-act-training.md) | 같은 조건의 정책을 어떻게 재현하고 비교하는가? |
+-   :material-database-plus: **데이터를 모아 직접 학습하고 싶다**
 
-## 이 프로젝트의 학습 문제
+    시연 데이터 기록, HDF5 검증, ACT 학습과 평가를 순서대로 진행한다.
 
-한 timestep의 수집 관측은 양팔 관절 상태, 양쪽 EE pose와 세 카메라 영상이다.
-ACT 설정의 `camera_names`에서 학습에 사용할 시점만 고른다. 학습 target은 현재부터
-미래까지의 오른팔 행동 묶음이다.
+    [명령어 레퍼런스](../../imitation-commands.md) ·
+    [Joint/Task 실험](../../modular-act-training.md)
 
-| 구분 | 현재 구현 |
-|---|---|
-| 관측 상태 | Joint: 오른팔 7축 + grasp, Task: 오른손 EE pose 7 + grasp |
-| 시각 관측 | 기본 `cam_high`, `cam_right_wrist`; HDF5에는 left wrist도 저장 |
-| 학습 target | `chunk_size`개의 8D 절대 joint target 또는 EE pose target |
-| 기본 chunk | 90 step |
-| 제어 주기 | 25 Hz |
-| 정책 출력 | `[batch, 90, 8]` action chunk |
-| 실행 | Joint는 actuator target, Task는 오른팔 IK로 변환 후 ensemble/PTE 적용 |
+-   :material-chart-box: **실험 결과를 해석하고 싶다**
 
-HDF5에는 ALOHA 호환 양팔 16차원과 양쪽 EE pose를 모두 저장한다. Joint 정책은 오른팔
-index `8..15`, Task 정책은 오른손 pose와 grasp만 선택한다. 하나의 원본 데이터셋에서
-표현만 바꾸므로 데이터 수와 split을 고정한 공정한 비교가 가능하다.
+    D97/D150, Joint/Task와 PTE의 성공률·시간·색상별 차이를 확인한다.
 
-## 학습과 추론의 차이
+    [연구 개요](../../research-report.md) ·
+    [평가 결과](../../evaluation-results.md)
+
+-   :material-book-open-variant: **ACT를 이해하거나 코드를 수정하고 싶다**
+
+    행동 복제부터 CVAE Transformer와 현재 Python 모듈의 책임까지 따라간다.
+
+    [ACT 아키텍처](act.md) ·
+    [코드 구조](../imitation-code-structure.md)
+
+</div>
+
+## 전체 작업 흐름
 
 ```mermaid
 flowchart LR
-    subgraph Train["학습"]
-        TO["qpos + RGB"] --> TP["ACT"]
-        TA["정답 action chunk"] --> TP
-        TP --> TL["L1 + beta·KL"]
-    end
-    subgraph Infer["추론"]
-        IO["현재 qpos + RGB"] --> IP["ACT, z=0"]
-        IP --> IC["미래 action chunk"]
-        IC --> IE["temporal ensemble"]
-        IE --> IA["현재 action 실행"]
-    end
+    HF["공개 checkpoint"] --> EVAL["closed-loop 평가"]
+    REC["시연 데이터 기록"] --> VALID["HDF5 검증"]
+    VALID --> TRAIN["Joint 또는 Task ACT 학습"]
+    TRAIN --> EVAL
+    EVAL --> ANALYZE["성공률 · 시간 · Grad-CAM"]
 ```
 
-학습 때만 정답 action chunk가 CVAE posterior의 입력으로 들어간다. 추론 때는 미래의
-정답을 알 수 없으므로 action 입력이 없고 latent `z=0`을 사용한다. 이 차이는
-데이터 누수 없이 ACT를 구현했는지 확인하는 가장 중요한 기준 중 하나다.
+| 단계 | 기준 문서 | 여기서 확인할 내용 |
+|---|---|---|
+| 설치·공개 자산 | [공개 정책·데이터셋](../../huggingface.md) | 고정 revision 다운로드, 실행, HDF5 경로 |
+| 명령 실행 | [모방학습 명령어](../../imitation-commands.md) | record, validate, train, evaluate, Grad-CAM 옵션 |
+| 데이터 계약 | [데이터 수집과 실기 전환](../imitation-sim2real.md) | 관측/action 정렬, camera, 실제 로봇 경계 |
+| 비교 실험 | [Joint/Task 학습과 PTE](../../modular-act-training.md) | 표현별 YAML, split, 평가 행렬 |
+| 결과 | [평가 결과 상세 분석](../../evaluation-results.md) | 2,000 rollout 통계와 해석 한계 |
+| 구현 | [모방학습 코드 구조](../imitation-code-structure.md) | 패키지 책임과 변경별 검증 |
 
-## 다음 단계
+## 현재 정책 계약
 
-- 실행 명령은 [모방학습 명령어](../../imitation-commands.md)를 참고한다.
-- 데이터 수집부터 실제 로봇 전환까지는
-  [데이터와 실기 전환](../imitation-sim2real.md)을 참고한다.
-- 모델을 수정하기 전에는 먼저 [ACT 아키텍처](act.md)의 tensor 흐름과
-  [논문 대응표](../act-implementation.md)를 확인한다.
+| 항목 | 값 |
+|---|---|
+| Task | `can_to_box`, `can_color_sort` |
+| Policy camera | `cam_high`, `cam_right_wrist` |
+| 수집 주기 | RGB, qpos/action, EE pose를 같은 25 Hz tick에 기록 |
+| Joint 표현 | 오른팔 관절 7 + grasp |
+| Task 표현 | world-frame 오른손 EE pose 7 + grasp |
+| ACT 출력 | 기본 `[batch, 90, 8]` action chunk |
+| 실행 | Joint는 actuator target, Task는 bounded right-arm IK로 변환 |
+| PTE | chunk의 `t+f` 후보를 현재 시점에 사용; 센서 주기는 바꾸지 않음 |
+
+Checkpoint는 representation metadata와 그 학습 split에서 계산한
+`dataset_stats.pkl`을 함께 사용해야 한다. 공개 dataset은
+`datasets/can_color_sort_hf/data` 아래로 내려오며, 로컬 수집 기본 경로와 다르다.
+
+## 개념을 공부하는 순서
+
+실행보다 이론이 목적이라면 아래 순서로 읽는다.
+
+1. [행동 복제와 데이터](foundations.md)
+2. [CNN과 ResNet18](vision-encoder.md)
+3. [RNN과 Transformer](sequence-models.md)
+4. [VAE와 CVAE](cvae.md)
+5. [ACT 아키텍처](act.md)
+6. [논문과 현재 구현 대응](../act-implementation.md)
+
+RNN은 현재 ACT 정책의 구성 요소가 아니라 Transformer와의 차이를 이해하기 위한 기반
+지식이다. 구현을 수정할 때는 마지막으로 [코드 구조](../imitation-code-structure.md)와
+[테스트와 검증](../../testing.md)을 확인한다.
+
+## 먼저 피해야 할 실수
+
+- HDF5 expert action을 closed-loop 정책 평가 결과로 사용하지 않는다.
+- Joint checkpoint와 Task `dataset_stats.pkl`처럼 representation과 통계를 섞지 않는다.
+- D97에는 주황·파랑 학습 episode가 없으므로 D150과의 차이를 순수 데이터 수 효과로
+  해석하지 않는다.
+- PTE `f`를 camera와 joint state의 sampling rate 변경으로 해석하지 않는다.
+- Grad-CAM을 색상 인식의 인과적 증거로 과장하지 않는다.

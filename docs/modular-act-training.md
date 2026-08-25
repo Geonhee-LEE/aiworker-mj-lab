@@ -1,4 +1,9 @@
-# Joint/Task ACT training
+# Joint/Task ACT 실험 재현
+
+이 문서는 D97/D150에서 Joint와 Task 표현을 같은 조건으로 학습·평가하는 **실험
+계약**을 설명한다. 설치와 개별 CLI 옵션은 [모방학습 명령어](imitation-commands.md),
+공개 checkpoint 실행은 [공개 정책·데이터셋](huggingface.md), 수치 해석은
+[평가 결과 상세 분석](evaluation-results.md)을 사용한다.
 
 하나의 `trainer.py`가 YAML의 `representation`에 따라 오른팔 정책의 좌표 표현만
 바꿔 학습한다.

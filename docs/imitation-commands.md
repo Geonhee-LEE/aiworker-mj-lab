@@ -1,4 +1,4 @@
-# Imitation Learning Command Reference
+# 모방학습 명령어 레퍼런스
 
 이 문서는 can-to-box 오른팔 ACT 워크플로의 모든 실행 명령을 한 곳에 정리한다.
 모든 명령은 저장소 루트에서 Python 3.12 가상환경을 활성화한 뒤 실행한다.
@@ -8,7 +8,7 @@ git clone https://github.com/ggh-png/aiworker-mj-lab.git
 cd aiworker-mj-lab
 ```
 
-## Setup
+## 설치
 
 ```bash
 python3.12 -m venv .venv
@@ -26,7 +26,7 @@ OSMesa 환경에서 `MUJOCO_GL=osmesa`를 지정한다.
 [Hugging Face 정책·데이터셋](huggingface.md)을 따른다. 해당 문서에는 고정된 `v3.1.0`
 revision 다운로드, checkpoint 실행, HDF5 검증과 재학습 경로 연결이 포함되어 있다.
 
-## Workflow
+## 작업 흐름
 
 | 단계 | 명령 | 결과 |
 |---|---|---|
@@ -45,7 +45,7 @@ revision 다운로드, checkpoint 실행, HDF5 검증과 재학습 경로 연결
 | ACT Grad-CAM | `python3 src/il.py gradcam --checkpoint outputs/act/<run>/checkpoints/policy_best.ckpt --episode datasets/can_to_box/episode_000000.hdf5` | 카메라별 PNG overlay와 원본 `.npz` |
 | interactive policy UI | `python3 src/teleop_app.py` | UI에서 `outputs/act`의 ACT 모델 선택 |
 
-## Record Demonstrations
+## 시연 데이터 기록
 
 ```bash
 python3 src/il.py record \
@@ -71,7 +71,7 @@ python3 src/il.py record \
   --variant blue
 ```
 
-## Inspect and Replay Episodes
+## HDF5 검사와 replay
 
 학습 전에 전체 dataset의 shape, dtype, timestep 정렬, finite 값과 필수 카메라를 확인한다.
 
@@ -110,7 +110,7 @@ python3 src/il.py rerun \
   --live --port 9877
 ```
 
-## Train ACT
+## ACT 학습
 
 ```bash
 python3 src/il.py train --config config/imitation/act.yaml
@@ -145,7 +145,7 @@ python3 src/il.py evaluate-color-sort --dry-run
 MUJOCO_GL=egl python3 src/il.py evaluate-color-sort --num-episodes 100
 ```
 
-## Evaluate and Compare
+## 평가와 expert 비교
 
 ```bash
 python3 src/il.py evaluate \
@@ -164,7 +164,7 @@ python3 src/il.py compare \
 `evaluate`의 `--no-rerun`은 rollout Rerun 기록을 끈다. `--stats`는 checkpoint
 옆의 `dataset_stats.pkl` 대신 별도 통계 파일을 사용할 때만 지정한다.
 
-## Explain ACT Predictions with Grad-CAM
+## ACT 예측 Grad-CAM { #explain-act-predictions-with-grad-cam }
 
 ACT는 분류 logit이 아니라 연속 action chunk를 출력한다. 따라서 이 명령의 Grad-CAM은
 물체 class가 아니라 **선택한 action 출력에 영향을 준 이미지 영역**을 설명한다. 아래
@@ -221,7 +221,7 @@ Grad-CAM은 상관 기반의 국소 설명이며 색상 사용의 인과적 증�
 교체 실험과 함께 확인한다. 마지막 image feature map이 낮은 공간 해상도이므로 heatmap이
 물체 경계보다 넓게 나타나는 것도 정상이다.
 
-## Run the Interactive Policy UI
+## 대화형 Policy UI
 
 ```bash
 python3 src/teleop_app.py
@@ -249,7 +249,7 @@ python3 src/teleop_app.py \
   --policy-max-steps 500
 ```
 
-## CLI Layout
+## CLI 구현 위치
 
 `src/il.py`가 가벼운 단일 dispatcher이며 선택된 command 모듈만 지연 import한다.
 

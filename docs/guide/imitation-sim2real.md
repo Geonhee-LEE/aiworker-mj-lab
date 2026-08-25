@@ -1,4 +1,8 @@
-# Arm-only ALOHA/ACT 파이프라인
+# 시연 데이터와 실기 전환
+
+이 문서는 arm-only ACT의 **데이터 계약과 실행 환경 경계**를 설명한다. 복사해서 실행할
+명령만 찾는 경우 [모방학습 명령어](../imitation-commands.md), Joint/Task 비교 설정은
+[Joint/Task ACT 실험](../modular-act-training.md)을 먼저 본다.
 
 현재 구현은 ROS와 Whole-body IK를 사용하지 않는 첫 모방학습 경로다. base와 lift는
 home reference에, head는 작업대를 보는 고정 pose에 유지된다. can-to-box v1은 오른팔 7축과 오른손 grasp만

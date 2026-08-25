@@ -194,51 +194,11 @@ metric과 plot이 있다. optimizer state가 큰 `policy_last.ckpt`, W&B와 Reru
 재현에 불필요하므로 배포하지 않는다. 전체 2,000-rollout 결과는
 `evaluation/experiment_summary.csv`에 포함된다.
 
-## 6. 유지관리자용 로컬 검증과 재배포
-
-업로드 전 release 디렉터리를 만들고 schema, 모델 산출물과 hash manifest를 검사한다.
-
-```bash
-python3 scripts/prepare_huggingface_release.py
-
-python3 scripts/publish_huggingface.py \
-  --dataset-repo-id ggh-png/ffw-sh5-can-color-sort \
-  --model-repo-id ggh-png/ffw-sh5-act-color-sort \
-  --revision-tag v3.1.0 \
-  --dry-run
-```
-
-실제 배포는 Hugging Face 로그인 후 명시적으로 수행한다. `--public`은 저장소 공개
-설정까지 적용하므로 asset과 checkpoint의 배포 권한을 먼저 확인해야 한다.
-
-```bash
-hf auth login
-HF_XET_HIGH_PERFORMANCE=1 python3 scripts/publish_huggingface.py \
-  --dataset-repo-id ggh-png/ffw-sh5-can-color-sort \
-  --model-repo-id ggh-png/ffw-sh5-act-color-sort \
-  --revision-tag v3.1.0 \
-  --public
-```
-
-업로드 뒤에는 두 저장소의 tag가 실제 main commit을 가리키는지 확인한다.
-
-```bash
-python3 - <<'PY'
-from huggingface_hub import HfApi
-
-api = HfApi()
-for repo_id, repo_type in (
-    ("ggh-png/ffw-sh5-can-color-sort", "dataset"),
-    ("ggh-png/ffw-sh5-act-color-sort", "model"),
-):
-    main = api.repo_info(repo_id, repo_type=repo_type).sha
-    tagged = api.repo_info(
-        repo_id, repo_type=repo_type, revision="v3.1.0"
-    ).sha
-    print(repo_id, main, tagged, main == tagged)
-PY
-```
+## 6. 사용 범위
 
 현재 카드는 원 프로젝트 asset 전체의 라이선스 검토가 끝나지 않았음을 분명히 하기
 위해 `license: other`를 사용한다. 실물 로봇 배포 전에는 카메라 보정, EE 좌표계,
 제어 주기, 관절/충돌 안전 계층과 sim-to-real 차이를 다시 검증해야 한다.
+
+새 revision을 업로드하는 저장소 유지관리자는
+[Hugging Face 재배포](guide/huggingface-publishing.md)를 따른다.
