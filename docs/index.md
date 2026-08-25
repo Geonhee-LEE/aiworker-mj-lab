@@ -53,6 +53,21 @@ FFW-SH5 양팔 모바일 로봇을 MuJoCo 물리에서 조작하는 텔레오퍼
 
 문제가 발생했다면 [증상별 문제 해결](troubleshooting.md)에서 바로 찾을 수 있다.
 
+## ACT 색상 분류 한눈에 보기
+
+<figure markdown>
+  ![D150 Joint와 Task 정책에서 PTE f=5, 10, 15, 20을 같은 초기 상태로 비교한 종합 GIF](assets/evaluation/d150-joint-task-pte-f05-f20.gif)
+  <figcaption>
+    같은 seed 195958와 초록 캔을 사용한 D150 closed-loop rollout. 위 행은 Joint,
+    아래 행은 Task이며 열은 왼쪽부터 f=5·10·15·20이다.
+  </figcaption>
+</figure>
+
+외부 관찰 카메라는 로봇, 테이블, 캔과 두 상자를 한 화면에 보여주는 시각화 전용
+뷰다. 이 영상은 PTE에 따른 동작 차이를 보여주는 단일 rollout 예시이며 성공률 통계는
+아니다. 조건별 100회 결과는 [평가 결과 상세 분석](evaluation-results.md), 같은 정책과
+데이터를 받는 방법은 [공개 정책·데이터셋](huggingface.md)에서 확인한다.
+
 ## 동작 흐름
 
 ```mermaid
