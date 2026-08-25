@@ -46,6 +46,15 @@ def validate_and_collect(source_dir: Path):
             seeds = tuple(int(trial["seed"]) for trial in trials)
             if len(trials) != int(config["num_episodes"]):
                 raise ValueError(f"trial count mismatch: {policy} F={f_value}")
+            configured_variants = config.get("object_variants")
+            if configured_variants is not None:
+                observed_variants = {trial["object_variant"] for trial in trials}
+                if observed_variants != set(configured_variants):
+                    raise ValueError(
+                        f"variant mismatch: {policy} F={f_value}: "
+                        f"configured={configured_variants}, "
+                        f"observed={sorted(observed_variants)}"
+                    )
             if common_seeds is None:
                 common_seeds = seeds
             elif seeds != common_seeds:
@@ -65,6 +74,8 @@ def validate_and_collect(source_dir: Path):
                     "chunk_size",
                 )
             }
+            if "object_variants" in config:
+                invariant_config["object_variants"] = config["object_variants"]
             if common_config is None:
                 common_config = invariant_config
             elif invariant_config != common_config:
@@ -159,7 +170,9 @@ def setup_axis(axis, title):
     axis.tick_params(which="minor", bottom=False, left=False)
 
 
-def create_combined_figure(output_dir, success, mean_time, counts, num_episodes):
+def create_combined_figure(
+    output_dir, success, mean_time, counts, num_episodes, variant_label
+):
     fig, axes = plt.subplots(1, 2, figsize=(15.5, 6.4), constrained_layout=True)
     success_image = axes[0].imshow(success, cmap="RdYlGn", vmin=0, vmax=100)
     setup_axis(axes[0], "Success rate")
@@ -210,7 +223,8 @@ def create_combined_figure(output_dir, success, mean_time, counts, num_episodes)
     fig.text(
         0.5,
         0.935,
-        f"{num_episodes} identical-seed closed-loop episodes per condition | 25 Hz",
+        f"{num_episodes} identical-seed closed-loop episodes per condition | "
+        f"{variant_label} | 25 Hz",
         ha="center",
         fontsize=11,
         color="#444444",
@@ -226,8 +240,14 @@ def create_combined_figure(output_dir, success, mean_time, counts, num_episodes)
 def write_outputs(output_dir, rows, seeds, common_config, source_dir):
     output_dir.mkdir(parents=True, exist_ok=False)
     success, mean_time, counts = matrices(rows)
+    object_variants = common_config.get("object_variants")
+    variant_label = (
+        "all can variants"
+        if object_variants is None
+        else "can variants: " + ", ".join(object_variants)
+    )
     png_path, pdf_path = create_combined_figure(
-        output_dir, success, mean_time, counts, len(seeds)
+        output_dir, success, mean_time, counts, len(seeds), variant_label
     )
 
     csv_path = output_dir / "heatmap_data.csv"
@@ -278,6 +298,7 @@ def write_outputs(output_dir, rows, seeds, common_config, source_dir):
         "The two panels use 100 real MuJoCo closed-loop evaluations per cell. "
         "Every policy/F condition uses the identical ordered seed set "
         f"{seeds[0]}–{seeds[-1]}.\n\n"
+        f"- Evaluated can variants: {variant_label}.\n"
         "- Left: stable-success rate (10 consecutive success steps).\n"
         "- Right: arithmetic mean evaluation time over all episodes. Failed "
         "episodes remain at the 20.0 s timeout, preventing low-success settings "

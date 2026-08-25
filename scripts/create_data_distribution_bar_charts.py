@@ -199,6 +199,8 @@ def create_distribution_overview(
 
     variants = list(VARIANTS)
     values = [variant_counts[variant] for variant in variants]
+    evaluation_total = sum(values)
+    evaluation_max = max(values, default=0)
     bars = axes[1, 0].bar(
         variants,
         values,
@@ -208,14 +210,19 @@ def create_distribution_overview(
     )
     axes[1, 0].bar_label(
         bars,
-        labels=[f"{value}\n({value:.0f}%)" for value in values],
+        labels=[
+            f"{value}\n({100.0 * value / evaluation_total:.0f}%)"
+            if evaluation_total
+            else "0\n(0%)"
+            for value in values
+        ],
         padding=3,
         fontweight="bold",
     )
     axes[1, 0].set(
         title="Evaluation seeds by can color",
         ylabel="Episodes",
-        ylim=(0, 31),
+        ylim=(0, max(1.0, evaluation_max * 1.22)),
     )
     axes[1, 0].title.set_fontweight("bold")
     style_axis(axes[1, 0])
@@ -255,7 +262,7 @@ def create_distribution_overview(
         ylabel="Episodes",
         xticks=x,
         xticklabels=[variant.capitalize() for variant in VARIANTS],
-        ylim=(0, 31),
+        ylim=(0, max(1.0, float(bottom.max()) * 1.22)),
     )
     axes[1, 1].title.set_fontweight("bold")
     axes[1, 1].legend(frameon=False, ncol=2)

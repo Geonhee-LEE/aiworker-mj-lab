@@ -150,6 +150,41 @@ python3 src/il.py evaluate-color-sort --dry-run
 MUJOCO_GL=egl python3 src/il.py evaluate-color-sort --num-episodes 100
 ```
 
+특정 캔 색만 평가할 때는 `--variant`를 반복한다. 아래 명령은 D97/D150의 Joint/Task와
+`F=0,5,10,15,20`을 주황·파랑 100개 공통 seed로 평가한다. 모든 cell은 동일한
+`195958..196057` seed 순서를 사용하며 기존 결과가 있으면 완료된 trial 다음부터
+재개한다.
+
+```bash
+MUJOCO_GL=egl python3 src/il.py evaluate-color-sort \
+  --policies d097_joint d097_task d150_joint d150_task \
+  --pte-steps 0 5 10 15 20 \
+  --num-episodes 100 --max-steps 500 --seed 195958 \
+  --variant orange --variant blue --device cuda \
+  --output-dir outputs/evaluation/can_color_sort_unseen_orange_blue
+
+python3 scripts/create_pte_success_time_heatmaps.py \
+  --source-dir outputs/evaluation/can_color_sort_unseen_orange_blue \
+  --output-dir outputs/analysis/unseen_orange_blue_heatmaps
+
+python3 scripts/create_data_distribution_bar_charts.py \
+  --evaluation-dir outputs/evaluation/can_color_sort_unseen_orange_blue \
+  --output-dir outputs/analysis/unseen_orange_blue_distributions
+```
+
+히트맵에서 성공률 우선·penalized time 차선으로 고른 F의 frame
+`0/100/200/300` Grad-CAM contact sheet는 다음 명령으로 만든다. 스크립트는 표시 seed를
+성공 여부가 아니라 각 색이 처음 등장하는 seed로 선택하고 ±world-EE-Y 원본 NPZ를 모두
+저장한다.
+
+```bash
+PYTHONPATH=src MUJOCO_GL=egl python3 \
+  scripts/create_unseen_pte_gradcam_contact_sheets.py \
+  --evaluation-dir outputs/evaluation/can_color_sort_unseen_orange_blue \
+  --heatmap-summary outputs/analysis/unseen_orange_blue_heatmaps/summary.json \
+  --output-dir outputs/analysis/unseen_orange_blue_gradcam
+```
+
 ## 평가와 expert 비교
 
 ```bash

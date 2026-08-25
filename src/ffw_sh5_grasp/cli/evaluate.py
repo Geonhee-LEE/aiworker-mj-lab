@@ -20,6 +20,16 @@ def main(argv=None):
         "--task", choices=("can_to_box", "can_color_sort"), default="can_to_box"
     )
     parser.add_argument(
+        "--variant",
+        action="append",
+        dest="object_variants",
+        choices=("green", "red", "orange", "blue"),
+        help=(
+            "평가에 스폰할 캔 variant를 제한합니다. 여러 색은 옵션을 반복합니다 "
+            "(예: --variant orange --variant blue)."
+        ),
+    )
+    parser.add_argument(
         "--representation", choices=("auto", "joint", "task"), default="auto"
     )
     parser.add_argument("--pte-steps", type=int, default=0)
@@ -45,6 +55,7 @@ def main(argv=None):
         rerun=not args.no_rerun,
         viewer=args.viewer,
         task_name=args.task,
+        object_variants=args.object_variants,
         representation=args.representation,
         proleptic_steps=args.pte_steps,
         temporal_decay=args.temporal_decay,

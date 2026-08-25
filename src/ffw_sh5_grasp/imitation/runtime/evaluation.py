@@ -164,6 +164,7 @@ def evaluate(
     rerun=True,
     viewer=False,
     task_name="can_to_box",
+    object_variants=None,
     representation="auto",
     proleptic_steps=0,
     temporal_decay=0.05,
@@ -180,6 +181,13 @@ def evaluate(
     output_dir = Path(output_dir or checkpoint.parent.parent / "evaluation").resolve()
     rollout_dir = output_dir / "rollouts"
     rollout_dir.mkdir(parents=True, exist_ok=True)
+    object_variants = (
+        None
+        if object_variants is None
+        else tuple(dict.fromkeys(str(name) for name in object_variants))
+    )
+    if object_variants == ():
+        raise ValueError("object_variants must not be empty")
     runner = ACTPolicyRunner(
         checkpoint,
         stats_path,
@@ -211,6 +219,8 @@ def evaluate(
         "camera_names": list(runner.camera_names),
         "chunk_size": int(runner.config.chunk_size),
     }
+    if object_variants is not None:
+        run_config["object_variants"] = list(object_variants)
     config_path = output_dir / "evaluation_config.json"
     trials_path = output_dir / "trials.jsonl"
     results = _load_resumable_trials(config_path, trials_path, run_config)
@@ -221,6 +231,7 @@ def evaluate(
         render_images=True,
         camera_names=runner.camera_names,
         task_name=task_name,
+        object_variants=object_variants,
         randomize_bin_colors=task_name == "can_color_sort",
     ) as env:
         solver = None

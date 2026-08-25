@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 주황·파랑 같은 지정 can variant만 공통 seed로 평가하는 CLI와 PTE 분포/Grad-CAM 재현 도구 추가
 - 모방학습 문서를 공개 자산 사용, 데이터·실행, 결과, 모델 이해와 개발 경로로 재구성
 - 기본 teleop과 HDF5/학습 의존성을 분리하고 episode I/O를 지연 import하도록 정리
 - ACT checkpoint를 PyTorch tensor 전용 안전 모드로 로드하고 직렬화 파일 신뢰 경계 문서화

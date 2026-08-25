@@ -46,9 +46,12 @@ def _write_summary(path, rows):
         "policy",
         "data_count",
         "representation",
+        "object_variants",
         "pte_steps",
         "lookahead_s",
         "num_episodes",
+        "seed_first",
+        "seed_last",
         "success_count",
         "success_rate",
         "success_ci95_low",
@@ -85,6 +88,16 @@ def main(argv=None):
     parser.add_argument("--num-episodes", type=int, default=100)
     parser.add_argument("--max-steps", type=int, default=500)
     parser.add_argument("--seed", type=int, default=10000)
+    parser.add_argument(
+        "--variant",
+        action="append",
+        dest="object_variants",
+        choices=("green", "red", "orange", "blue"),
+        help=(
+            "평가에 스폰할 캔 variant를 제한합니다. 여러 색은 옵션을 반복합니다 "
+            "(예: --variant orange --variant blue)."
+        ),
+    )
     parser.add_argument("--device", default="auto")
     parser.add_argument("--temporal-decay", type=float, default=0.05)
     parser.add_argument("--task-ik-speed-scale", type=float, default=3.0)
@@ -109,11 +122,18 @@ def main(argv=None):
     if any(step < 0 for step in args.pte_steps):
         parser.error("--pte-steps values must be non-negative")
     pte_steps = tuple(dict.fromkeys(args.pte_steps))
+    object_variants = (
+        None
+        if args.object_variants is None
+        else tuple(dict.fromkeys(args.object_variants))
+    )
     selected = [(name, DEFAULT_POLICIES[name]) for name in args.policies]
     total = len(selected) * len(pte_steps) * args.num_episodes
     print(
         f"color-sort matrix: policies={len(selected)} "
         f"pte={list(pte_steps)} episodes/cell={args.num_episodes} "
+        f"variants={list(object_variants) if object_variants else 'all'} "
+        f"seeds={args.seed}..{args.seed + args.num_episodes - 1} "
         f"total_rollouts={total}",
         flush=True,
     )
@@ -145,6 +165,7 @@ def main(argv=None):
                 device=args.device,
                 rerun=args.rerun,
                 task_name="can_color_sort",
+                object_variants=object_variants,
                 representation=policy["representation"],
                 proleptic_steps=steps,
                 temporal_decay=args.temporal_decay,
@@ -175,9 +196,14 @@ def main(argv=None):
                     "policy": name,
                     "data_count": policy["data_count"],
                     "representation": policy["representation"],
+                    "object_variants": (
+                        "all" if object_variants is None else ",".join(object_variants)
+                    ),
                     "pte_steps": steps,
                     "lookahead_s": steps / result["control_hz"],
                     "num_episodes": result["num_episodes"],
+                    "seed_first": args.seed,
+                    "seed_last": args.seed + args.num_episodes - 1,
                     "success_count": result["success_count"],
                     "success_rate": result["success_rate"],
                     "success_ci95_low": ci_low,
