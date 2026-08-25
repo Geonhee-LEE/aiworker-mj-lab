@@ -1,24 +1,30 @@
 # Imitation Learning Command Reference
 
 이 문서는 can-to-box 오른팔 ACT 워크플로의 모든 실행 명령을 한 곳에 정리한다.
-모든 명령은 저장소 루트에서 실행한다.
+모든 명령은 저장소 루트에서 Python 3.12 가상환경을 활성화한 뒤 실행한다.
 
 ```bash
-cd /home/ggh/wsyoon/ffw-sh5-grasp
+git clone https://github.com/ggh-png/aiworker-mj-lab.git
+cd aiworker-mj-lab
 ```
 
 ## Setup
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install --upgrade pip
-python3 -m pip install -r requirements-imitation.txt
-wandb login
+python -m pip install --upgrade pip
+python -m pip install -r requirements-imitation.txt
 ```
 
-W&B를 사용하지 않으면 `config/imitation/act.yaml`의 `wandb.enabled`를 `false`로
-설정한다. GUI 앱은 Linux 데스크톱 OpenGL 세션에서 실행한다.
+W&B를 사용할 때만 `wandb login`을 실행한다. 사용하지 않으면 학습 YAML의
+`wandb.enabled`를 `false`로 설정한다. GUI 앱은 Linux 데스크톱 OpenGL 세션에서
+실행하고, headless renderer가 필요한 명령은 NVIDIA 환경에서 `MUJOCO_GL=egl`, CI와
+OSMesa 환경에서 `MUJOCO_GL=osmesa`를 지정한다.
+
+직접 수집·학습하지 않고 공개 정책과 dataset으로 시작하려면 먼저
+[Hugging Face 정책·데이터셋](huggingface.md)을 따른다. 해당 문서에는 고정된 `v3.1.0`
+revision 다운로드, checkpoint 실행, HDF5 검증과 재학습 경로 연결이 포함되어 있다.
 
 ## Workflow
 

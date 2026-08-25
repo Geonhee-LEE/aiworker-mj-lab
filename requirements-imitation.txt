@@ -1,11 +1,8 @@
-h5py>=3.10
+-r requirements-runtime.txt
+
 imageio[ffmpeg]>=2.34
-imgui-bundle>=1.6
 matplotlib>=3.10,<4
-mujoco>=3.2
-numpy>=2.0
 pillow>=10.0
-pyyaml>=6.0
 rerun-sdk>=0.36
 torch>=2.3
 torchvision>=0.18

@@ -127,7 +127,7 @@ nav:
                 - 평가 결과 상세 분석: evaluation-results.md
                 - 코드 구조: guide/imitation-code-structure.md
                 - 데이터와 실기 전환: guide/imitation-sim2real.md
-                - Hugging Face 배포: huggingface.md
+                - 공개 정책·데이터셋: huggingface.md
         - 검증과 확장:
             - 테스트와 검증: testing.md
             - 개발 체크리스트: guide/pitfalls.md

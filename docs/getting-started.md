@@ -3,11 +3,25 @@
 이 문서는 저장소를 처음 받은 사람이 앱을 실행하고, 베이스와 한 손을 움직이고,
 전신 제어 ON/OFF 차이를 확인하는 데 필요한 내용만 담는다.
 
-## 1. 준비 사항
+## 1. 준비 사항과 저장소 받기
 
 - Linux 데스크톱과 OpenGL을 사용할 수 있는 화면 세션
-- `python3`, `pip`, `venv`
-- 저장소 루트에서 명령 실행
+- Python 3.12와 `venv` (Ubuntu 24.04, Python 3.12에서 검증)
+- Git
+
+Ubuntu 24.04에서는 먼저 Python 가상환경과 headless OpenGL 런타임을 설치한다.
+
+```bash
+sudo apt-get update
+sudo apt-get install --yes python3.12-venv libgl1 libosmesa6
+```
+
+저장소를 받은 뒤 모든 명령을 저장소 루트에서 실행한다.
+
+```bash
+git clone https://github.com/ggh-png/aiworker-mj-lab.git
+cd aiworker-mj-lab
+```
 
 현재 앱은 주 GLFW 창에 MuJoCo 3D 화면을 띄우고, ImGui multi-viewport로 기능별
 패널을 별도 OS 창에 띄운다. ROS2 workspace, `colcon`, MoveIt, controller manager는
@@ -18,28 +32,40 @@
 시스템 Python을 직접 수정하지 않도록 가상환경을 권장한다.
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install mujoco numpy glfw imgui-bundle pyyaml
+python -m pip install -r requirements-runtime.txt
 ```
 
-이미 시스템 환경에 설치되어 있다면 가상환경은 생략할 수 있다. 이미지 생성과 일부
-보조 스크립트까지 사용할 때만 `pillow`, `trimesh`가 추가로 필요하다.
+`requirements-runtime.txt`에는 일반 teleop 실행에 필요한 MuJoCo, GLFW, ImGui,
+NumPy, YAML과 앱의 ACT checkpoint 탐색 경로가 사용하는 HDF5 의존성이 포함된다.
+시스템 Python을 직접 수정하는 방식은 권장하지 않는다.
 
 설치 확인:
 
 ```bash
-python -c "import mujoco, numpy, glfw; from imgui_bundle import imgui; print('runtime imports OK')"
+python -c "import glfw, h5py, mujoco, numpy, yaml; from imgui_bundle import imgui; print('runtime imports OK')"
 ```
+
+ACT 학습·평가 또는 공개 checkpoint와 dataset 다운로드까지 사용할 때는 같은
+가상환경에 모방학습/Hugging Face 의존성을 추가한다.
+
+```bash
+python -m pip install -r requirements-huggingface.txt
+```
+
+공개 정책을 바로 실행하거나 공개 HDF5로 학습하는 절차는
+[정책·데이터셋 다운로드](huggingface.md)를 따른다. 직접 데이터를 기록하고 학습하려면
+[모방학습 명령어](imitation-commands.md)로 이동한다.
 
 ## 3. 먼저 headless 검증
 
 창을 띄우기 전에 모델과 핵심 알고리즘이 동작하는지 확인한다.
 
 ```bash
-python3 tests/test_phase_6.py
-python3 tests/test_whole_body.py
+python tests/test_phase_6.py
+python tests/test_whole_body.py
 ```
 
 마지막 줄이 각각 `PASS`면 marker/UI 상태와 whole-body/mobile/collision 알고리즘이
@@ -48,7 +74,7 @@ python3 tests/test_whole_body.py
 ## 4. 앱 실행
 
 ```bash
-python3 src/teleop_app.py
+python src/teleop_app.py
 ```
 
 속도, IK·제어 이득, 파지와 UI 범위를 바꾸려면 코드를 수정하지 말고

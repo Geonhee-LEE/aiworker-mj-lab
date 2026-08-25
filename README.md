@@ -43,14 +43,17 @@ Pinocchio, FCL, OSQP는 런타임 의존성이 아닙니다.
 
 ## 빠른 실행
 
-Linux 데스크톱과 OpenGL 화면 세션이 필요합니다.
+Ubuntu 24.04와 Python 3.12에서 검증했습니다. Linux 데스크톱과 OpenGL 화면 세션이
+필요합니다.
 
 ```bash
-python3 -m venv .venv
+git clone https://github.com/ggh-png/aiworker-mj-lab.git
+cd aiworker-mj-lab
+python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install mujoco numpy glfw imgui-bundle pyyaml h5py torch pillow imageio rerun-sdk wandb
-python3 src/teleop_app.py
+python -m pip install -r requirements-runtime.txt
+python src/teleop_app.py
 ```
 
 환경 번호를 명시하면 기존 단일 상자와 색상 분류 환경을 구분해 실행할 수 있습니다.
@@ -112,6 +115,15 @@ python -m mkdocs build --strict
 이 경로에서는 base/lift/head를 고정하고 Whole-body IK를 사용하지 않습니다. 왼팔은
 상자와 간섭하지 않는 palm-up 자세로 고정되며, 상자 바닥·네 벽은 실제 contact를
 만듭니다.
+
+ACT 데이터 기록·학습·평가에는 추가 의존성이 필요합니다.
+
+```bash
+python -m pip install -r requirements-imitation.txt
+```
+
+직접 학습하지 않고 공개된 D97/D150 Joint/Task 정책과 150-episode HDF5를 사용하려면
+[Hugging Face 다운로드와 실행](docs/huggingface.md)을 따릅니다.
 
 ```bash
 # recorder와 live Rerun Viewer가 함께 열린다.
@@ -180,8 +192,29 @@ python3 src/il.py train --config config/imitation/act.yaml
 - [FFW-SH5 Can Color Sort 데이터셋](https://huggingface.co/datasets/ggh-png/ffw-sh5-can-color-sort)
 - [FFW-SH5 ACT Color Sort 정책](https://huggingface.co/ggh-png/ffw-sh5-act-color-sort)
 
+공개 checkpoint와 dataset은 로그인 없이 고정된 `v3.1.0` revision으로 받을 수 있습니다.
+
 ```bash
 python -m pip install -r requirements-huggingface.txt
+
+hf download ggh-png/ffw-sh5-act-color-sort \
+  --revision v3.1.0 \
+  --local-dir outputs/hf/ffw-sh5-act-color-sort
+
+hf download ggh-png/ffw-sh5-can-color-sort \
+  --repo-type dataset \
+  --revision v3.1.0 \
+  --local-dir datasets/can_color_sort_hf
+
+MUJOCO_GL=egl python src/il.py evaluate \
+  --checkpoint outputs/hf/ffw-sh5-act-color-sort/policies/d150_joint/checkpoints/policy_best.ckpt \
+  --task can_color_sort --pte-steps 5 --num-episodes 10 --no-rerun
+```
+
+다운로드 검증, GUI 실행과 `datasets/can_color_sort_hf/data`를 학습 설정에 연결하는 전체
+절차는 [공개 정책·데이터셋 사용법](docs/huggingface.md)에 있습니다.
+
+```bash
 hf auth login
 
 # 파일 목록·용량·metadata만 점검하며 업로드하지 않는다.
