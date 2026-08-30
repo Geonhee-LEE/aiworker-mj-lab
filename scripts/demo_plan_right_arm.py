@@ -72,9 +72,13 @@ REQUIRE_CONTACT_GEOMS = (
 DEFAULT_START = np.array([0.0, -1.4, 0.0, -0.5, 0.0, 0.3, 0.0])
 # 시각화에서 각 관절 configuration을 하나의 3D 점으로 투영할 site다.
 TREE_SITE_NAME = "grasp_target_r"
-START_TREE_RGBA = np.array([0.15, 0.75, 0.25, 0.9], dtype=np.float32)
-GOAL_TREE_RGBA = np.array([0.20, 0.45, 0.95, 0.9], dtype=np.float32)
-PATH_RGBA = np.array([0.95, 0.65, 0.05, 0.95], dtype=np.float32)
+# #2a9e4a / #4f8ff2 / #d94fa0 — 3색 모두 OKLab Delta E 기반 CVD(색각 이상)
+# 검사를 통과한 조합이다(protan/deutan 최소 10.3, 정상 시각 최소 24.9,
+# 모두 8/15 문턱 이상). 이전 초록·주황 조합은 protanopia에서 Delta E 2.8로
+# 사실상 구분이 안 됐다 — Q-space 시각화 페이지에서 검증하며 발견했다.
+START_TREE_RGBA = np.array([0.165, 0.620, 0.290, 0.9], dtype=np.float32)
+GOAL_TREE_RGBA = np.array([0.310, 0.561, 0.949, 0.9], dtype=np.float32)
+PATH_RGBA = np.array([0.851, 0.310, 0.627, 0.95], dtype=np.float32)
 
 
 def _build_scene(*, with_obstacle=True):

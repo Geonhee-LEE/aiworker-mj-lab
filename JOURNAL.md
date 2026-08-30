@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-08-30 19:00 — qspace-visualization-and-cvd-safe-palette
+- **Pick**: 사용자 요청 — Q-space(관절 공간) 시각화. Artifact로 parallel coordinates 페이지 게시
+- **Outcome**: dataviz 스킬 팔레트 검증기(Node 없어 Python으로 포팅)가 기존 초록/주황 조합의 protanopia Delta E 2.8 하드 FAIL을 발견. 초록/파랑/마젠타로 교체해 검증 통과, 3D 뷰어 색도 함께 맞춤
+- **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
+- **Full**: [journal/2026-08/30-19-qspace-visualization-and-cvd-safe-palette.md](journal/2026-08/30-19-qspace-visualization-and-cvd-safe-palette.md)
+
+
 ## 2026-08-30 18:00 — obstacle-in-real-reach-region
 - **Pick**: 사용자 지적 — 장애물이 오른팔 실제 동작 영역 밖(테이블 위)에 있었음. 구체 3개로 교체 + 위치 재배치 + 크기 확대
 - **Outcome**: RightArmSpace.sample() 분포 실측으로 실제 도달 영역 파악, 손끝만 보고 배치했다가 팔 body 충돌로 실패 → is_valid(START) 체계적 검증으로 재배치. 반지름 6cm에서 시작 자세 유효 유지, 차단율 54%
