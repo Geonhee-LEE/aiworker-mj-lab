@@ -1,6 +1,6 @@
 # Research State — auto-generated each cycle
 
-_Last updated: 2026-08-30 17:00 KST · cycle repeat-loop-and-tree-viz-demo_
+_Last updated: 2026-08-30 17:30 KST · cycle add-obstacle-and-persistent-path-viz_
 
 ## North star distance
 

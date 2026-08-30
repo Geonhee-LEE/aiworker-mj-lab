@@ -13,6 +13,12 @@
     --show-tree         RRT-Connect가 탐색한 두 트리를 뷰어에 그린다(--viewer 자동 활성화)
     --loop N            목표에 도착할 때마다 새 무작위 목표를 다시 계획·재생한다.
                         N<=0이면 뷰어를 닫거나 Ctrl-C할 때까지 계속 반복(기본 1회)
+    --no-obstacle       탐색 영역에 추가한 장애물(빨간 기둥)을 빼고 비교
+
+기본적으로 테이블 위에 오른팔이 실제로 피해 가야 하는 장애물(빨간 기둥,
+``planning_obstacle``)을 하나 추가한다. 저장소의 ``models/full_scene.xml``은
+건드리지 않는다 — 데모를 실행할 때만 ``mujoco.MjSpec``으로 임시 지오메트리를
+붙이고 컴파일한다.
 
 ``--viewer``를 쓸 때는 ``MUJOCO_GL``을 설정하지 않는다(``osmesa``/``egl``은
 오프스크린 백엔드라 창형 GLFW 뷰어와 충돌해 ``OpenGL error ... mjr_makeContext``가
@@ -38,24 +44,43 @@ from ffw_sh5_grasp.planning import (
     plan_rrt_connect,
 )
 
+OBSTACLE_NAME = "planning_obstacle"
+# 테이블(중심 x=0.4055,y=0.0, 상판 z≈0.7316) 위, 오른팔이 테이블을 가로질러
+# 손을 뻗을 때 실제로 지나가는 높이에 놓은 기둥이다. 이 위치·크기는 무작위
+# 유효 목표 표본을 여러 개 뽑아 직선 경로가 실제로 막히는지 직접 확인해서
+# 골랐다 — 너무 작으면 무작위 목표가 우연히 지나칠 확률이 낮아 장애물 회피를
+# 보여줄 기회가 거의 없다.
+OBSTACLE_POS = (0.4055, 0.0, 0.95)
+OBSTACLE_HALF_SIZE = (0.05, 0.05, 0.20)
 REQUIRE_CONTACT_GEOMS = (
     "target_bin_floor",
     "target_bin_red_floor",
     "can_geom",
     "table",
     "floor",
+    OBSTACLE_NAME,
 )
 # 상자를 승격한 상태에서 실제로 유효함을 확인한 기본 자세다. 일반 teleop
 # ``home`` 키프레임은 상자 승격 후 겹치므로 기본값으로 쓰지 않는다.
 DEFAULT_START = np.array([0.0, -1.4, 0.0, -0.5, 0.0, 0.3, 0.0])
-# 트리 시각화에서 각 관절 configuration을 하나의 3D 점으로 투영할 site다.
+# 시각화에서 각 관절 configuration을 하나의 3D 점으로 투영할 site다.
 TREE_SITE_NAME = "grasp_target_r"
 START_TREE_RGBA = np.array([0.15, 0.75, 0.25, 0.9], dtype=np.float32)
 GOAL_TREE_RGBA = np.array([0.20, 0.45, 0.95, 0.9], dtype=np.float32)
+PATH_RGBA = np.array([0.95, 0.65, 0.05, 0.95], dtype=np.float32)
 
 
-def _build_scene():
-    model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
+def _build_scene(*, with_obstacle=True):
+    spec = mujoco.MjSpec.from_file(str(MODEL_PATH))
+    if with_obstacle:
+        spec.worldbody.add_geom(
+            name=OBSTACLE_NAME,
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            pos=list(OBSTACLE_POS),
+            size=list(OBSTACLE_HALF_SIZE),
+            rgba=[0.9, 0.2, 0.1, 0.85],
+        )
+    model = spec.compile()
     enable_task_collisions(model, ("target_bin", "target_bin_red"))
     data = mujoco.MjData(model)
     home_key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
@@ -79,15 +104,15 @@ def _parse_q(text):
     return np.asarray(values, dtype=float)
 
 
-def _tree_site_positions(checker, space, tree_snapshot, site_id):
-    """트리의 각 관절 configuration을 ``site_id`` world 위치로 투영한다.
+def _site_positions(checker, space, configs, site_id):
+    """관절 configuration 배열 ``(N, 7)``을 각각 ``site_id`` world 위치로 투영한다.
 
     베이스·리프트·왼팔·손가락 등 계획 대상이 아닌 자유도는 충돌 검사기가
     스냅샷으로 들고 있는 배경 상태(``checker.snapshot_qpos``)를 그대로 쓴다.
     """
     background = checker.snapshot_qpos
-    positions = np.empty((len(tree_snapshot.nodes), 3))
-    for index, q in enumerate(tree_snapshot.nodes):
+    positions = np.empty((len(configs), 3))
+    for index, q in enumerate(configs):
         qpos = background.copy()
         space.write(qpos, q)
         site = checker.tree.forward_site(qpos, site_id, space.joint_ids)
@@ -129,8 +154,8 @@ def _clear_scene(viewer):
 
 def _show_tree(viewer, checker, space, result, *, pause_s):
     site_id = mujoco.mj_name2id(checker.model, mujoco.mjtObj.mjOBJ_SITE, TREE_SITE_NAME)
-    start_positions = _tree_site_positions(checker, space, result.start_tree, site_id)
-    goal_positions = _tree_site_positions(checker, space, result.goal_tree, site_id)
+    start_positions = _site_positions(checker, space, result.start_tree.nodes, site_id)
+    goal_positions = _site_positions(checker, space, result.goal_tree.nodes, site_id)
     _draw_trees(
         viewer,
         [
@@ -143,6 +168,19 @@ def _show_tree(viewer, checker, space, result, *, pause_s):
     while viewer.is_running() and time.perf_counter() < deadline:
         time.sleep(0.02)
     _clear_scene(viewer)
+
+
+def _draw_path(viewer, checker, space, path):
+    """최종 선택 경로를 순서대로 잇는 waypoint 마커+선을 그린다.
+
+    경로는 트리가 아니라 단순 사슬이므로, 각 waypoint의 "부모"를 바로
+    앞 waypoint로 두면 ``_draw_trees``를 그대로 재사용할 수 있다.
+    """
+    site_id = mujoco.mj_name2id(checker.model, mujoco.mjtObj.mjOBJ_SITE, TREE_SITE_NAME)
+    positions = _site_positions(checker, space, path, site_id)
+    parents = np.arange(-1, len(positions) - 1)
+    _draw_trees(viewer, [(positions, parents, PATH_RGBA)], node_size=0.009, edge_width=2.5)
+    viewer.sync()
 
 
 def _step_waypoint(model, data, controller, space, q_des, max_steps, converge_tol_rad, on_frame):
@@ -224,8 +262,16 @@ def _run_cycle(cycle, model, data, space, checker, edge_checker, start, goal, rn
         # — 상자와 겹칠 수도 있는 — 자세에서 출발한다. 실제로 겪은 버그.)
         space.write(data.qpos, start)
         mujoco.mj_forward(model, data)
+        if viewer is not None:
+            # 계획한 경로(주황)를 그려두고, 팔이 실제로 움직이는 동안에도
+            # 지우지 않는다 — "이 경로를 따라가는 중"이라는 걸 눈으로
+            # 비교할 수 있게. ``_execute``의 프레임 콜백은 user_scn을
+            # 건드리지 않으므로 여기서 그린 것이 실행 내내 그대로 남는다.
+            _draw_path(viewer, checker, space, result.path)
         max_error = _execute(model, data, space, result.path, viewer=viewer)
         print(f"실행 완료. 최종 관절 오차(최대) = {max_error:.4f} rad")
+        if viewer is not None:
+            _clear_scene(viewer)
 
     return result.path[-1]
 
@@ -248,13 +294,18 @@ def main(argv=None):
         "--loop", type=int, default=1,
         help="목표 도착마다 새 무작위 목표로 반복. 0 이하면 무한 반복(뷰어를 닫거나 Ctrl-C)",
     )
+    parser.add_argument("--no-obstacle", action="store_true", help="추가 장애물(빨간 기둥) 없이 실행")
     args = parser.parse_args(argv)
     use_viewer = args.viewer or args.show_tree
+    with_obstacle = not args.no_obstacle
 
-    model, data = _build_scene()
+    model, data = _build_scene(with_obstacle=with_obstacle)
     space = RightArmSpace.from_model(model)
+    require_contact_geoms = REQUIRE_CONTACT_GEOMS if with_obstacle else tuple(
+        name for name in REQUIRE_CONTACT_GEOMS if name != OBSTACLE_NAME
+    )
     checker = ArmCollisionChecker(
-        model, space, padding_m=args.padding_m, require_contact_geoms=REQUIRE_CONTACT_GEOMS
+        model, space, padding_m=args.padding_m, require_contact_geoms=require_contact_geoms
     )
     checker.set_snapshot(data)
     edge_checker = EdgeChecker(space, checker.is_valid, resolution_rad=0.05)

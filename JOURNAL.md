@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-08-30 17:30 — add-obstacle-and-persistent-path-viz
+- **Pick**: 사용자 요청 — 오른팔 탐색 영역에 장애물 추가, 실행 중 경로 시각화 유지
+- **Outcome**: MjSpec으로 모델 파일을 안 건드리고 빨간 기둥(planning_obstacle) 추가, 실제 충돌 판정에 관여함을 검증. 실행 중 주황색 경로 시각화가 지워지지 않고 유지되도록 수정
+- **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
+- **Full**: [journal/2026-08/30-17-30-add-obstacle-and-persistent-path-viz.md](journal/2026-08/30-17-30-add-obstacle-and-persistent-path-viz.md)
+
+
 ## 2026-08-30 17:00 — repeat-loop-and-tree-viz-demo
 - **Pick**: 사용자 요청 — 데모에 반복 목표 방문(`--loop`)과 RRT 트리 시각화(`--show-tree`) 추가
 - **Outcome**: `PlannerResult`에 `TreeSnapshot`(start_tree/goal_tree) 추가, mjv_initGeom/mjv_connector로 트리를 뷰어에 렌더. 실제 디스플레이에서 반복 실행 세그폴트 없이 확인

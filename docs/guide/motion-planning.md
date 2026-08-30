@@ -61,7 +61,25 @@ PYTHONPATH=src env -u MUJOCO_GL python3 scripts/demo_plan_right_arm.py --execute
 목표를 다시 계획한다 — `--goal`은 첫 cycle에만 적용되고 이후는 항상
 무작위다. `--show-tree`는 `--viewer`를 자동으로 켠다.
 
-### 트리 시각화
+### 추가 장애물
+
+기본적으로 테이블 위(`x=0.4055, y=0.0, z=0.95`, 반지름 격 5×5×20 cm 기둥)에
+`planning_obstacle`이라는 빨간 기둥을 하나 추가한다. 저장소의
+`models/full_scene.xml`은 전혀 건드리지 않는다 — `_build_scene()`이
+`mujoco.MjSpec.from_file`로 모델을 불러온 뒤 `spec.worldbody.add_geom(...)`으로
+임시 지오메트리를 붙이고 그 자리에서 `spec.compile()`한다. 별도 `contype`/
+`conaffinity`를 지정하지 않아 이 저장소의 기본값(오른팔 링크와 동일한
+`contype=1 conaffinity=1`)을 그대로 물려받으므로 특별한 설정 없이도 충돌
+검사에 잡힌다. 실제로 이 기둥과 부딪히는 configuration이 있는지는
+`checker.report(q)`의 `pair_name`에 `planning_obstacle`이 등장하는 것으로
+직접 확인했다. 없이 비교하려면 `--no-obstacle`.
+
+크기·위치를 이렇게 고른 이유는 완전히 무작위인 목표로는 작은 장애물을 우연히
+지나칠 확률이 낮기 때문이다(처음엔 5×5×15 cm로 시도했더니 무작위 유효 목표
+30개 중 하나도 안 걸렸다). 지금 크기는 테이블 인근 무작위 유효 목표 중
+약 20% 안팎이 직선 경로 기준으로 막히도록 실측하며 조정한 값이다.
+
+### 트리·경로 시각화
 
 `--show-tree`는 각 cycle의 계획이 끝나면(성공이든 실패든) `PlannerResult`의
 `start_tree`/`goal_tree`(`TreeSnapshot`: 노드 배열 + 부모 인덱스 배열)를
@@ -72,6 +90,13 @@ world 좌표로 순전파(FK)해 3D 점 하나로 투영하고, 부모-자식 �
 선분(edge)을 `viewer.user_scn.geoms`에 채워 넣는 방식이며 씬 지오메트리
 자체(`model`)는 건드리지 않는다. `--tree-pause-s`(기본 2.5초) 동안 정지
 화면으로 보여준 뒤 지우고 실제 경로 재생으로 넘어간다.
+
+`--execute`를 함께 쓰면 재생을 시작하기 직전에 최종 선택 경로(주황색 점+선,
+`_draw_path`)를 그리고, 팔이 실제로 움직이는 동안에도 지우지 않는다 —
+"이 경로를 따라가는 중"이라는 걸 눈으로 계속 비교할 수 있다. 재생이 끝나면
+지우고 다음 cycle로 넘어간다. 경로 시각화는 트리와 같은 `_draw_trees`
+헬퍼를 재사용한다 — 경로는 각 waypoint의 "부모"가 바로 앞 waypoint인
+사슬형 트리와 구조적으로 같기 때문이다.
 
 **실행(`--execute`) 재생의 한계**: waypoint마다 "수렴할 때까지 최대 3초 대기"
 하는 임시 방식이다. 정식 시간 파라미터화(P2, `planning.trajectory`)가 관절
