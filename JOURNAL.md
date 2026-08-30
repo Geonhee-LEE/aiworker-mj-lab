@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-08-30 22:02 — fix-marker-render-below-floor
+- **Pick**: 사용자 버그 리포트 — 인터랙티브 모드의 노란 목표 마커가 바닥 밑에 보임
+- **Outcome**: `mocap_pos`만 쓰고 `mj_forward`를 안 불러서 렌더링용 `data.xpos`가 컴파일 시점 기본값(월드 원점, 바닥보다 아래)에 남아있던 버그. 마커 초기 배치 직후 `mj_forward` 호출 추가, 실제 뷰어에서 `data.xpos`를 직접 읽어 바닥 위(z=0.99 vs 0.148)임을 확인
+- **Next**: MP-0006 시간 파라미터화, MP-0013 벤치마크 하네스
+- **Full**: [journal/2026-08/30-22-fix-marker-render-below-floor.md](journal/2026-08/30-22-fix-marker-render-below-floor.md)
+
+
 ## 2026-08-30 21:00 — p2-shortcut-smoothing
 - **Pick**: MP-0005 — RRT-Connect 경로 shortcut 평활화(`planning/shortcut.py`)
 - **Outcome**: 무작위 두 waypoint 사이 직선 구간을 `EdgeChecker`로 검증해 잘라내는 `shortcut_path` + `path_length_rad` 헬퍼 추가. 신규 6개 포함 31개 planning 테스트 통과(끝점 보존·길이 비증가·무충돌·결정론 속성). 합성 slab 시나리오 median reduction 23%(비공식, 실제 장면 측정은 벤치마크 하네스 대기)

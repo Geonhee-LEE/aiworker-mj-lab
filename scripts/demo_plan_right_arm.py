@@ -331,6 +331,12 @@ def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
     initial_state = solver.forward(current_q, context_qpos)
     hold_quat = initial_state.quaternion.copy()
     data.mocap_pos[marker_id] = initial_state.position
+    # ``mocap_pos``를 쓰는 것만으로는 렌더링에 실제 쓰이는 ``data.xpos``가
+    # 갱신되지 않는다 — mocap body의 world pose는 mj_kinematics/mj_forward가
+    # 다시 돌아야 mocap_pos에서 다시 계산된다. 이걸 빼먹으면 구슬이 컴파일
+    # 시점 기본값(월드 원점, 바닥 z=0.148보다 아래)에 그대로 남아 "땅 밑에
+    # 있는 구슬"처럼 보인다 — 실제로 겪은 버그다.
+    mujoco.mj_forward(model, data)
     last_target = initial_state.position.copy()
 
     print("=== 인터랙티브 모드 ===")

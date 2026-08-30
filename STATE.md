@@ -1,6 +1,6 @@
 # Research State — auto-generated each cycle
 
-_Last updated: 2026-08-30 21:04 KST · cycle p2-shortcut-smoothing_
+_Last updated: 2026-08-30 22:02 KST · cycle fix-marker-render-below-floor_
 
 ## North star distance
 
@@ -46,6 +46,11 @@ P2 나머지(시간 파라미터화) → P3(정식 실행 모듈) → P4(Cartesi
   마커가 가만히 있는 것 자체가 계속 "새로 안정됨"으로 재판정되어 무한
   재계획 루프가 된다. `poll_ref`(안정성)와 `processed_pos`(처리 완료)를
   분리해야 한다.
+- **`mocap_pos`를 쓰는 것만으로는 화면에 안 반영된다**: mocap body의 world
+  pose(`data.xpos`, 렌더링에 실제 쓰이는 값)는 `mj_kinematics`/`mj_forward`가
+  다시 돌아야 `mocap_pos`에서 재계산된다. 파이썬 코드가 최초로 mocap 위치를
+  설정한 직후에는 명시적으로 `mj_forward`를 불러야 한다 — 안 그러면 컴파일
+  시점 기본값(대개 월드 원점)에 남아 "바닥 밑에 있는 것처럼" 보인다.
 
 ## Next claude-actionable
 
