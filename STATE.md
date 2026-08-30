@@ -1,6 +1,6 @@
 # Research State — auto-generated each cycle
 
-_Last updated: 2026-08-30 22:16 KST · cycle drop-orientation-constraint-from-interactive-ik_
+_Last updated: 2026-08-31 07:17 KST · cycle nullspace-regularization-natural-posture_
 
 ## North star distance
 
@@ -28,27 +28,29 @@ P2 나머지(시간 파라미터화) → P3(정식 실행 모듈) → P4(Cartesi
 
 ## Recent learnings (last 3 cycles)
 
-- **IK 수렴 실패와 모션 플래닝은 다른 층의 문제**: 인터랙티브 모드에서
-  세션 시작 자세를 고정한 채 위치+자세를 동시에 IK로 풀었더니, 실제로는
-  도달 가능한 위치인데도 자주 수렴하지 않았다. 자세 제약을 빼고 위치
-  3개 자유도만 풀도록 바꾸자 즉시 해결됐다 — IK는 "목표 configuration이
-  존재하는가"를 풀고 모션 플래닝은 "존재하는 두 configuration 사이 경로가
-  있는가"를 푼다. IK가 실패하면 애초에 계획할 목표가 없으므로 플래닝이
-  개입할 수 없다. **불필요한 과잉 제약(안 물어본 자세까지 고정)이 원인일
-  수 있다는 걸 항상 의심할 것.** P4(`planning.goals`) 설계에도 반영.
+- **nullspace 정칙화 없이는 여유 자유도가 매번 임의로 재배치된다**:
+  position-only IK가 남기는 4개 자유도를 무작위 재시도에만 맡기면 팔
+  자세가 매번 크게 바뀌어 "부자연스럽다"는 인상을 준다. 표준
+  redundancy resolution(`dq = J⁺e + (I−J⁺J)(k(q_ref−q))`, 현재 관절값에
+  가깝게 유지)을 추가했다. 단, "부자연스러워 보이는 해"가 실제로는 가장
+  가까운 자세가 장애물과 충돌해서 정당하게 크게 재배치된 경우일 수 있다 —
+  정칙화가 충돌 회피를 이기면 안 된다. P4(`planning.goals`) 설계에 반영.
+- **IK 수렴 실패와 모션 플래닝은 다른 층의 문제**: IK는 "목표
+  configuration이 존재하는가"를 풀고 모션 플래닝은 "존재하는 두
+  configuration 사이 경로가 있는가"를 푼다. IK가 실패하면 애초에 계획할
+  목표가 없으므로 플래닝이 개입할 수 없다. 불필요한 과잉 제약(안 물어본
+  자세까지 고정)이 원인일 수 있다는 걸 항상 의심할 것.
 - **`mocap_pos`를 쓰는 것만으로는 화면에 안 반영된다**: mocap body의 world
   pose(`data.xpos`, 렌더링에 실제 쓰이는 값)는 `mj_kinematics`/`mj_forward`가
   다시 돌아야 `mocap_pos`에서 재계산된다. 파이썬 코드가 최초로 mocap 위치를
-  설정한 직후에는 명시적으로 `mj_forward`를 불러야 한다 — 안 그러면 컴파일
-  시점 기본값(대개 월드 원점)에 남아 "바닥 밑에 있는 것처럼" 보인다.
-- **시작 상태 동기화를 두 번 빼먹음**: `--execute`와 `--interactive` 둘 다
-  live `data.qpos`를 planner의 `start`로 먼저 맞추지 않아서 실패했다. 새
-  실행 경로를 추가할 때마다 "live 상태를 start와 동기화했는가"를
-  체크리스트로 챙길 것 — 같은 실수를 두 번 했다.
-- **합성 시나리오의 shortcut 상한은 장면 형태에 달려 있다**: box-space 좁은 틈
-  장면(30 seed)에서 median length reduction은 iterations=200에서 이미 23%로
-  수렴하고 2000까지 늘려도 그대로였다 — PRD의 30% 목표(실제 can-sort 장면
-  기준) 충족 여부는 벤치마크 하네스 없이는 판단할 수 없다.
+  설정한 직후에는 명시적으로 `mj_forward`를 불러야 한다.
+- **hydrax(github.com/vincekurtz/hydrax)는 GPU sampling MPC지 RRT류
+  경로 탐색기가 아니다**: MPPI/CEM/DIAL-MPC 등으로 receding-horizon 최적
+  제어를 푼다. 이 저장소에 들여온다면 RRT-Connect 대체가 아니라 아직 없는
+  P3(정식 실행 모듈)에서 "전역 경로를 매끄럽게 따라가는 저수준 제어"로
+  보완하는 역할이 맞다. 이 머신에 RTX 5080 + CUDA 12.8이 있어 기술적으로는
+  가능하지만 JAX/MJX라는 무거운 새 의존성이 필요하고 hydrax README는 CUDA
+  13을 명시한다 — 실제 설치 검증이 먼저다. 사용자 확인 대기, 아직 미착수.
 
 ## Next claude-actionable
 
@@ -68,6 +70,6 @@ P2 나머지(시간 파라미터화) → P3(정식 실행 모듈) → P4(Cartesi
 
 ## Cycles to date
 
-6 (2026-08-30 사람 주도: P0 부트스트랩, P1 RRT-Connect 구현, 데모 반복/트리
-시각화, 장애물 재배치, Q-space 시각화+CVD 팔레트, 인터랙티브 마우스 목표;
-자율 루프: shortcut 평활화)
+7 (2026-08-30~31 사람 주도: P0 부트스트랩, P1 RRT-Connect 구현, 데모 반복/트리
+시각화, 장애물 재배치, Q-space 시각화+CVD 팔레트, 인터랙티브 마우스 목표+버그
+수정 3건, nullspace 정칙화+hydrax 조사; 자율 루프: shortcut 평활화)

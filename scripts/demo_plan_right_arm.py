@@ -269,16 +269,27 @@ def _execute(model, data, space, path, *, viewer, converge_tol_rad=0.02, max_wai
     return float(np.max(error))
 
 
-def _ik_attempt(solver, q_init, target_pos, context_qpos, *, max_iter=150):
-    """마우스로 옮긴 3D 점 하나를 향한 position-only DLS IK 한 번.
+def _ik_attempt(solver, q_init, target_pos, context_qpos, q_reference, *, max_iter=150, nullspace_gain=0.2):
+    """마우스로 옮긴 3D 점 하나를 향한 position-only DLS IK + nullspace 정칙화.
 
-    자세(orientation)는 일부러 안 맞춘다 — 마커가 표현하는 건 3D 점 하나뿐이고,
-    자세까지 목표로 걸면(예: 세션 시작 시점의 손 자세를 계속 고정) 실제로는
-    도달 가능한 위치인데도 IK가 수렴하지 않는 경우가 훨씬 많아진다. 7-DOF의
-    나머지 여유 자유도는 세션마다 고정한 값이 아니라 DLS 반복이 알아서
-    채우게 둔다. 이 함수는 데모 전용이고 정식 product API가 아니다 — 재사용
-    가능한 버전은 로드맵 P4(``planning.goals``)에서 다룬다.
+    자세(orientation)는 일부러 목표로 안 건다 — 마커가 표현하는 건 3D 점
+    하나뿐이고, 자세까지 고정하면(예: 세션 시작 시점 손 자세) 실제로는
+    도달 가능한 위치인데도 IK가 수렴하지 않는 경우가 훨씬 많아진다(이전에
+    겪은 버그).
+
+    대신 위치(3개 제약)로 다 못 채우는 나머지 자유도는 무작위가 아니라
+    ``q_reference``(보통 팔의 현재 관절값)에 최대한 가깝게 유지하도록
+    nullspace로 정칙화한다 — 실제 여유 매니퓰레이터 IK가 자연스러운 자세를
+    만드는 표준적인 방법이다(이 저장소의 반응형 ``WholeBodyIK``가 쓰는
+    ``regularization_task``와 같은 발상). 그래도 목표 지점 근처의 "가장
+    가까운" 자세가 장애물과 부딪힌다면, 그 지점은 원래 더 크게 돌아가야만
+    닿을 수 있는 자리라는 뜻이다 — 그럴 땐 정칙화를 걸어도 여전히 크게
+    재배치된 해가 나오는 게 맞다(정칙화가 충돌 회피보다 우선하지 않는다).
+
+    이 함수는 데모 전용이고 정식 product API가 아니다 — 재사용 가능한
+    버전은 로드맵 P4(``planning.goals``)에서 다룬다.
     """
+    n = solver.n
     q = np.clip(q_init, solver.joint_ranges[:, 0], solver.joint_ranges[:, 1])
     for _ in range(max_iter):
         state = solver.forward(q, context_qpos)
@@ -289,7 +300,11 @@ def _ik_attempt(solver, q_init, target_pos, context_qpos, *, max_iter=150):
         jacobian = state.jacobian[:3]
         damping_sq = 0.05**2
         gram = jacobian @ jacobian.T + damping_sq * np.eye(3)
-        delta = jacobian.T @ np.linalg.solve(gram, position_error)
+        pseudo_inverse = jacobian.T @ np.linalg.inv(gram)
+        primary = pseudo_inverse @ position_error
+        nullspace_projector = np.eye(n) - pseudo_inverse @ jacobian
+        secondary = nullspace_gain * (q_reference - q)
+        delta = primary + nullspace_projector @ secondary
         delta = np.clip(delta, -0.1, 0.1)
         q = np.clip(q + delta, solver.joint_ranges[:, 0], solver.joint_ranges[:, 1])
     state = solver.forward(q, context_qpos)
@@ -300,7 +315,10 @@ def _solve_valid_ik(solver, checker, q_init, target_pos, context_qpos, rng, *, n
     """여러 초기값에서 IK를 풀고, 수렴 + 충돌 없음을 모두 만족하는 첫 해를 쓴다.
 
     수렴만 하고 충돌하는 해가 먼저 나와도 계속 다른 시드를 시도한다 —
-    "IK가 풀렸다"와 "그 자세가 실제로 유효하다"는 별개다.
+    "IK가 풀렸다"와 "그 자세가 실제로 유효하다"는 별개다. 현재 자세(``q_init``)를
+    가장 먼저 시도하고, 모든 시도에서 그 자세를 nullspace 정칙화 기준
+    (``q_reference``)으로 계속 넘긴다 — 그래야 무작위 재시도로 넘어가도
+    "현재 자세에서 최대한 안 벗어나기"라는 목표가 유지된다.
     """
     candidates = [q_init] + [
         rng.uniform(solver.joint_ranges[:, 0], solver.joint_ranges[:, 1])
@@ -308,7 +326,7 @@ def _solve_valid_ik(solver, checker, q_init, target_pos, context_qpos, rng, *, n
     ]
     fallback = None
     for candidate in candidates:
-        q, pos_err, converged = _ik_attempt(solver, candidate, target_pos, context_qpos)
+        q, pos_err, converged = _ik_attempt(solver, candidate, target_pos, context_qpos, q_init)
         if converged and checker.is_valid(q):
             return q, pos_err, True
         if converged and fallback is None:

@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-08-31 07:17 — nullspace-regularization-natural-posture
+- **Pick**: 사용자 지적 — 목적지엔 가지만 팔 자세가 부자연스러움, 매니퓰레이터 모션 플래닝을 보통 이렇게 푸는지 질문 + hydrax(sampling MPC) 참조 가능성 문의
+- **Outcome**: position-only IK의 남는 4개 자유도에 표준 nullspace redundancy resolution(현재 관절값에 최대한 가깝게 유지) 추가. 분석해보니 "부자연스러운" 사례 하나는 실제로 가장 가까운 해가 장애물과 충돌해서 정당하게 크게 재배치된 것 — 정칙화는 이런 경우 충돌 회피를 우선한다(의도된 동작). hydrax는 RRT 대체가 아니라 P3(정식 실행) 보완 후보로 조사만 하고 구현은 사용자 확인 대기
+- **Next**: MP-0006 시간 파라미터화, MP-0013 벤치마크 하네스. hydrax 통합은 사용자 확인 후 TODO 등록
+- **Full**: [journal/2026-08/31-07-nullspace-regularization-natural-posture.md](journal/2026-08/31-07-nullspace-regularization-natural-posture.md)
+
+
 ## 2026-08-30 22:16 — drop-orientation-constraint-from-interactive-ik
 - **Pick**: 사용자 버그 리포트 — 인터랙티브 모드에서 "IK가 수렴하지 않았습니다"가 반복됨, 모션 플래닝이 이걸 풀어주는 게 아니냐는 질문
 - **Outcome**: 세션 시작 자세를 고정한 채 위치+자세를 동시에 풀던 게 원인 — 보고된 실패 지점은 자세 제약 없이 위치만 풀면 즉시 수렴+충돌 없음. `_ik_attempt`/`_solve_valid_ik`를 position-only로 재작성. IK 수렴 실패와 모션 플래닝은 다른 층의 문제라는 설명도 정리(목표 configuration 자체가 없으면 플래닝이 개입할 여지가 없음)
