@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-08-30 21:00 — p2-shortcut-smoothing
+- **Pick**: MP-0005 — RRT-Connect 경로 shortcut 평활화(`planning/shortcut.py`)
+- **Outcome**: 무작위 두 waypoint 사이 직선 구간을 `EdgeChecker`로 검증해 잘라내는 `shortcut_path` + `path_length_rad` 헬퍼 추가. 신규 6개 포함 31개 planning 테스트 통과(끝점 보존·길이 비증가·무충돌·결정론 속성). 합성 slab 시나리오 median reduction 23%(비공식, 실제 장면 측정은 벤치마크 하네스 대기)
+- **Next**: MP-0006 시간 파라미터화, MP-0013 벤치마크 하네스
+- **Full**: [journal/2026-08/30-21-p2-shortcut-smoothing.md](journal/2026-08/30-21-p2-shortcut-smoothing.md)
+
+
 ## 2026-08-30 20:00 — interactive-mouse-goal-marker
 - **Pick**: 사용자 요청 — teleop_app.py처럼 마우스로 목표를 드래그하는 인터랙티브 모드
 - **Outcome**: mocap body + 뷰어 기본 조작으로 커스텀 마우스 코드 없이 드래그 가능. 데모 전용 position-우선 DLS IK 추가. 버그 2개(시작상태 미동기화 재발, 무한 재트리거) 발견·수정, 실제 main() 경로로 세그폴트 없이 검증

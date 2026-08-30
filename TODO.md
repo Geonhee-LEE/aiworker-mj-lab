@@ -3,18 +3,18 @@
 _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트가 함께 수정한다._
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
-- Last update: `2026-08-30 15:31 KST`
+- Last update: `2026-08-30 21:01 KST`
 - Open (Doing + Today + Blocked + Backlog): **17**
 - Next ID: `MP-0021`
 
 ## Doing
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
+| MP-0005 | P1 | P2 | claude | [planner] shortcut 평활화 `planning/shortcut.py` | planning/p2-shortcut-smoothing | ☐ |
 
 ## Today
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
-| MP-0005 | P1 | P2 | claude | [planner] shortcut 평활화 `planning/shortcut.py` |  | ☐ |
 | MP-0006 | P1 | P2 | claude | [planner] `time_parameterize` 사다리꼴 속도 프로파일 |  | ☐ |
 
 ## Blocked
