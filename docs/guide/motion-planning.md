@@ -39,8 +39,10 @@ PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/demo_plan_right_arm.py
 # 계획 + 물리 재생까지 확인(관절 오차 출력)
 PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/demo_plan_right_arm.py --execute
 
-# 계획 + 재생을 실시간 뷰어 창으로 직접 확인 (디스플레이가 있는 환경에서)
-PYTHONPATH=src python3 scripts/demo_plan_right_arm.py --execute --viewer
+# 계획 + 재생을 실시간 뷰어 창으로 직접 확인 (디스플레이가 있는 환경에서).
+# MUJOCO_GL은 설정하지 않는다 — osmesa/egl은 오프스크린 백엔드라 이 창형
+# 뷰어(GLFW)와 충돌한다. 셸에 이미 export되어 있다면 -u로 지워야 한다.
+PYTHONPATH=src env -u MUJOCO_GL python3 scripts/demo_plan_right_arm.py --execute --viewer
 
 # 다른 목표로 반복(시드만 바꾸면 다른 무작위 유효 목표를 계획한다)
 PYTHONPATH=src python3 scripts/demo_plan_right_arm.py --seed 3 --execute

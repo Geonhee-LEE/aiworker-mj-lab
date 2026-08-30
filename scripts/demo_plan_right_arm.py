@@ -10,9 +10,15 @@
     --goal "q0 .. q6"  목표 configuration 직접 지정 (기본: seed로 무작위 유효 표본)
     --execute          계획한 경로를 MuJoCo 물리로 재생하고 추종 오차를 보고
     --viewer            --execute와 함께 실시간 뷰어 창을 띄워 눈으로 확인
+
+``--viewer``를 쓸 때는 ``MUJOCO_GL``을 설정하지 않는다(``osmesa``/``egl``은
+오프스크린 백엔드라 창형 GLFW 뷰어와 충돌해 ``OpenGL error ... mjr_makeContext``가
+난다). 셸에 이미 export되어 있다면 ``env -u MUJOCO_GL``로 지우고 실행한다.
 """
 
 import argparse
+import os
+import sys
 import time
 
 import mujoco
@@ -66,7 +72,19 @@ def _parse_q(text):
     return np.asarray(values, dtype=float)
 
 
-def _execute(model, data, space, path, *, use_viewer, converge_tol_rad=0.02, max_wait_s=3.0):
+def _step_waypoint(model, data, controller, space, q_des, max_steps, converge_tol_rad, on_frame):
+    """한 waypoint로 수렴할 때까지(또는 max_steps까지) 물리를 진행한다."""
+    for _ in range(max_steps):
+        controller.apply(data, q_des)
+        mujoco.mj_step(model, data)
+        if on_frame is not None and not on_frame():
+            return False  # 뷰어 창이 닫혔다 — 재생 중단
+        if np.max(np.abs(data.qpos[space.qpos_adrs] - q_des)) < converge_tol_rad:
+            break
+    return True
+
+
+def _execute(model, data, space, path, *, use_viewer, converge_tol_rad=0.02, max_wait_s=3.0, linger_s=3.0):
     """웨이포인트마다 실제로 수렴할 때까지 기다렸다가 다음으로 넘어간다.
 
     관절 공간 거리로 재생 시간을 미리 계산하는 대신 수렴 게이팅을 쓰는 이유는,
@@ -74,25 +92,44 @@ def _execute(model, data, space, path, *, use_viewer, converge_tol_rad=0.02, max
     ``max_joint_speed_rad_s`` 가정보다 훨씬 느리게 추종될 수 있기 때문이다
     (미리 정한 시간표대로 밀어붙이면 오차가 누적된다). 정식 시간 파라미터화는
     P2에서 다룬다 — 이 함수는 데모/디버그 재생용이다.
+
+    뷰어는 ``with`` 컨텍스트 매니저로만 연다 — MuJoCo가 공식적으로 권장하는
+    형태이고, 수동 ``launch_passive(...).close()``는 렌더 스레드가 Python
+    인터프리터 종료 순서와 어긋나 세그폴트를 낼 수 있다(실제로 겪은 문제).
     """
     controller = ArmTorqueController(model, space.joint_names)
     dt = float(model.opt.timestep)
     max_steps_per_waypoint = max(1, int(round(max_wait_s / dt)))
-    viewer_ctx = mujoco.viewer.launch_passive(model, data) if use_viewer else None
+    # 물리는 dt(보통 1 kHz)마다 진행하되, 화면 갱신은 ~60 Hz로만 한다.
+    # 매 물리 스텝마다 뷰어를 sync()하면 Wayland/GLFW 오버헤드 때문에
+    # 15-waypoint 경로 하나가 실제로 1분 넘게 걸릴 수 있다(실측).
+    render_every = max(1, int(round(1.0 / (60.0 * dt))))
 
-    try:
+    if not use_viewer:
         for q_des in path[1:]:
-            for _ in range(max_steps_per_waypoint):
-                controller.apply(data, q_des)
-                mujoco.mj_step(model, data)
-                if viewer_ctx is not None:
-                    viewer_ctx.sync()
-                    time.sleep(dt)
-                if np.max(np.abs(data.qpos[space.qpos_adrs] - q_des)) < converge_tol_rad:
+            _step_waypoint(model, data, controller, space, q_des, max_steps_per_waypoint,
+                            converge_tol_rad, on_frame=None)
+    else:
+        with mujoco.viewer.launch_passive(model, data) as viewer:
+            frame_counter = 0
+
+            def on_frame():
+                nonlocal frame_counter
+                frame_counter += 1
+                time.sleep(dt)
+                if frame_counter % render_every == 0:
+                    viewer.sync()
+                return viewer.is_running()
+
+            for q_des in path[1:]:
+                if not _step_waypoint(model, data, controller, space, q_des,
+                                       max_steps_per_waypoint, converge_tol_rad, on_frame):
                     break
-    finally:
-        if viewer_ctx is not None:
-            viewer_ctx.close()
+            # 마지막 자세를 눈으로 확인할 시간을 준다. 창을 먼저 닫으면 바로 종료.
+            linger_deadline = time.perf_counter() + linger_s
+            while viewer.is_running() and time.perf_counter() < linger_deadline:
+                viewer.sync()
+                time.sleep(dt)
 
     final_q = data.qpos[space.qpos_adrs]
     error = np.abs(final_q - path[-1])
@@ -158,6 +195,14 @@ def main(argv=None):
         mujoco.mj_forward(model, data)
         max_error = _execute(model, data, space, result.path, use_viewer=args.viewer)
         print(f"실행 완료. 최종 관절 오차(최대) = {max_error:.4f} rad")
+        if args.viewer:
+            # ``with`` 블록이 뷰어를 정상 종료했어도 GLFW 렌더 스레드가 일부
+            # 드라이버 조합에서 Python 인터프리터 종료 순서와 어긋나 뒤늦게
+            # 세그폴트를 낼 수 있다(실측). 필요한 출력은 이미 다 찍었으므로
+            # 정상 종료 절차(atexit, GC __del__)를 건너뛰고 바로 프로세스를
+            # 끝내 그 경로를 피한다.
+            sys.stdout.flush()
+            os._exit(0)
     return 0
 
 
