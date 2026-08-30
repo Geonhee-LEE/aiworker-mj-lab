@@ -1,6 +1,6 @@
 # Research State — auto-generated each cycle
 
-_Last updated: 2026-08-30 15:35 KST · cycle p1-rrt-connect-plus-demo_
+_Last updated: 2026-08-30 17:00 KST · cycle repeat-loop-and-tree-viz-demo_
 
 ## North star distance
 
@@ -34,6 +34,15 @@ P2(shortcut 평활화 + 시간 파라미터화)가 없어 현재 경로는 waypo
 - **테스트 설계 교훈**: 순수 numpy 성질 시험에서 "완전히 막힌" slab 장애물은
   RRT-Connect가 원리적으로 풀 수 없다(로컬 검사 해상도 이하로 벽을 통과할 수
   없음). "틈이 있는 벽" 형태로 바꿔야 진짜 우회 경로 시험이 된다.
+- **뷰어 세그폴트/느림**: `mujoco.viewer.launch_passive`는 수동 `.close()`
+  대신 `with` 컨텍스트 매니저로만 쓰고, 결과 출력 뒤 `os._exit(0)`으로
+  Python 정상 종료 절차를 건너뛰어야 일부 드라이버 조합(Wayland)에서
+  세그폴트를 피한다. 매 물리 스텝(1kHz)마다 `viewer.sync()`하면 렌더
+  오버헤드로 재생이 10배 이상 느려진다 — ~60Hz로 throttle해야 한다.
+- **트리 시각화**: `PlannerResult`에 `TreeSnapshot`(start_tree/goal_tree)을
+  추가해 `mjv_initGeom`/`mjv_connector`로 `viewer.user_scn`에 탐색 트리를
+  직접 그릴 수 있다. 7-D 관절 공간은 눈으로 볼 수 없으므로 site FK로 3D
+  좌표에 투영해야 한다.
 
 ## Next claude-actionable
 

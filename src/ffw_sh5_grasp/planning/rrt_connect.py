@@ -16,6 +16,15 @@ _TRAPPED = "trapped"
 
 
 @dataclass(frozen=True)
+class TreeSnapshot:
+    """트리 시각화용 스냅샷. ``nodes[i]``의 부모는 ``nodes[parents[i]]``다
+    (root는 parents[i] == -1)."""
+
+    nodes: object  # (N, 7) np.ndarray
+    parents: object  # (N,) np.ndarray[int]
+
+
+@dataclass(frozen=True)
 class PlannerResult:
     """RRT-Connect 한 번의 질의 결과."""
 
@@ -26,6 +35,8 @@ class PlannerResult:
     node_counts: tuple
     state_checks: int
     elapsed_s: float
+    start_tree: TreeSnapshot
+    goal_tree: TreeSnapshot
 
 
 class _Tree:
@@ -61,6 +72,9 @@ class _Tree:
         path.reverse()
         return path
 
+    def snapshot(self):
+        return TreeSnapshot(np.stack(self.nodes), np.asarray(self.parents, dtype=int))
+
 
 def straight_line_path(space, start, goal):
     """단순 두 점 경로(성공 시 다른 후처리 단계의 기준선으로 쓴다)."""
@@ -90,6 +104,17 @@ def _connect(tree, space, edge_checker, target, step_size_rad):
             return status, index
 
 
+def _result(success, path, reason, iterations, tree_a, tree_b, swapped, checks, elapsed_s):
+    """``tree_a``/``tree_b``는 매 반복 서로 바뀌므로, 반환 직전에 ``swapped``를
+    보고 항상 (start 쪽 트리, goal 쪽 트리) 순서로 복원해 스냅샷을 만든다."""
+    start_tree, goal_tree = (tree_b, tree_a) if swapped else (tree_a, tree_b)
+    counts = (len(goal_tree), len(start_tree)) if swapped else (len(start_tree), len(goal_tree))
+    return PlannerResult(
+        success, path, reason, iterations, counts, checks, elapsed_s,
+        start_tree.snapshot(), goal_tree.snapshot(),
+    )
+
+
 def plan_rrt_connect(
     space,
     edge_checker,
@@ -106,16 +131,20 @@ def plan_rrt_connect(
 
     두 트리(시작·목표)를 번갈아 확장하고, 한쪽이 다른 쪽 최신 노드에 닿으면
     (CONNECT) 성공이다. ``time_budget_s``가 실제 종료 조건이고
-    ``max_iterations``는 폭주 방지용 상한이다.
+    ``max_iterations``는 폭주 방지용 상한이다. 성공 여부와 무관하게 반환값의
+    ``start_tree``/``goal_tree``에 그 시점까지 탐색한 트리 전체가 담겨
+    시각화나 디버깅에 쓸 수 있다.
     """
     start = np.asarray(start, dtype=float)
     goal = np.asarray(goal, dtype=float)
     start_time = time.perf_counter()
 
     if not edge_checker.is_valid(start):
-        return PlannerResult(False, None, "invalid_start", 0, (1, 1), edge_checker.space.n, 0.0)
+        return _result(False, None, "invalid_start", 0, _Tree(start), _Tree(goal), False,
+                        edge_checker.space.n, 0.0)
     if not edge_checker.is_valid(goal):
-        return PlannerResult(False, None, "no_valid_goal", 0, (1, 1), edge_checker.space.n, 0.0)
+        return _result(False, None, "no_valid_goal", 0, _Tree(start), _Tree(goal), False,
+                        edge_checker.space.n, 0.0)
 
     tree_a = _Tree(start)
     tree_b = _Tree(goal)
@@ -123,10 +152,8 @@ def plan_rrt_connect(
 
     for iteration in range(1, max_iterations + 1):
         if time.perf_counter() - start_time > time_budget_s:
-            return PlannerResult(
-                False, None, "time_budget", iteration, (len(tree_a), len(tree_b)),
-                _checks(edge_checker), time.perf_counter() - start_time,
-            )
+            return _result(False, None, "time_budget", iteration, tree_a, tree_b, swapped,
+                            _checks(edge_checker), time.perf_counter() - start_time)
 
         sample = goal if rng.random() < goal_bias else space.sample(rng)
         status_a, index_a = _extend(tree_a, space, edge_checker, sample, step_size_rad)
@@ -138,19 +165,13 @@ def plan_rrt_connect(
                 path = path_a + path_b[::-1]
                 if swapped:
                     path = path[::-1]
-                counts = (len(tree_a), len(tree_b)) if not swapped else (len(tree_b), len(tree_a))
-                return PlannerResult(
-                    True, np.stack(path), "goal_reached", iteration, counts,
-                    _checks(edge_checker), time.perf_counter() - start_time,
-                )
+                return _result(True, np.stack(path), "goal_reached", iteration, tree_a, tree_b,
+                                swapped, _checks(edge_checker), time.perf_counter() - start_time)
         tree_a, tree_b = tree_b, tree_a
         swapped = not swapped
 
-    counts = (len(tree_a), len(tree_b)) if not swapped else (len(tree_b), len(tree_a))
-    return PlannerResult(
-        False, None, "iteration_limit", max_iterations, counts,
-        _checks(edge_checker), time.perf_counter() - start_time,
-    )
+    return _result(False, None, "iteration_limit", max_iterations, tree_a, tree_b, swapped,
+                    _checks(edge_checker), time.perf_counter() - start_time)
 
 
 def _checks(edge_checker):
@@ -159,4 +180,4 @@ def _checks(edge_checker):
     return getattr(checker, "state_checks", 0)
 
 
-__all__ = ["PlannerResult", "plan_rrt_connect", "straight_line_path"]
+__all__ = ["PlannerResult", "TreeSnapshot", "plan_rrt_connect", "straight_line_path"]

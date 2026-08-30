@@ -9,7 +9,12 @@ from .arm_state import RIGHT_ARM_JOINTS, RightArmSpace
 from .collision_state import ArmCollisionChecker, CollisionReport
 from .local_path import EdgeChecker
 from .obstacles import RIGHT_ARM_BODIES, right_arm_collision_pairs
-from .rrt_connect import PlannerResult, plan_rrt_connect, straight_line_path
+from .rrt_connect import (
+    PlannerResult,
+    TreeSnapshot,
+    plan_rrt_connect,
+    straight_line_path,
+)
 
 __all__ = [
     "RIGHT_ARM_BODIES",
@@ -19,6 +24,7 @@ __all__ = [
     "EdgeChecker",
     "PlannerResult",
     "RightArmSpace",
+    "TreeSnapshot",
     "plan_rrt_connect",
     "right_arm_collision_pairs",
     "straight_line_path",

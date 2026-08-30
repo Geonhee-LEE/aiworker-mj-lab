@@ -23,7 +23,7 @@ sampling-based 모션 플래너다. 베이스·리프트·헤드·손가락·왼
 | `collision_state.ArmCollisionChecker` | boolean `is_valid(q)` + exact `clearance(q)` |
 | `local_path.EdgeChecker` | 두 configuration 사이 선분의 충돌 검사(이분 순서) |
 | `settings.load_collision_settings` | `config/default.yaml`의 `planning.collision.*` 로더 |
-| `rrt_connect.plan_rrt_connect` | 두 트리 EXTEND/CONNECT 표준 RRT-Connect. 결정론적 seed |
+| `rrt_connect.plan_rrt_connect` | 두 트리 EXTEND/CONNECT 표준 RRT-Connect. 결정론적 seed. 반환값에 `TreeSnapshot`(탐색한 전체 트리)도 포함 |
 
 평활화·시간 파라미터화(P2)와 정식 실행 모듈(P3)은 아직 없다.
 
@@ -46,11 +46,32 @@ PYTHONPATH=src env -u MUJOCO_GL python3 scripts/demo_plan_right_arm.py --execute
 
 # 다른 목표로 반복(시드만 바꾸면 다른 무작위 유효 목표를 계획한다)
 PYTHONPATH=src python3 scripts/demo_plan_right_arm.py --seed 3 --execute
+
+# 목표에 도착할 때마다 새 무작위 목표로 계속 반복 (--loop 0 = 창을 닫을 때까지 무한 반복)
+PYTHONPATH=src env -u MUJOCO_GL python3 scripts/demo_plan_right_arm.py --execute --viewer --loop 5
+
+# RRT-Connect가 탐색한 두 트리(시작 쪽 초록, 목표 쪽 파랑)를 실시간 뷰어에 그린다
+PYTHONPATH=src env -u MUJOCO_GL python3 scripts/demo_plan_right_arm.py --execute --show-tree --loop 3
 ```
 
 목표를 지정하지 않으면 `--seed`로 시드된 rejection sampling으로 유효한
 무작위 목표를 하나 뽑는다. `--start`/`--goal`에 `"q0 q1 ... q6"` 형태로 직접
-7개 관절값을 줄 수도 있다.
+7개 관절값을 줄 수도 있다. `--loop N`을 쓰면 한 목표에 도착할 때마다(``--execute``
+없이도 계획만) 그 configuration을 다음 cycle의 시작점으로 삼아 새 무작위
+목표를 다시 계획한다 — `--goal`은 첫 cycle에만 적용되고 이후는 항상
+무작위다. `--show-tree`는 `--viewer`를 자동으로 켠다.
+
+### 트리 시각화
+
+`--show-tree`는 각 cycle의 계획이 끝나면(성공이든 실패든) `PlannerResult`의
+`start_tree`/`goal_tree`(`TreeSnapshot`: 노드 배열 + 부모 인덱스 배열)를
+MuJoCo 뷰어의 `user_scn`에 직접 그린다. 7차원 관절 공간 자체는 눈으로 볼 수
+없으므로, 각 트리 노드(관절 configuration)를 오른손 site(`grasp_target_r`)의
+world 좌표로 순전파(FK)해 3D 점 하나로 투영하고, 부모-자식 관계를 선분으로
+잇는다. `mujoco.mjv_initGeom`으로 구체(노드)를, `mujoco.mjv_connector`로
+선분(edge)을 `viewer.user_scn.geoms`에 채워 넣는 방식이며 씬 지오메트리
+자체(`model`)는 건드리지 않는다. `--tree-pause-s`(기본 2.5초) 동안 정지
+화면으로 보여준 뒤 지우고 실제 경로 재생으로 넘어간다.
 
 **실행(`--execute`) 재생의 한계**: waypoint마다 "수렴할 때까지 최대 3초 대기"
 하는 임시 방식이다. 정식 시간 파라미터화(P2, `planning.trajectory`)가 관절
