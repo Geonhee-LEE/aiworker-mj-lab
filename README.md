@@ -23,6 +23,24 @@ RGB·관절·EE pose·action을 같은 25 Hz tick에 기록하고, Joint/Task-sp
 - 4색 캔 분류를 위한 HDF5 시연 데이터, Joint/Task ACT와 PTE
 - 동일 seed closed-loop 평가와 action-target Grad-CAM 분석
 
+## 오른팔 모션 플래닝 연구
+
+같은 시뮬레이션 위에서 오른팔 7-DOF sampling-based 모션 플래닝(RRT-Connect 기준선)을
+새로 연구합니다. `docs/prd.md`의 북극성과 `TODO.md`를 축으로 cron 에이전트가 매일
+문헌을 조사하고 TODO를 하나 골라 구현·검증·PR을 만들며, 진행 상황은 Telegram으로
+보고됩니다(머지는 항상 사람).
+
+- **P0 완료** — `RightArmSpace`(관절공간), `ArmCollisionChecker`(live `MjData`를
+  건드리지 않는 scratch 충돌 검사기), `EdgeChecker`(선분 검사)를 구현하고
+  실제 캔 분류 장면에서 검증했습니다. 초당 약 6,800회 유효성 검사, 상자 geom
+  가시성 가드가 승격되지 않은 모델을 정확히 거부함을 확인했습니다.
+- **다음 단계**는 P1(RRT-Connect 코어) → P2(평활화·시간화) → P3(실행) →
+  P4(Cartesian goal·벤치마크) → P5(RRT* 비교연구) 순으로, 자동 연구 루프가
+  `TODO.md`를 보고 이어갑니다.
+
+[설계와 충돌 검사 계약](docs/guide/motion-planning.md) ·
+[연구 PRD](docs/prd.md) · [자동화 운영 매뉴얼](docs/automation.md)
+
 ## ACT closed-loop 비교
 
 ![D150 Joint와 Task 정책에서 PTE f=5, 10, 15, 20을 같은 초기 상태로 비교한 종합 GIF](docs/assets/evaluation/d150-joint-task-pte-f05-f20.gif)
@@ -46,4 +64,5 @@ Task이며 열은 `f=5/10/15/20`입니다. 이 GIF는 동작 차이를 보여주
 - [모방학습 명령어](docs/imitation-commands.md)
 - [공개 D97/D150 정책과 150-episode 데이터셋](docs/huggingface.md)
 - [시스템 구조와 개발](docs/guide/index.md)
+- [오른팔 모션 플래닝](docs/guide/motion-planning.md)
 - [테스트와 검증](docs/testing.md)

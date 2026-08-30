@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push origin main*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(crontab*)",
+      "Bash(sudo*)",
+      "Bash(systemctl*)",
+      "Bash(apt*)",
+      "Bash(apt-get*)"
+    ]
+  }
+}

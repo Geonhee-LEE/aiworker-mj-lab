@@ -29,6 +29,7 @@ python -m pip install -r requirements-dev.txt -r requirements-docs.txt
 | collision CBF | `test_whole_body.py` | Phase 5, 6 |
 | 모델 XML/actuator | 관련 Phase + `test_whole_body.py` | 전체 suite |
 | imitation/ACT | `test_il_action.py`, `test_il_env.py`, `test_il_dataset.py` | `test_il_*.py` 전체 |
+| 오른팔 모션 플래닝 | `test_planning_*.py` | [오른팔 모션 플래닝](guide/motion-planning.md) |
 
 ## 빠른 핵심 검증
 

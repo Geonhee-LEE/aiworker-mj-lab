@@ -132,6 +132,8 @@ nav:
             - 팔 토크 제어: guide/arm_control.md
             - 모바일 스워브 제어: guide/base_teleop.md
             - 손 파지와 접촉 판정: guide/grasp.md
+        - 모션 플래닝:
+            - 오른팔 모션 플래닝: guide/motion-planning.md
         - 검증과 확장:
             - 테스트와 검증: testing.md
             - 개발 체크리스트: guide/pitfalls.md

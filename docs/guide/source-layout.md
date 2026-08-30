@@ -16,6 +16,7 @@ src/
     ├── control/                  # 팔, 손, base, whole-body controller
     ├── imitation/                # data/simulation/act/runtime/apps/visualization
     ├── kinematics/               # tree, task, constraint, solver, collision
+    ├── planning/                 # 오른팔 sampling-based motion planning
     └── visualization/            # teleop ImGui와 MuJoCo renderer
 ```
 

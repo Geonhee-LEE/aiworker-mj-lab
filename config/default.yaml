@@ -1,6 +1,6 @@
 # FFW-SH5 실행 및 알고리즘 조절값의 기본 설정이다.
 # 단위는 키 이름 또는 각 항목의 주석에 표시한다.
-schema_version: 5
+schema_version: 6
 
 application:
   # 실행할 MJCF 모델과 초기 키프레임이다. 상대 경로는 저장소 루트를 기준으로 한다.
@@ -156,6 +156,21 @@ grasp:
     minimum_fingers: 2
     minimum_total_force_n: 0.05
     require_thumb: true
+
+# 오른팔 7자유도 sampling-based motion planning 설정이다. 베이스와 리프트는
+# 계획 대상이 아니라 질의 시점의 상태로 고정하며 왼팔은 park 자세의 장애물로 본다.
+# P1(RRT-Connect) 이후 단계에서 쓸 sampler/shortcut/trajectory/goal 키는 그
+# 단계의 코드가 실제로 읽기 시작할 때 추가한다 — 쓰지 않는 leaf는 CI가 거부한다.
+planning:
+  collision:
+    # 유효 자세로 인정하는 최소 여유 거리다. whole_body_ik.collision_safe_distance_m
+    # (0.01)보다 크게 두어 계획한 경로 위에서는 국소 CBF가 활성화되지 않는다.
+    # 동시에 collision_buffer_m(0.03)보다 작아 CBF의 반응 여유는 그대로 남는다.
+    padding_m: 0.012
+    # 최소 여유 거리 지표를 계산할 때 검사하는 거리 상한이다.
+    clearance_report_m: 0.20
+    # 손 자세는 계획 대상이 아니므로 손 내부 캡슐 접촉은 무효 판정에서 제외한다.
+    ignore_hand_internal_contacts: true
 
 ui:
   jog_position_step_m: 0.005

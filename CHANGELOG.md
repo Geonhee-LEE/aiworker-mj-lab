@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 오른팔 7-DOF sampling-based 모션 플래닝(P0: 관절공간 추상화, 충돌 유효성 검사기,
+  선분 검사)과 자율 연구 자동화(cron + Telegram, `TODO.md`/`STATE.md`/`docs/prd.md`)
+  scaffolding 추가
 - 주황·파랑 같은 지정 can variant만 공통 seed로 평가하는 CLI와 PTE 분포/Grad-CAM 재현 도구 추가
 - 모방학습 문서를 공개 자산 사용, 데이터·실행, 결과, 모델 이해와 개발 경로로 재구성
 - 기본 teleop과 HDF5/학습 의존성을 분리하고 episode I/O를 지연 import하도록 정리

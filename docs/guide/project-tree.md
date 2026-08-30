@@ -27,6 +27,7 @@ ffw-sh5-grasp/
 │       ├── application/               # 앱 조립과 frame loop
 │       ├── control/                   # arm·base·hand·whole-body 제어
 │       ├── kinematics/                # FK·Jacobian·IK·충돌 수학
+│       ├── planning/                  # 오른팔 sampling-based 모션 플래닝
 │       ├── visualization/             # 기본 teleop UI·렌더링
 │       ├── imitation/                 # IL 데이터·ACT·실행·시각화
 │       ├── cli/                       # `src/il.py` 하위 명령
@@ -313,6 +314,20 @@ STL/OBJ는 시각 형상이다. 충돌 안정성이나 접촉을 바꾸려면 me
 | `kinematics/collision.py` | MuJoCo signed distance와 kinematic Jacobian으로 충돌 제약 gradient를 계산한다. |
 | `kinematics/optimization.py` | differential IK용 convex QP를 NumPy 기반으로 푸는 수치 계층이다. |
 | `kinematics/solver.py` | task와 constraint를 모아 한 step의 joint velocity를 구하는 IK 진입점이다. |
+
+## 모션 플래닝
+
+오른팔 7-DOF sampling-based 플래너. 상세 설계는
+[오른팔 모션 플래닝](motion-planning.md) 참고.
+
+| 파일 | 역할 |
+|---|---|
+| `planning/__init__.py` | 하위 모듈의 공개 API를 재수출한다. |
+| `planning/arm_state.py` | 오른팔 관절 이름·주소·범위 추상화(`RightArmSpace`)를 제공한다. |
+| `planning/collision_state.py` | live `MjData`를 건드리지 않는 scratch 충돌 유효성 검사기(`ArmCollisionChecker`)다. |
+| `planning/obstacles.py` | `clearance()` exact 보고용 충돌 쌍 목록을 만든다. |
+| `planning/local_path.py` | 두 configuration 사이 선분의 충돌 검사(`EdgeChecker`)를 제공한다. |
+| `planning/settings.py` | `config/default.yaml`의 `planning.*` 블록을 읽는 유일한 지점이다. |
 
 ## 기본 teleop 시각화
 
