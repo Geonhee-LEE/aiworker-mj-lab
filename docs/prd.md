@@ -102,8 +102,11 @@ executor는 사람 개입 없이 조사→구현→테스트→PR까지 완결�
 
 ### 단기 (P0-P1 마무리)
 
-- [ ] `ArmCollisionChecker`가 live `MjData`를 오염시키지 않음을 테스트로 증명
-- [ ] can-sort 장면에서 RRT-Connect가 seed 10개 중 10개 성공
+- [x] `ArmCollisionChecker`가 live `MjData`를 오염시키지 않음을 테스트로 증명
+  (`tests/test_planning_collision.py::test_live_data_is_never_mutated`)
+- [x] can-sort 장면에서 RRT-Connect가 seed 10개 중 10개 성공 — 합성 공간
+  100/100 seed + 실제 장면 seeded 질의로 확인(`tests/test_planning_rrt_scene.py`).
+  정식 TSV 벤치마크(seed 50개, MP-0004/MP-0013)는 아직 대기
 - [ ] 자동화 cron 8종이 모두 최소 1회 수동 스모크 통과
 
 ### 중기 (P3-P4 마무리)

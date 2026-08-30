@@ -14,7 +14,7 @@ sampling-based 모션 플래너다. 베이스·리프트·헤드·손가락·왼
 - **기존 자산을 재사용한다.** FK는 `KinematicTree`, 관절 범위 클리핑 개념은
   `kinematics.constraints`와 같은 패턴을 따른다.
 
-## 현재 구현 (P0)
+## 현재 구현 (P0 + P1)
 
 | 모듈 | 책임 |
 |---|---|
@@ -23,6 +23,37 @@ sampling-based 모션 플래너다. 베이스·리프트·헤드·손가락·왼
 | `collision_state.ArmCollisionChecker` | boolean `is_valid(q)` + exact `clearance(q)` |
 | `local_path.EdgeChecker` | 두 configuration 사이 선분의 충돌 검사(이분 순서) |
 | `settings.load_collision_settings` | `config/default.yaml`의 `planning.collision.*` 로더 |
+| `rrt_connect.plan_rrt_connect` | 두 트리 EXTEND/CONNECT 표준 RRT-Connect. 결정론적 seed |
+
+평활화·시간 파라미터화(P2)와 정식 실행 모듈(P3)은 아직 없다.
+
+## 직접 실행해 보기
+
+`scripts/demo_plan_right_arm.py`가 계획 → (선택) MuJoCo 물리 재생 → (선택)
+실시간 뷰어까지 엔드투엔드로 보여준다.
+
+```bash
+# 계획만 (수 밀리초, 렌더링 없음)
+PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/demo_plan_right_arm.py
+
+# 계획 + 물리 재생까지 확인(관절 오차 출력)
+PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/demo_plan_right_arm.py --execute
+
+# 계획 + 재생을 실시간 뷰어 창으로 직접 확인 (디스플레이가 있는 환경에서)
+PYTHONPATH=src python3 scripts/demo_plan_right_arm.py --execute --viewer
+
+# 다른 목표로 반복(시드만 바꾸면 다른 무작위 유효 목표를 계획한다)
+PYTHONPATH=src python3 scripts/demo_plan_right_arm.py --seed 3 --execute
+```
+
+목표를 지정하지 않으면 `--seed`로 시드된 rejection sampling으로 유효한
+무작위 목표를 하나 뽑는다. `--start`/`--goal`에 `"q0 q1 ... q6"` 형태로 직접
+7개 관절값을 줄 수도 있다.
+
+**실행(`--execute`) 재생의 한계**: waypoint마다 "수렴할 때까지 최대 3초 대기"
+하는 임시 방식이다. 정식 시간 파라미터화(P2, `planning.trajectory`)가 관절
+속도·가속도 상한을 지키는 매끄러운 궤적을 대신하게 된다 — 지금은 데모/디버그
+용도다.
 
 ## 충돌 검사 계약
 
@@ -86,5 +117,5 @@ raw 모델에서 `contype=2 conaffinity=0`으로 오른팔과 충돌하지 않�
 
 ## 다음 단계
 
-RRT-Connect 코어(P1)부터는 자동 연구 루프(`docs/agents.md`)가 `TODO.md`를 보고
-진행한다. 로드맵 전체는 [`docs/prd.md`](../prd.md) §2를 참고.
+P2(shortcut 평활화 + 시간 파라미터화)부터는 자동 연구 루프(`docs/agents.md`)가
+`TODO.md`를 보고 진행한다. 로드맵 전체는 [`docs/prd.md`](../prd.md) §2를 참고.

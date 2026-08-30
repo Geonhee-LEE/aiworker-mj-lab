@@ -34,7 +34,16 @@ RGB·관절·EE pose·action을 같은 25 Hz tick에 기록하고, Joint/Task-sp
   건드리지 않는 scratch 충돌 검사기), `EdgeChecker`(선분 검사)를 구현하고
   실제 캔 분류 장면에서 검증했습니다. 초당 약 6,800회 유효성 검사, 상자 geom
   가시성 가드가 승격되지 않은 모델을 정확히 거부함을 확인했습니다.
-- **다음 단계**는 P1(RRT-Connect 코어) → P2(평활화·시간화) → P3(실행) →
+- **P1 완료** — 표준 RRT-Connect(`planning/rrt_connect.py`)를 구현했습니다.
+  합성 공간 100/100 seed와 실제 can-sort 장면 seeded 질의 모두 무충돌 경로를
+  찾고, `ArmTorqueController`로 실제 재생해 목표에 수렴함(최종 오차 ≈ 0.02 rad)
+  까지 확인했습니다. 직접 실행해 보려면 아래 명령을 씁니다:
+
+  ```bash
+  PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/demo_plan_right_arm.py --execute
+  ```
+
+- **다음 단계**는 P2(평활화·시간화) → P3(정식 실행 모듈) →
   P4(Cartesian goal·벤치마크) → P5(RRT* 비교연구) 순으로, 자동 연구 루프가
   `TODO.md`를 보고 이어갑니다.
 

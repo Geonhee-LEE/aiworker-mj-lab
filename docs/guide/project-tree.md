@@ -327,6 +327,7 @@ STL/OBJ는 시각 형상이다. 충돌 안정성이나 접촉을 바꾸려면 me
 | `planning/collision_state.py` | live `MjData`를 건드리지 않는 scratch 충돌 유효성 검사기(`ArmCollisionChecker`)다. |
 | `planning/obstacles.py` | `clearance()` exact 보고용 충돌 쌍 목록을 만든다. |
 | `planning/local_path.py` | 두 configuration 사이 선분의 충돌 검사(`EdgeChecker`)를 제공한다. |
+| `planning/rrt_connect.py` | 두 트리 EXTEND/CONNECT 표준 RRT-Connect 플래너(`plan_rrt_connect`)를 구현한다. |
 | `planning/settings.py` | `config/default.yaml`의 `planning.*` 블록을 읽는 유일한 지점이다. |
 
 ## 기본 teleop 시각화

@@ -1,17 +1,21 @@
 # Research State — auto-generated each cycle
 
-_Last updated: 2026-08-30 14:00 KST · cycle bootstrap_
+_Last updated: 2026-08-30 15:35 KST · cycle p1-rrt-connect-plus-demo_
 
 ## North star distance
 
-P0 기반(관절 공간 추상화 + 충돌 검사기)이 사람 손으로 막 구현되었다. RRT-Connect
-코어는 아직 없다. 북극성(캔 분류 장면 오른팔 충돌-없는 경로 계획+실행)까지는
-P1~P4 네 단계가 남았다.
+P0(관절공간 추상화 + 충돌 검사기)와 P1(RRT-Connect 코어)이 모두 구현·검증되었다.
+실제 can-sort 장면에서 계획한 경로를 `ArmTorqueController`로 재생해 목표에
+수렴하는 것까지 확인했다(데모 스크립트, 정식 P3는 아직 아님). 북극성까지는
+P2(평활화·시간화) → P3(정식 실행 모듈) → P4(Cartesian goal·벤치마크) 세 단계가
+남았다.
 
 ## Current bottleneck
 
-RRT-Connect 코어(`planning/rrt_connect.py`)가 없어 P1이 시작되지 못했다. MP-0002가
-다음 executor cycle의 최우선 후보다.
+P2(shortcut 평활화 + 시간 파라미터화)가 없어 현재 경로는 waypoint를 곧바로
+"수렴할 때까지 대기"하는 방식으로만 재생 가능하다(데모 스크립트의 임시방편).
+정식 시간 파라미터화가 있어야 관절 속도 상한을 지키는 매끄러운 궤적을 만들 수
+있다. MP-0005/MP-0006이 다음 최우선 후보다.
 
 ## Open experiments
 
@@ -20,22 +24,31 @@ RRT-Connect 코어(`planning/rrt_connect.py`)가 없어 P1이 시작되지 못�
 
 ## Recent learnings (last 3 cycles)
 
-- (부트스트랩) 상자 geom(`target_bin_collision` class)은 raw 모델에서
-  `contype=2 conaffinity=0`이라 오른팔과 충돌하지 않는다. `enable_task_collisions`가
-  이를 승격시킨다 — 플래너의 충돌 검사기는 이 승격된 상태를 복사해야 하며,
-  생성 시 가시성 가드로 이를 강제한다.
+- **CONNECT 버그**: 최초 `_connect` 구현이 target을 향해 반복 확장하는 대신
+  방금 추가한 노드를 향해 확장하는 오류가 있었다. 무충돌 경로 속성 시험
+  (20 seed)이 이를 즉시 잡아냈다 — property test가 실제로 버그를 잡은 사례.
+- **실행 재생 버그**: `--execute` 데모에서 live `MjData`를 planner의 `start`
+  configuration으로 먼저 맞추지 않고 재생을 시작해, 여전히 상자와 겹치는
+  `home` 키프레임에서 출발해 수렴하지 못했다. 시작 상태 동기화를 추가하고
+  회귀 시험(`test_plan_then_execute_converges`)으로 고정했다.
+- **테스트 설계 교훈**: 순수 numpy 성질 시험에서 "완전히 막힌" slab 장애물은
+  RRT-Connect가 원리적으로 풀 수 없다(로컬 검사 해상도 이하로 벽을 통과할 수
+  없음). "틈이 있는 벽" 형태로 바꿔야 진짜 우회 경로 시험이 된다.
 
 ## Next claude-actionable
 
-1. **MP-0002** RRT-Connect core — P0 기반 위에서 바로 시작 가능
-2. **MP-0003** 무충돌 경로 속성 시험 — MP-0002와 병행 설계 가능
-3. **MP-0018** `aggregate_results.py` — 벤치마크가 생기기 전에 먼저 준비해도 무해
+1. **MP-0005** shortcut 평활화(`planning/shortcut.py`)
+2. **MP-0006** `time_parameterize` 사다리꼴 속도 프로파일
+3. **MP-0018** `aggregate_results.py`는 이미 있음 — 벤치마크 하네스(MP-0013)와
+   연결해 P1/P2 결과를 `results/*.tsv`에 남기는 작업
 
 ## Next user-blocked
 
 1. **MP-0020** Telegram 봇 생성 및 `telegram_setup.sh` 실행 (사람만 가능)
-2. **MP-0004** can-sort 10 seed 성공률 측정 — RRT-Connect 완성 후 사람이 결과 확인
+2. **MP-0004** can-sort 10 seed 성공률 정식 측정 — 벤치마크 하네스(MP-0013)가
+   먼저 있어야 TSV로 기록 가능. 데모 스크립트로는 이미 여러 seed에서 성공을
+   비공식 확인함(`scripts/demo_plan_right_arm.py --seed N --execute`)
 
 ## Cycles to date
 
-0 (부트스트랩 — 사람이 직접 P0을 구현하고 자동화를 배선한 첫 커밋)
+1 (2026-08-30 사람 주도: P0 부트스트랩 + P1 RRT-Connect 구현·버그 수정·실행 데모)
