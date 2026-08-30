@@ -128,13 +128,19 @@ Q-space 페이지를 만들며 검증하다 발견해서 3D 뷰어 쪽 색도 �
 
 `_run_interactive`는 이 위치를 ~30Hz로 폴링하다가, 한 지점에서 0.4초 이상
 멈추면(`STABLE_HOLD_S`) 그 3D 점을 향해 IK를 푼다. IK는
-`kinematics.joint_space.JointSpaceKinematics` + `kinematics.tasks.pose_error`
-위에 짠 단순한 position-우선 damped least-squares(`tests/offline_pose_ik.py`의
-`solve_offline_pose`와 같은 계열이지만 이 데모 전용으로 더 단순화한 버전)이고,
-여러 무작위 초기값에서 풀어 **수렴하면서 동시에 충돌도 없는** 첫 해를
-채택한다(`_solve_valid_ik`) — IK가 수렴만 하고 충돌하는 해는 버리고 다음
-시드를 계속 시도한다. 해를 찾으면 현재 자세에서 그 관절 목표까지
-RRT-Connect로 계획하고 재생한다.
+`kinematics.joint_space.JointSpaceKinematics` 위에 짠 **position-only**
+damped least-squares(`_ik_attempt`)이고, 여러 무작위 초기값에서 풀어
+**수렴하면서 동시에 충돌도 없는** 첫 해를 채택한다(`_solve_valid_ik`) —
+IK가 수렴만 하고 충돌하는 해는 버리고 다음 시드를 계속 시도한다. 해를
+찾으면 현재 자세에서 그 관절 목표까지 RRT-Connect로 계획하고 재생한다.
+
+**자세(orientation)는 일부러 목표에 안 건다.** 처음엔 세션 시작 시점의 손
+자세를 계속 고정해 `kinematics.tasks.pose_error`로 위치+자세를 같이 풀었는데,
+실제로는 도달 가능한 위치인데도 IK가 자주 수렴하지 않았다 — 예를 들어
+`[-0.403, -0.865, 1.419]`는 자세를 고정하면 25번 재시도해도 못 풀지만
+position-only로는 즉시 풀린다. 마커가 표현하는 정보는 3D 점 하나뿐이니,
+7-DOF 중 위치 3개 자유도만 제약하고 나머지는 DLS 반복이 알아서 채우게
+두는 게 맞다.
 
 **같은 위치에 계속 머물러도 재계획을 반복하지 않는다.** "최근 몇 틱 동안
 안 움직였는가"(`poll_ref`)와 "마지막으로 실제 계획을 실행한 위치"

@@ -1,6 +1,6 @@
 # Research State — auto-generated each cycle
 
-_Last updated: 2026-08-30 22:02 KST · cycle fix-marker-render-below-floor_
+_Last updated: 2026-08-30 22:16 KST · cycle drop-orientation-constraint-from-interactive-ik_
 
 ## North star distance
 
@@ -28,29 +28,27 @@ P2 나머지(시간 파라미터화) → P3(정식 실행 모듈) → P4(Cartesi
 
 ## Recent learnings (last 3 cycles)
 
-- **합성 시나리오의 shortcut 상한은 장면 형태에 달려 있다**: box-space 좁은 틈
-  장면(30 seed)에서 median length reduction은 iterations=200에서 이미 23%로
-  수렴하고 2000까지 늘려도 그대로였다 — 장애물 하나짜리 장면은 최적 우회
-  경로 자체가 그 정도만 줄일 수 있는 형태였을 뿐, PRD의 30% 목표(실제
-  can-sort 장면 기준) 충족 여부는 벤치마크 하네스 없이는 판단할 수 없다.
-- **waypoint 기반 shortcut은 원본 경로 밀도에 의존한다**: RRT-Connect의
-  `step_size_rad`가 작을수록 shortcut이 시도할 인덱스 쌍이 늘어 더 잘 줄어들
-  것으로 예상되나 이번엔 검증하지 않았다 — 벤치마크할 때 함께 재보면 좋다.
-- **시작 상태 동기화를 두 번 빼먹음**: `--execute`와 `--interactive` 둘 다
-  live `data.qpos`를 planner의 `start`로 먼저 맞추지 않아서, 여전히 상자와
-  겹치는 `home` 키프레임 기준으로 동작해 실패했다. 새 실행 경로를 추가할
-  때마다 "live 상태를 start와 동기화했는가"를 체크리스트로 챙길 것 —
-  같은 실수를 두 번 했다.
-- **안정성 감지와 "이미 처리함"은 다른 질문**: 인터랙티브 모드에서 "최근에
-  안 움직였는가"만 보고 "마지막으로 처리한 위치와 같은가"를 구분 안 하면,
-  마커가 가만히 있는 것 자체가 계속 "새로 안정됨"으로 재판정되어 무한
-  재계획 루프가 된다. `poll_ref`(안정성)와 `processed_pos`(처리 완료)를
-  분리해야 한다.
+- **IK 수렴 실패와 모션 플래닝은 다른 층의 문제**: 인터랙티브 모드에서
+  세션 시작 자세를 고정한 채 위치+자세를 동시에 IK로 풀었더니, 실제로는
+  도달 가능한 위치인데도 자주 수렴하지 않았다. 자세 제약을 빼고 위치
+  3개 자유도만 풀도록 바꾸자 즉시 해결됐다 — IK는 "목표 configuration이
+  존재하는가"를 풀고 모션 플래닝은 "존재하는 두 configuration 사이 경로가
+  있는가"를 푼다. IK가 실패하면 애초에 계획할 목표가 없으므로 플래닝이
+  개입할 수 없다. **불필요한 과잉 제약(안 물어본 자세까지 고정)이 원인일
+  수 있다는 걸 항상 의심할 것.** P4(`planning.goals`) 설계에도 반영.
 - **`mocap_pos`를 쓰는 것만으로는 화면에 안 반영된다**: mocap body의 world
   pose(`data.xpos`, 렌더링에 실제 쓰이는 값)는 `mj_kinematics`/`mj_forward`가
   다시 돌아야 `mocap_pos`에서 재계산된다. 파이썬 코드가 최초로 mocap 위치를
   설정한 직후에는 명시적으로 `mj_forward`를 불러야 한다 — 안 그러면 컴파일
   시점 기본값(대개 월드 원점)에 남아 "바닥 밑에 있는 것처럼" 보인다.
+- **시작 상태 동기화를 두 번 빼먹음**: `--execute`와 `--interactive` 둘 다
+  live `data.qpos`를 planner의 `start`로 먼저 맞추지 않아서 실패했다. 새
+  실행 경로를 추가할 때마다 "live 상태를 start와 동기화했는가"를
+  체크리스트로 챙길 것 — 같은 실수를 두 번 했다.
+- **합성 시나리오의 shortcut 상한은 장면 형태에 달려 있다**: box-space 좁은 틈
+  장면(30 seed)에서 median length reduction은 iterations=200에서 이미 23%로
+  수렴하고 2000까지 늘려도 그대로였다 — PRD의 30% 목표(실제 can-sort 장면
+  기준) 충족 여부는 벤치마크 하네스 없이는 판단할 수 없다.
 
 ## Next claude-actionable
 

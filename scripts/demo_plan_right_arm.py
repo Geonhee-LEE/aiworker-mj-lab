@@ -40,7 +40,6 @@ import numpy as np
 from ffw_sh5_grasp.control.arm import ArmTorqueController
 from ffw_sh5_grasp.imitation.simulation.environment import enable_task_collisions
 from ffw_sh5_grasp.kinematics.joint_space import JointSpaceKinematics
-from ffw_sh5_grasp.kinematics.tasks import pose_error
 from ffw_sh5_grasp.paths import MODEL_PATH
 from ffw_sh5_grasp.planning import (
     ArmCollisionChecker,
@@ -270,34 +269,34 @@ def _execute(model, data, space, path, *, viewer, converge_tol_rad=0.02, max_wai
     return float(np.max(error))
 
 
-def _ik_attempt(solver, q_init, target_pos, target_quat, context_qpos, *, max_iter=150):
-    """마우스로 옮긴 3D 점 하나를 향한 position-우선 DLS IK 한 번.
+def _ik_attempt(solver, q_init, target_pos, context_qpos, *, max_iter=150):
+    """마우스로 옮긴 3D 점 하나를 향한 position-only DLS IK 한 번.
 
-    ``tests/offline_pose_ik.py``의 ``solve_offline_pose``와 같은 수식(위치를
-    우선하는 nullspace 투영 대신, 여기서는 위치+자세를 한 번에 damped
-    least-squares로 푸는 더 단순한 버전)이다. 이 함수는 데모 전용이고 정식
-    product API가 아니다 — 재사용 가능한 버전은 로드맵 P4(``planning.goals``)
-    에서 다룬다.
+    자세(orientation)는 일부러 안 맞춘다 — 마커가 표현하는 건 3D 점 하나뿐이고,
+    자세까지 목표로 걸면(예: 세션 시작 시점의 손 자세를 계속 고정) 실제로는
+    도달 가능한 위치인데도 IK가 수렴하지 않는 경우가 훨씬 많아진다. 7-DOF의
+    나머지 여유 자유도는 세션마다 고정한 값이 아니라 DLS 반복이 알아서
+    채우게 둔다. 이 함수는 데모 전용이고 정식 product API가 아니다 — 재사용
+    가능한 버전은 로드맵 P4(``planning.goals``)에서 다룬다.
     """
     q = np.clip(q_init, solver.joint_ranges[:, 0], solver.joint_ranges[:, 1])
     for _ in range(max_iter):
         state = solver.forward(q, context_qpos)
-        error = pose_error(state.position, state.quaternion, target_pos, target_quat)
-        if error.position_norm < 0.003 and error.orientation_norm < 0.1:
-            return q, error.position_norm, error.orientation_norm, True
-        jacobian = state.jacobian
-        stacked_error = np.concatenate([error.position, 0.2 * error.orientation])
+        position_error = target_pos - state.position
+        position_norm = float(np.linalg.norm(position_error))
+        if position_norm < 0.003:
+            return q, position_norm, True
+        jacobian = state.jacobian[:3]
         damping_sq = 0.05**2
-        gram = jacobian @ jacobian.T + damping_sq * np.eye(6)
-        delta = jacobian.T @ np.linalg.solve(gram, stacked_error)
+        gram = jacobian @ jacobian.T + damping_sq * np.eye(3)
+        delta = jacobian.T @ np.linalg.solve(gram, position_error)
         delta = np.clip(delta, -0.1, 0.1)
         q = np.clip(q + delta, solver.joint_ranges[:, 0], solver.joint_ranges[:, 1])
     state = solver.forward(q, context_qpos)
-    error = pose_error(state.position, state.quaternion, target_pos, target_quat)
-    return q, error.position_norm, error.orientation_norm, False
+    return q, float(np.linalg.norm(target_pos - state.position)), False
 
 
-def _solve_valid_ik(solver, checker, q_init, target_pos, target_quat, context_qpos, rng, *, n_restarts=25):
+def _solve_valid_ik(solver, checker, q_init, target_pos, context_qpos, rng, *, n_restarts=25):
     """여러 초기값에서 IK를 풀고, 수렴 + 충돌 없음을 모두 만족하는 첫 해를 쓴다.
 
     수렴만 하고 충돌하는 해가 먼저 나와도 계속 다른 시드를 시도한다 —
@@ -309,14 +308,14 @@ def _solve_valid_ik(solver, checker, q_init, target_pos, target_quat, context_qp
     ]
     fallback = None
     for candidate in candidates:
-        q, pos_err, ori_err, converged = _ik_attempt(solver, candidate, target_pos, target_quat, context_qpos)
+        q, pos_err, converged = _ik_attempt(solver, candidate, target_pos, context_qpos)
         if converged and checker.is_valid(q):
-            return q, pos_err, ori_err, True
+            return q, pos_err, True
         if converged and fallback is None:
-            fallback = (q, pos_err, ori_err)
+            fallback = (q, pos_err)
     if fallback is not None:
         return (*fallback, False)
-    return None, None, None, False
+    return None, None, False
 
 
 def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
@@ -329,7 +328,6 @@ def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
     current_q = data.qpos[space.qpos_adrs].copy()
     context_qpos = checker.snapshot_qpos
     initial_state = solver.forward(current_q, context_qpos)
-    hold_quat = initial_state.quaternion.copy()
     data.mocap_pos[marker_id] = initial_state.position
     # ``mocap_pos``를 쓰는 것만으로는 렌더링에 실제 쓰이는 ``data.xpos``가
     # 갱신되지 않는다 — mocap body의 world pose는 mj_kinematics/mj_forward가
@@ -382,8 +380,8 @@ def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
 
         print(f"목표 이동 감지: {np.round(marker_pos, 3).tolist()} — IK 계산 중...")
         processed_pos = marker_pos
-        q_goal, pos_err, ori_err, valid = _solve_valid_ik(
-            solver, checker, current_q, marker_pos, hold_quat, context_qpos, rng
+        q_goal, pos_err, valid = _solve_valid_ik(
+            solver, checker, current_q, marker_pos, context_qpos, rng
         )
         if q_goal is None:
             print("  IK가 수렴하지 않았습니다. 다른 위치를 시도하세요.")

@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-08-30 22:16 — drop-orientation-constraint-from-interactive-ik
+- **Pick**: 사용자 버그 리포트 — 인터랙티브 모드에서 "IK가 수렴하지 않았습니다"가 반복됨, 모션 플래닝이 이걸 풀어주는 게 아니냐는 질문
+- **Outcome**: 세션 시작 자세를 고정한 채 위치+자세를 동시에 풀던 게 원인 — 보고된 실패 지점은 자세 제약 없이 위치만 풀면 즉시 수렴+충돌 없음. `_ik_attempt`/`_solve_valid_ik`를 position-only로 재작성. IK 수렴 실패와 모션 플래닝은 다른 층의 문제라는 설명도 정리(목표 configuration 자체가 없으면 플래닝이 개입할 여지가 없음)
+- **Next**: MP-0006 시간 파라미터화, MP-0013 벤치마크 하네스. P4(planning.goals) 설계에 이 발견 반영할 것
+- **Full**: [journal/2026-08/30-22-16-drop-orientation-constraint-from-interactive-ik.md](journal/2026-08/30-22-16-drop-orientation-constraint-from-interactive-ik.md)
+
+
 ## 2026-08-30 22:02 — fix-marker-render-below-floor
 - **Pick**: 사용자 버그 리포트 — 인터랙티브 모드의 노란 목표 마커가 바닥 밑에 보임
 - **Outcome**: `mocap_pos`만 쓰고 `mj_forward`를 안 불러서 렌더링용 `data.xpos`가 컴파일 시점 기본값(월드 원점, 바닥보다 아래)에 남아있던 버그. 마커 초기 배치 직후 `mj_forward` 호출 추가, 실제 뷰어에서 `data.xpos`를 직접 읽어 바닥 위(z=0.99 vs 0.148)임을 확인
