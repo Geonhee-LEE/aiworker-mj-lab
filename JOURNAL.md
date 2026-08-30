@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-08-30 20:00 — interactive-mouse-goal-marker
+- **Pick**: 사용자 요청 — teleop_app.py처럼 마우스로 목표를 드래그하는 인터랙티브 모드
+- **Outcome**: mocap body + 뷰어 기본 조작으로 커스텀 마우스 코드 없이 드래그 가능. 데모 전용 position-우선 DLS IK 추가. 버그 2개(시작상태 미동기화 재발, 무한 재트리거) 발견·수정, 실제 main() 경로로 세그폴트 없이 검증
+- **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
+- **Full**: [journal/2026-08/30-20-interactive-mouse-goal-marker.md](journal/2026-08/30-20-interactive-mouse-goal-marker.md)
+
+
 ## 2026-08-30 19:00 — qspace-visualization-and-cvd-safe-palette
 - **Pick**: 사용자 요청 — Q-space(관절 공간) 시각화. Artifact로 parallel coordinates 페이지 게시
 - **Outcome**: dataviz 스킬 팔레트 검증기(Node 없어 Python으로 포팅)가 기존 초록/주황 조합의 protanopia Delta E 2.8 하드 FAIL을 발견. 초록/파랑/마젠타로 교체해 검증 통과, 3D 뷰어 색도 함께 맞춤

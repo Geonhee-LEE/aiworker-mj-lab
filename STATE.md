@@ -1,6 +1,6 @@
 # Research State — auto-generated each cycle
 
-_Last updated: 2026-08-30 19:00 KST · cycle qspace-visualization-and-cvd-safe-palette_
+_Last updated: 2026-08-30 20:00 KST · cycle interactive-mouse-goal-marker_
 
 ## North star distance
 
@@ -24,25 +24,27 @@ P2(shortcut 평활화 + 시간 파라미터화)가 없어 현재 경로는 waypo
 
 ## Recent learnings (last 3 cycles)
 
-- **CONNECT 버그**: 최초 `_connect` 구현이 target을 향해 반복 확장하는 대신
-  방금 추가한 노드를 향해 확장하는 오류가 있었다. 무충돌 경로 속성 시험
-  (20 seed)이 이를 즉시 잡아냈다 — property test가 실제로 버그를 잡은 사례.
-- **실행 재생 버그**: `--execute` 데모에서 live `MjData`를 planner의 `start`
-  configuration으로 먼저 맞추지 않고 재생을 시작해, 여전히 상자와 겹치는
-  `home` 키프레임에서 출발해 수렴하지 못했다. 시작 상태 동기화를 추가하고
-  회귀 시험(`test_plan_then_execute_converges`)으로 고정했다.
-- **테스트 설계 교훈**: 순수 numpy 성질 시험에서 "완전히 막힌" slab 장애물은
-  RRT-Connect가 원리적으로 풀 수 없다(로컬 검사 해상도 이하로 벽을 통과할 수
-  없음). "틈이 있는 벽" 형태로 바꿔야 진짜 우회 경로 시험이 된다.
+- **시작 상태 동기화를 두 번 빼먹음**: `--execute`와 `--interactive` 둘 다
+  live `data.qpos`를 planner의 `start`로 먼저 맞추지 않아서, 여전히 상자와
+  겹치는 `home` 키프레임 기준으로 동작해 실패했다. 새 실행 경로를 추가할
+  때마다 "live 상태를 start와 동기화했는가"를 체크리스트로 챙길 것 —
+  같은 실수를 두 번 했다.
+- **안정성 감지와 "이미 처리함"은 다른 질문**: 인터랙티브 모드에서 "최근에
+  안 움직였는가"만 보고 "마지막으로 처리한 위치와 같은가"를 구분 안 하면,
+  마커가 가만히 있는 것 자체가 계속 "새로 안정됨"으로 재판정되어 무한
+  재계획 루프가 된다. `poll_ref`(안정성)와 `processed_pos`(처리 완료)를
+  분리해야 한다.
 - **뷰어 세그폴트/느림**: `mujoco.viewer.launch_passive`는 수동 `.close()`
   대신 `with` 컨텍스트 매니저로만 쓰고, 결과 출력 뒤 `os._exit(0)`으로
   Python 정상 종료 절차를 건너뛰어야 일부 드라이버 조합(Wayland)에서
   세그폴트를 피한다. 매 물리 스텝(1kHz)마다 `viewer.sync()`하면 렌더
   오버헤드로 재생이 10배 이상 느려진다 — ~60Hz로 throttle해야 한다.
-- **트리 시각화**: `PlannerResult`에 `TreeSnapshot`(start_tree/goal_tree)을
-  추가해 `mjv_initGeom`/`mjv_connector`로 `viewer.user_scn`에 탐색 트리를
-  직접 그릴 수 있다. 7-D 관절 공간은 눈으로 볼 수 없으므로 site FK로 3D
-  좌표에 투영해야 한다.
+- **CVD 팔레트는 계산해야지 눈대중이면 안 된다**: 초록/주황처럼 "확실히
+  달라 보이는" 조합도 protanopia 시뮬레이션에서 Delta E 2.8(문턱 6)로
+  사실상 구분이 안 됐다. 이 환경엔 Node.js가 없어 `dataviz` 스킬의
+  검증기 수식을 Python으로 포팅해 직접 돌렸다.
+- **MuJoCo mocap body**는 뷰어 기본 조작(더블클릭+Ctrl드래그)만으로 커스텀
+  마우스 코드 없이 드래그 가능한 3D 핸들을 만드는 표준 방법이다.
 
 ## Next claude-actionable
 
@@ -60,4 +62,5 @@ P2(shortcut 평활화 + 시간 파라미터화)가 없어 현재 경로는 waypo
 
 ## Cycles to date
 
-1 (2026-08-30 사람 주도: P0 부트스트랩 + P1 RRT-Connect 구현·버그 수정·실행 데모)
+5 (2026-08-30 사람 주도: P0 부트스트랩, P1 RRT-Connect 구현, 데모 반복/트리
+시각화, 장애물 재배치, Q-space 시각화+CVD 팔레트, 인터랙티브 마우스 목표)

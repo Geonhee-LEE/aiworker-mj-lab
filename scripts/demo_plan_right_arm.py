@@ -13,10 +13,13 @@
     --show-tree         RRT-Connect가 탐색한 두 트리를 뷰어에 그린다(--viewer 자동 활성화)
     --loop N            목표에 도착할 때마다 새 무작위 목표를 다시 계획·재생한다.
                         N<=0이면 뷰어를 닫거나 Ctrl-C할 때까지 계속 반복(기본 1회)
-    --no-obstacle       탐색 영역에 추가한 장애물(빨간 기둥)을 빼고 비교
+    --no-obstacle       탐색 영역에 추가한 장애물(빨간 구체 3개)을 빼고 비교
+    --interactive       목표를 마우스로 직접 옮긴다(--viewer 자동 활성화). teleop_app.py처럼
+                        노란 구슬을 더블클릭으로 선택하고 Ctrl+마우스 오른쪽 버튼으로
+                        드래그하면, 놓인 위치까지 IK를 풀고 그 자세로 다시 계획·재생한다.
 
-기본적으로 테이블 위에 오른팔이 실제로 피해 가야 하는 장애물(빨간 기둥,
-``planning_obstacle``)을 하나 추가한다. 저장소의 ``models/full_scene.xml``은
+기본적으로 오른팔이 실제로 뻗는 영역 안에 피해 가야 하는 장애물(빨간 구체
+3개, ``planning_obstacle_0..2``)을 추가한다. 저장소의 ``models/full_scene.xml``은
 건드리지 않는다 — 데모를 실행할 때만 ``mujoco.MjSpec``으로 임시 지오메트리를
 붙이고 컴파일한다.
 
@@ -36,6 +39,8 @@ import numpy as np
 
 from ffw_sh5_grasp.control.arm import ArmTorqueController
 from ffw_sh5_grasp.imitation.simulation.environment import enable_task_collisions
+from ffw_sh5_grasp.kinematics.joint_space import JointSpaceKinematics
+from ffw_sh5_grasp.kinematics.tasks import pose_error
 from ffw_sh5_grasp.paths import MODEL_PATH
 from ffw_sh5_grasp.planning import (
     ArmCollisionChecker,
@@ -80,8 +85,11 @@ START_TREE_RGBA = np.array([0.165, 0.620, 0.290, 0.9], dtype=np.float32)
 GOAL_TREE_RGBA = np.array([0.310, 0.561, 0.949, 0.9], dtype=np.float32)
 PATH_RGBA = np.array([0.851, 0.310, 0.627, 0.95], dtype=np.float32)
 
+MARKER_NAME = "goal_marker"
+MARKER_RGBA = [1.0, 0.85, 0.1, 0.85]
 
-def _build_scene(*, with_obstacle=True):
+
+def _build_scene(*, with_obstacle=True, with_marker=False):
     spec = mujoco.MjSpec.from_file(str(MODEL_PATH))
     if with_obstacle:
         for name, (x, y, z, radius) in zip(OBSTACLE_NAMES, OBSTACLE_SPHERES):
@@ -92,6 +100,19 @@ def _build_scene(*, with_obstacle=True):
                 size=[radius, 0.0, 0.0],
                 rgba=[0.9, 0.2, 0.1, 0.85],
             )
+    if with_marker:
+        # ``mocap="true"`` body는 물리에 영향받지 않고 뷰어의 기본 상호작용
+        # (더블클릭으로 선택 → Ctrl+오른쪽 버튼 드래그)으로 직접 옮길 수 있다.
+        # teleop_app.py가 쓰는 커스텀 GLFW 마우스 콜백과 달리, 이건 MuJoCo
+        # 뷰어에 이미 내장된 기능이라 별도 마우스 이벤트 코드가 필요 없다.
+        marker_body = spec.worldbody.add_body(name=MARKER_NAME, mocap=True)
+        marker_body.add_geom(
+            type=mujoco.mjtGeom.mjGEOM_SPHERE,
+            size=[0.025, 0.0, 0.0],
+            rgba=MARKER_RGBA,
+            contype=0,
+            conaffinity=0,
+        )
     model = spec.compile()
     enable_task_collisions(model, ("target_bin", "target_bin_red"))
     data = mujoco.MjData(model)
@@ -249,6 +270,141 @@ def _execute(model, data, space, path, *, viewer, converge_tol_rad=0.02, max_wai
     return float(np.max(error))
 
 
+def _ik_attempt(solver, q_init, target_pos, target_quat, context_qpos, *, max_iter=150):
+    """마우스로 옮긴 3D 점 하나를 향한 position-우선 DLS IK 한 번.
+
+    ``tests/offline_pose_ik.py``의 ``solve_offline_pose``와 같은 수식(위치를
+    우선하는 nullspace 투영 대신, 여기서는 위치+자세를 한 번에 damped
+    least-squares로 푸는 더 단순한 버전)이다. 이 함수는 데모 전용이고 정식
+    product API가 아니다 — 재사용 가능한 버전은 로드맵 P4(``planning.goals``)
+    에서 다룬다.
+    """
+    q = np.clip(q_init, solver.joint_ranges[:, 0], solver.joint_ranges[:, 1])
+    for _ in range(max_iter):
+        state = solver.forward(q, context_qpos)
+        error = pose_error(state.position, state.quaternion, target_pos, target_quat)
+        if error.position_norm < 0.003 and error.orientation_norm < 0.1:
+            return q, error.position_norm, error.orientation_norm, True
+        jacobian = state.jacobian
+        stacked_error = np.concatenate([error.position, 0.2 * error.orientation])
+        damping_sq = 0.05**2
+        gram = jacobian @ jacobian.T + damping_sq * np.eye(6)
+        delta = jacobian.T @ np.linalg.solve(gram, stacked_error)
+        delta = np.clip(delta, -0.1, 0.1)
+        q = np.clip(q + delta, solver.joint_ranges[:, 0], solver.joint_ranges[:, 1])
+    state = solver.forward(q, context_qpos)
+    error = pose_error(state.position, state.quaternion, target_pos, target_quat)
+    return q, error.position_norm, error.orientation_norm, False
+
+
+def _solve_valid_ik(solver, checker, q_init, target_pos, target_quat, context_qpos, rng, *, n_restarts=25):
+    """여러 초기값에서 IK를 풀고, 수렴 + 충돌 없음을 모두 만족하는 첫 해를 쓴다.
+
+    수렴만 하고 충돌하는 해가 먼저 나와도 계속 다른 시드를 시도한다 —
+    "IK가 풀렸다"와 "그 자세가 실제로 유효하다"는 별개다.
+    """
+    candidates = [q_init] + [
+        rng.uniform(solver.joint_ranges[:, 0], solver.joint_ranges[:, 1])
+        for _ in range(n_restarts)
+    ]
+    fallback = None
+    for candidate in candidates:
+        q, pos_err, ori_err, converged = _ik_attempt(solver, candidate, target_pos, target_quat, context_qpos)
+        if converged and checker.is_valid(q):
+            return q, pos_err, ori_err, True
+        if converged and fallback is None:
+            fallback = (q, pos_err, ori_err)
+    if fallback is not None:
+        return (*fallback, False)
+    return None, None, None, False
+
+
+def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
+    """노란 구슬을 마우스로 드래그할 때마다 그 위치로 IK + 계획 + 실행을 반복한다."""
+    solver = JointSpaceKinematics(model, TREE_SITE_NAME, list(space.joint_names), tree=checker.tree)
+    marker_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, MARKER_NAME)
+    marker_id = model.body_mocapid[marker_body]
+    rng = np.random.default_rng(args.seed)
+
+    current_q = data.qpos[space.qpos_adrs].copy()
+    context_qpos = checker.snapshot_qpos
+    initial_state = solver.forward(current_q, context_qpos)
+    hold_quat = initial_state.quaternion.copy()
+    data.mocap_pos[marker_id] = initial_state.position
+    last_target = initial_state.position.copy()
+
+    print("=== 인터랙티브 모드 ===")
+    print("노란 구슬을 더블클릭으로 선택하고 Ctrl+마우스 오른쪽 버튼으로 드래그하세요.")
+    print("놓인 위치에서 0.4초 이상 멈추면 그 지점으로 IK를 풀고 다시 계획·재생합니다.")
+    print("창을 닫으면 종료합니다.")
+
+    # 마커 위치는 물리 스텝(dt, 보통 1kHz)이 아니라 사람이 눈으로 반응할 수 있는
+    # 빈도(~30Hz)로만 확인한다. ``STABLE_HOLD_S``만큼 제자리에 머물러야 "드롭"으로
+    # 인정해, 드래그하는 도중에 매 프레임 재계획을 시작하지 않는다.
+    #
+    # ``poll_ref``와 ``processed_pos``를 분리해서 추적하는 게 핵심이다.
+    # ``poll_ref``는 "최근 폴링 틱들 사이에 안 움직였는가"만 보고,
+    # ``processed_pos``는 "마지막으로 실제 계획을 실행한 위치"를 기억한다.
+    # 이 둘을 합치면 안 되는 이유: 매 실행 뒤 안정된 위치를 그대로
+    # ``poll_ref``로만 남기면, 사용자가 마커를 다시 안 건드려도 다음
+    # 폴링 틱에서 "직전 틱과 같은 위치 = 안정됨"이 또 참이 되어 0.4초마다
+    # 같은 목표로 무한히 재계획을 반복한다(실제로 겪은 버그).
+    POLL_HZ = 30.0
+    STABLE_HOLD_S = 0.4
+    STABLE_TICKS = max(1, round(STABLE_HOLD_S * POLL_HZ))
+    COMMIT_THRESHOLD_M = 0.01
+    poll_ref = last_target.copy()
+    processed_pos = last_target.copy()
+    stable_count = 0
+
+    while viewer.is_running():
+        viewer.sync()
+        time.sleep(1.0 / POLL_HZ)
+
+        marker_pos = data.mocap_pos[marker_id].copy()
+        if np.linalg.norm(marker_pos - poll_ref) < 0.004:
+            stable_count += 1
+        else:
+            stable_count = 0
+            poll_ref = marker_pos
+            continue
+
+        if stable_count != STABLE_TICKS:
+            continue
+        if np.linalg.norm(marker_pos - processed_pos) < COMMIT_THRESHOLD_M:
+            continue  # 이미 처리한 위치에 그대로 머물러 있을 뿐 — 재계획하지 않는다
+
+        print(f"목표 이동 감지: {np.round(marker_pos, 3).tolist()} — IK 계산 중...")
+        processed_pos = marker_pos
+        q_goal, pos_err, ori_err, valid = _solve_valid_ik(
+            solver, checker, current_q, marker_pos, hold_quat, context_qpos, rng
+        )
+        if q_goal is None:
+            print("  IK가 수렴하지 않았습니다. 다른 위치를 시도하세요.")
+            continue
+        if not valid:
+            print(f"  IK는 풀렸지만(pos_err={pos_err:.4f}) 충돌 없는 해를 못 찾았습니다. 다른 위치를 시도하세요.")
+            continue
+
+        result = plan_rrt_connect(
+            space, edge_checker, current_q, q_goal,
+            rng=rng, step_size_rad=args.step_size_rad, goal_bias=args.goal_bias,
+            max_iterations=args.max_iterations, time_budget_s=args.time_budget_s,
+        )
+        print(
+            f"  계획: success={result.success} reason={result.reason} "
+            f"iterations={result.iterations} elapsed={result.elapsed_s:.3f}s"
+        )
+        if result.success:
+            if args.show_tree:
+                _show_tree(viewer, checker, space, result, pause_s=args.tree_pause_s)
+            _draw_path(viewer, checker, space, result.path)
+            max_error = _execute(model, data, space, result.path, viewer=viewer)
+            _clear_scene(viewer)
+            print(f"  실행 완료. 최종 관절 오차(최대) = {max_error:.4f} rad")
+            current_q = data.qpos[space.qpos_adrs].copy()
+
+
 def _run_cycle(cycle, model, data, space, checker, edge_checker, start, goal, rng, args, viewer):
     """계획 한 번 + (선택) 트리 표시 + (선택) 실행. 성공한 목표 configuration을 반환한다."""
     print(f"--- cycle {cycle}: start={np.round(start, 2).tolist()} goal={np.round(goal, 2).tolist()} ---")
@@ -306,12 +462,16 @@ def main(argv=None):
         "--loop", type=int, default=1,
         help="목표 도착마다 새 무작위 목표로 반복. 0 이하면 무한 반복(뷰어를 닫거나 Ctrl-C)",
     )
-    parser.add_argument("--no-obstacle", action="store_true", help="추가 장애물(빨간 기둥) 없이 실행")
+    parser.add_argument("--no-obstacle", action="store_true", help="추가 장애물(빨간 구체) 없이 실행")
+    parser.add_argument(
+        "--interactive", action="store_true",
+        help="목표를 마우스로 드래그하는 노란 구슬로 대체한다(--viewer 자동 활성화)",
+    )
     args = parser.parse_args(argv)
-    use_viewer = args.viewer or args.show_tree
+    use_viewer = args.viewer or args.show_tree or args.interactive
     with_obstacle = not args.no_obstacle
 
-    model, data = _build_scene(with_obstacle=with_obstacle)
+    model, data = _build_scene(with_obstacle=with_obstacle, with_marker=args.interactive)
     space = RightArmSpace.from_model(model)
     require_contact_geoms = REQUIRE_CONTACT_GEOMS if with_obstacle else tuple(
         name for name in REQUIRE_CONTACT_GEOMS if name not in OBSTACLE_NAMES
@@ -357,7 +517,17 @@ def main(argv=None):
         return run_all(None)
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
-        rc = run_all(viewer)
+        if args.interactive:
+            # live data는 아직 ``home`` 키프레임 그대로다 — 인터랙티브 루프가
+            # 시작 관절값을 읽기 전에 ``start``로 맞춰야 한다. (--execute 경로에서
+            # 겪었던 것과 같은 버그: 동기화를 빼먹으면 첫 자동 재계획이 여전히
+            # home 자세를 기준으로 삼아 상자와 겹치는 무효한 시작점을 쓰게 된다.)
+            space.write(data.qpos, start)
+            mujoco.mj_forward(model, data)
+            _run_interactive(model, data, space, checker, edge_checker, viewer, args)
+            rc = 0
+        else:
+            rc = run_all(viewer)
         if viewer.is_running():
             viewer.sync()
 

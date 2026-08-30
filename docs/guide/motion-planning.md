@@ -52,6 +52,11 @@ PYTHONPATH=src env -u MUJOCO_GL python3 scripts/demo_plan_right_arm.py --execute
 
 # RRT-Connect가 탐색한 두 트리(시작 쪽 초록, 목표 쪽 파랑)를 실시간 뷰어에 그린다
 PYTHONPATH=src env -u MUJOCO_GL python3 scripts/demo_plan_right_arm.py --execute --show-tree --loop 3
+
+# teleop_app.py처럼 목표를 마우스로 직접 옮긴다 — 노란 구슬을 더블클릭으로
+# 선택하고 Ctrl+마우스 오른쪽 버튼으로 드래그하면, 놓인 위치까지 IK를 풀고
+# 그 자세로 다시 계획·재생한다
+PYTHONPATH=src env -u MUJOCO_GL python3 scripts/demo_plan_right_arm.py --interactive
 ```
 
 목표를 지정하지 않으면 `--seed`로 시드된 rejection sampling으로 유효한
@@ -111,6 +116,33 @@ world 좌표로 순전파(FK)해 3D 점 하나로 투영하고, 부모-자식 �
 (색각 이상) 검증을 통과한 조합이다 — 처음 썼던 초록·주황 조합은 protanopia
 시뮬레이션에서 Delta E 2.8로 사실상 구분이 안 됐다(문턱 6, 목표 8). 아래
 Q-space 페이지를 만들며 검증하다 발견해서 3D 뷰어 쪽 색도 함께 바꿨다.
+
+### 마우스로 목표 옮기기 (`--interactive`)
+
+`teleop_app.py`는 GLFW 마우스 콜백을 직접 짜서 목표 마커를 드래그하지만,
+이 데모는 MuJoCo 뷰어에 이미 내장된 상호작용을 그대로 쓴다 — 씬에
+`mocap="true"` body(`goal_marker`, 노란 구체, `contype=0 conaffinity=0`이라
+충돌에 관여하지 않는다)를 하나 추가하면, 뷰어 기본 조작만으로(더블클릭으로
+선택 → Ctrl+마우스 오른쪽 버튼 드래그) `data.mocap_pos`가 직접 갱신된다.
+별도 마우스 이벤트 코드는 한 줄도 필요 없다.
+
+`_run_interactive`는 이 위치를 ~30Hz로 폴링하다가, 한 지점에서 0.4초 이상
+멈추면(`STABLE_HOLD_S`) 그 3D 점을 향해 IK를 푼다. IK는
+`kinematics.joint_space.JointSpaceKinematics` + `kinematics.tasks.pose_error`
+위에 짠 단순한 position-우선 damped least-squares(`tests/offline_pose_ik.py`의
+`solve_offline_pose`와 같은 계열이지만 이 데모 전용으로 더 단순화한 버전)이고,
+여러 무작위 초기값에서 풀어 **수렴하면서 동시에 충돌도 없는** 첫 해를
+채택한다(`_solve_valid_ik`) — IK가 수렴만 하고 충돌하는 해는 버리고 다음
+시드를 계속 시도한다. 해를 찾으면 현재 자세에서 그 관절 목표까지
+RRT-Connect로 계획하고 재생한다.
+
+**같은 위치에 계속 머물러도 재계획을 반복하지 않는다.** "최근 몇 틱 동안
+안 움직였는가"(`poll_ref`)와 "마지막으로 실제 계획을 실행한 위치"
+(`processed_pos`)를 분리해서 추적한다 — 이 둘을 하나로 합치면, 사용자가
+드래그를 멈춘 뒤에도 마커가 가만히 있는 것 자체가 "안정됨"으로 계속
+재판정되어 0.4초마다 같은 목표를 무한히 재계획하는 버그가 생긴다(실제로
+겪고 고쳤다). 새 위치는 마지막으로 처리한 위치에서 1cm 이상 떨어져 있을
+때만 "새 목표"로 인정한다.
 
 ### Q-space(관절 공간) 시각화 — 참고용 익스포트
 
