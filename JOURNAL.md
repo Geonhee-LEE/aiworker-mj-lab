@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-08-30 18:00 — obstacle-in-real-reach-region
+- **Pick**: 사용자 지적 — 장애물이 오른팔 실제 동작 영역 밖(테이블 위)에 있었음. 구체 3개로 교체 + 위치 재배치 + 크기 확대
+- **Outcome**: RightArmSpace.sample() 분포 실측으로 실제 도달 영역 파악, 손끝만 보고 배치했다가 팔 body 충돌로 실패 → is_valid(START) 체계적 검증으로 재배치. 반지름 6cm에서 시작 자세 유효 유지, 차단율 54%
+- **Next**: MP-0005 shortcut 평활화, Q-space 시각화(사용자 요청)
+- **Full**: [journal/2026-08/30-18-obstacle-in-real-reach-region.md](journal/2026-08/30-18-obstacle-in-real-reach-region.md)
+
+
 ## 2026-08-30 17:30 — add-obstacle-and-persistent-path-viz
 - **Pick**: 사용자 요청 — 오른팔 탐색 영역에 장애물 추가, 실행 중 경로 시각화 유지
 - **Outcome**: MjSpec으로 모델 파일을 안 건드리고 빨간 기둥(planning_obstacle) 추가, 실제 충돌 판정에 관여함을 검증. 실행 중 주황색 경로 시각화가 지워지지 않고 유지되도록 수정

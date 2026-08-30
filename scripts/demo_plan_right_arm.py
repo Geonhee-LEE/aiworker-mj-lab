@@ -44,22 +44,29 @@ from ffw_sh5_grasp.planning import (
     plan_rrt_connect,
 )
 
-OBSTACLE_NAME = "planning_obstacle"
-# 테이블(중심 x=0.4055,y=0.0, 상판 z≈0.7316) 위, 오른팔이 테이블을 가로질러
-# 손을 뻗을 때 실제로 지나가는 높이에 놓은 기둥이다. 이 위치·크기는 무작위
-# 유효 목표 표본을 여러 개 뽑아 직선 경로가 실제로 막히는지 직접 확인해서
-# 골랐다 — 너무 작으면 무작위 목표가 우연히 지나칠 확률이 낮아 장애물 회피를
-# 보여줄 기회가 거의 없다.
-OBSTACLE_POS = (0.4055, 0.0, 0.95)
-OBSTACLE_HALF_SIZE = (0.05, 0.05, 0.20)
+OBSTACLE_PREFIX = "planning_obstacle_"
+# (x, y, z, radius) 구체 3개. "테이블 위"가 아니라 오른팔이 무작위 관절
+# 표본에서 실제로 손을 뻗는 영역(=RightArmSpace.sample이 만드는 분포) 안에
+# 놓았다 — 처음엔 테이블 위 고정 기둥 하나였는데, 팔이 실제로 훑는 도달
+# 영역이 테이블 근처가 아니라 훨씬 넓고 다른 자리(y가 훨씬 더 음수인 쪽)에
+# 몰려 있어서 거의 안 걸렸다. 5000개 무작위 유효 표본의 손끝 FK 위치
+# 분포(중앙값 근방)에서 후보 중심을 뽑았다. 반지름 6cm에서도
+# ``DEFAULT_START``는 계속 유효하다 — 실측: 무작위 유효 표본 비율은 장애물
+# 없을 때(58%) 대비 52%로 소폭 감소, 직선 경로 차단율은 목표 50개 중
+# 27개(54%). 반지름을 더 키우면(7cm+) 시작 자세도 무효가 되기 시작한다.
+OBSTACLE_SPHERES = (
+    (-0.05, -0.91, 1.61, 0.06),
+    (0.55, -0.81, 1.19, 0.06),
+    (-0.01, -0.80, 1.17, 0.06),
+)
+OBSTACLE_NAMES = tuple(f"{OBSTACLE_PREFIX}{i}" for i in range(len(OBSTACLE_SPHERES)))
 REQUIRE_CONTACT_GEOMS = (
     "target_bin_floor",
     "target_bin_red_floor",
     "can_geom",
     "table",
     "floor",
-    OBSTACLE_NAME,
-)
+) + OBSTACLE_NAMES
 # 상자를 승격한 상태에서 실제로 유효함을 확인한 기본 자세다. 일반 teleop
 # ``home`` 키프레임은 상자 승격 후 겹치므로 기본값으로 쓰지 않는다.
 DEFAULT_START = np.array([0.0, -1.4, 0.0, -0.5, 0.0, 0.3, 0.0])
@@ -73,13 +80,14 @@ PATH_RGBA = np.array([0.95, 0.65, 0.05, 0.95], dtype=np.float32)
 def _build_scene(*, with_obstacle=True):
     spec = mujoco.MjSpec.from_file(str(MODEL_PATH))
     if with_obstacle:
-        spec.worldbody.add_geom(
-            name=OBSTACLE_NAME,
-            type=mujoco.mjtGeom.mjGEOM_BOX,
-            pos=list(OBSTACLE_POS),
-            size=list(OBSTACLE_HALF_SIZE),
-            rgba=[0.9, 0.2, 0.1, 0.85],
-        )
+        for name, (x, y, z, radius) in zip(OBSTACLE_NAMES, OBSTACLE_SPHERES):
+            spec.worldbody.add_geom(
+                name=name,
+                type=mujoco.mjtGeom.mjGEOM_SPHERE,
+                pos=[x, y, z],
+                size=[radius, 0.0, 0.0],
+                rgba=[0.9, 0.2, 0.1, 0.85],
+            )
     model = spec.compile()
     enable_task_collisions(model, ("target_bin", "target_bin_red"))
     data = mujoco.MjData(model)
@@ -302,7 +310,7 @@ def main(argv=None):
     model, data = _build_scene(with_obstacle=with_obstacle)
     space = RightArmSpace.from_model(model)
     require_contact_geoms = REQUIRE_CONTACT_GEOMS if with_obstacle else tuple(
-        name for name in REQUIRE_CONTACT_GEOMS if name != OBSTACLE_NAME
+        name for name in REQUIRE_CONTACT_GEOMS if name not in OBSTACLE_NAMES
     )
     checker = ArmCollisionChecker(
         model, space, padding_m=args.padding_m, require_contact_geoms=require_contact_geoms

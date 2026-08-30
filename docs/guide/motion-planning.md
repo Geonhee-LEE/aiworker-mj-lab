@@ -63,21 +63,29 @@ PYTHONPATH=src env -u MUJOCO_GL python3 scripts/demo_plan_right_arm.py --execute
 
 ### 추가 장애물
 
-기본적으로 테이블 위(`x=0.4055, y=0.0, z=0.95`, 반지름 격 5×5×20 cm 기둥)에
-`planning_obstacle`이라는 빨간 기둥을 하나 추가한다. 저장소의
-`models/full_scene.xml`은 전혀 건드리지 않는다 — `_build_scene()`이
+기본적으로 빨간 구체 3개(`planning_obstacle_0..2`, 반지름 6cm)를 추가한다.
+저장소의 `models/full_scene.xml`은 전혀 건드리지 않는다 — `_build_scene()`이
 `mujoco.MjSpec.from_file`로 모델을 불러온 뒤 `spec.worldbody.add_geom(...)`으로
 임시 지오메트리를 붙이고 그 자리에서 `spec.compile()`한다. 별도 `contype`/
 `conaffinity`를 지정하지 않아 이 저장소의 기본값(오른팔 링크와 동일한
 `contype=1 conaffinity=1`)을 그대로 물려받으므로 특별한 설정 없이도 충돌
-검사에 잡힌다. 실제로 이 기둥과 부딪히는 configuration이 있는지는
-`checker.report(q)`의 `pair_name`에 `planning_obstacle`이 등장하는 것으로
+검사에 잡힌다. 실제로 이 구체와 부딪히는 configuration이 있는지는
+`checker.report(q)`의 `pair_name`에 `planning_obstacle_N`이 등장하는 것으로
 직접 확인했다. 없이 비교하려면 `--no-obstacle`.
 
-크기·위치를 이렇게 고른 이유는 완전히 무작위인 목표로는 작은 장애물을 우연히
-지나칠 확률이 낮기 때문이다(처음엔 5×5×15 cm로 시도했더니 무작위 유효 목표
-30개 중 하나도 안 걸렸다). 지금 크기는 테이블 인근 무작위 유효 목표 중
-약 20% 안팎이 직선 경로 기준으로 막히도록 실측하며 조정한 값이다.
+**위치를 고른 방법**: 처음엔 테이블 위 고정 기둥 하나였는데, 오른팔이
+`RightArmSpace.sample()`(전체 관절 범위 균등 무작위)로 실제로 뻗는 손끝
+위치를 5000개 표본으로 재보니 테이블 근처가 아니라 훨씬 넓고 다른 자리
+(y가 테이블보다 훨씬 더 음수인 쪽)에 몰려 있어서 기둥이 거의 안 걸렸다.
+그 표본 분포의 밀집 구간에서 후보 중심을 뽑고, `DEFAULT_START`가 계속
+유효하게 남는 조합만 채택했다.
+
+**크기를 고른 방법**: 반지름을 3cm→7cm까지 올려가며 (1) `DEFAULT_START`가
+여전히 유효한지 (2) 무작위 유효 표본 비율이 너무 무너지지 않는지 (3) 시작점
+기준 직선 경로 차단율이 적당한지를 실측했다. 6cm에서 시작 자세는 계속
+유효(7cm부터 무효가 되기 시작)하고, 무작위 유효 표본 비율은 장애물
+없을 때(58%) 대비 52%, 목표 50개 중 27개(54%)가 직선 경로 기준으로
+막힌다 — 눈에 띄게 크면서도 계획이 항상 막히지는 않는 균형점이다.
 
 ### 트리·경로 시각화
 

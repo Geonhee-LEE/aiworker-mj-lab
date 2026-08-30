@@ -1,6 +1,6 @@
 # Research State — auto-generated each cycle
 
-_Last updated: 2026-08-30 17:30 KST · cycle add-obstacle-and-persistent-path-viz_
+_Last updated: 2026-08-30 18:00 KST · cycle obstacle-in-real-reach-region_
 
 ## North star distance
 
