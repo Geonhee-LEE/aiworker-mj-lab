@@ -1,0 +1,2 @@
+timestamp	commit	metric	status	description
+2026-08-31T02:35:00Z	b8a44a7	qual:tests-pass	keep	time_parameterize: 세그먼트별 독립 사다리꼴/삼각형 프로파일, 37개 planning 테스트(신규 11개 포함) 통과. 전역 단일 프로파일(웨이포인트 무정지)을 먼저 시도했으나 다중 웨이포인트 합성 경로에서 세그먼트 경계(코너) 관절 속도 방향 불연속으로 가속도 상한 위반(실측 최대 173 rad/s^2 vs 상한 4.0)을 발견해 매 waypoint 정지 방식으로 수정. 실제 can-sort 장면·RRT 원경로 기준 측정은 벤치마크 하네스(MP-0013) 완료 후.
