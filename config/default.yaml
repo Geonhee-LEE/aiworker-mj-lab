@@ -171,6 +171,13 @@ planning:
     clearance_report_m: 0.20
     # 손 자세는 계획 대상이 아니므로 손 내부 캡슐 접촉은 무효 판정에서 제외한다.
     ignore_hand_internal_contacts: true
+  trajectory:
+    # 사다리꼴 속도 프로파일의 관절 속도·가속도 상한이다. imitation.teleop의
+    # FFW-SH5 follower URDF 관절 한계(4.8 rad/s)를 그대로 재사용해 실제 하드웨어
+    # 한계와 일관성을 맞춘다. 가속도는 실측 스펙이 없어 0.5초 안에 최고 속도에
+    # 도달하는 값(9.6 rad/s^2)으로 잠정 설정 — 실제 실행에서 문제가 보이면 조정한다.
+    max_joint_speed_rad_s: 4.8
+    max_joint_accel_rad_s2: 9.6
 
 ui:
   jog_position_step_m: 0.005
