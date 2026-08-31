@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-08-31 11:10 — p2-time-parameterize
+- **Pick**: MP-0006 — `planning.trajectory.time_parameterize` 사다리꼴 속도 프로파일. `research/feed.md`의 같은 날 researcher 노트가 이 TODO를 정확히 다뤄 설계 출발점으로 삼음
+- **Outcome**: 처음 구현한 "웨이포인트에서 안 멈추는 전역 단일 프로파일"이 다중 waypoint 합성 경로 시험에서 가속도 상한 위반(상한 4.0 vs 실측 173 rad/s²)을 냄 — 세그먼트 경계(코너)에서 관절 속도 방향이 불연속으로 바뀌기 때문. research 노트가 권장한 "세그먼트별 독립 사다리꼴 + 매 waypoint 정지"(moveit 계열)로 재구현해 해결. 모든 관절이 같은 스칼라 상한을 쓰므로 표준 다관절 동기화가 Linf 세그먼트 거리와 수학적으로 동치임을 확인. `max_joint_speed_rad_s`는 `imitation.teleop`의 실기 한계(4.8)를 재사용, 신규 11개 포함 37개 planning 테스트 통과
+- **Next**: MP-0013 벤치마크 하네스(PR 대기열이 늘고 있어 우선순위 상향), PR #1(MP-0005)·PR #2(MP-0006) 리뷰/병합, P3 실행 연결(MP-0008)
+- **Full**: [journal/2026-08/31-11-p2-time-parameterize.md](journal/2026-08/31-11-p2-time-parameterize.md)
+
+
 ## 2026-08-31 07:17 — nullspace-regularization-natural-posture
 - **Pick**: 사용자 지적 — 목적지엔 가지만 팔 자세가 부자연스러움, 매니퓰레이터 모션 플래닝을 보통 이렇게 푸는지 질문 + hydrax(sampling MPC) 참조 가능성 문의
 - **Outcome**: position-only IK의 남는 4개 자유도에 표준 nullspace redundancy resolution(현재 관절값에 최대한 가깝게 유지) 추가. 분석해보니 "부자연스러운" 사례 하나는 실제로 가장 가까운 해가 장애물과 충돌해서 정당하게 크게 재배치된 것 — 정칙화는 이런 경우 충돌 회피를 우선한다(의도된 동작). hydrax는 RRT 대체가 아니라 P3(정식 실행) 보완 후보로 조사만 하고 구현은 사용자 확인 대기
