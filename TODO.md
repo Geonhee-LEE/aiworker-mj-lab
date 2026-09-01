@@ -11,7 +11,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
 | MP-0005 | P1 | P2 | claude | [stuck][planner] shortcut 평활화 `planning/shortcut.py` | planning/p2-shortcut-smoothing | ☐ |
-| MP-0006 | P1 | P2 | claude | [planner] `time_parameterize` 사다리꼴 속도 프로파일 | planning/p2-time-parameterize | ☐ |
+| MP-0006 | P1 | P2 | claude | [stuck][planner] `time_parameterize` 사다리꼴 속도 프로파일 | planning/p2-time-parameterize | ☐ |
 
 ## Today
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |

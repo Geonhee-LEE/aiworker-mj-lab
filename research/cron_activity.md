@@ -20,3 +20,4 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
 - 08:02 `researcher` · MP-0013 벤치마크 하네스 설계 지침(성공률 주지표, raw TSV 행 보존, factorial 비교) + MP-0008 실행 모듈 velocity feedforward 옵션 조사, research/2026-09/001.md 신규, 신규 TODO 없음(MP-0013/MP-0008/MP-0009가 이미 커버)
 - 08:30 `brief` · Daily Brief 집계(병목: MP-0013 벤치마크 하네스 부재, Doing 후보 2건 MP-0005/MP-0006), Telegram 발송 실패(telegram.env 없음, MP-0020 미완료) — 결과는 여기에만 기록
 - 11:00 `executor` · Cadence gate #2(stuck TODO) 발동: MP-0005가 2026-08-30 21:05부터 Doing으로 38시간 이상 정체(PR #1은 이미 OPEN, merge 대기 중) — 제목에 `[stuck]` 부착 후 조용히 스킵, Telegram 미발송
+- 21:00 `executor` · Cadence gate #2(stuck TODO) 재발동: MP-0005(38h+, 기존 [stuck])에 더해 MP-0006도 2026-08-31 02:10부터 33h+ Doing 정체 확인(PR #2 OPEN, merge 대기) — MP-0006 제목에 `[stuck]` 신규 부착, `todo_tool.py check`가 "claude Doing 2건" 불변식 위반도 재확인. 조용히 스킵, Telegram 미발송. 병목: PR #1·#2 사람 리뷰/머지 대기 — 머지 전까지 executor가 새 planning TODO를 못 집음
