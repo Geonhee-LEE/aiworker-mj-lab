@@ -3,9 +3,9 @@
 _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트가 함께 수정한다._
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
-- Last update: `2026-08-31 11:03 KST`
-- Open (Doing + Today + Blocked + Backlog): **18**
-- Next ID: `MP-0022`
+- Last update: `2026-09-02 08:01 KST`
+- Open (Doing + Today + Blocked + Backlog): **19**
+- Next ID: `MP-0023`
 
 ## Doing
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -40,6 +40,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0019 | P2 | P0 | claude | [infra] `scripts/todo_tool.py` 단위 테스트(파싱·왕복) |  | ☐ |
 | MP-0020 | P3 | P0 | user | (user) Telegram 봇 생성 후 `scripts/telegram_setup.sh` 실행 확인 |  | ☑ |
 | MP-0021 | P2 | P3 | user | [research] hydrax(GPU sampling MPC) 통합 검토 — P3 실행 레이어에서 RRT-Connect 경로를 매끄럽게 추종하는 저수준 제어로. JAX/MJ... |  | ☐ |
+| MP-0022 | P2 | P4 | claude | [research] aggregate_results.py에 성공률 Wilson 신뢰구간 계산 추가 (MP-0013/0018 완료 후) |  | ☐ |
 
 ## Done
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |

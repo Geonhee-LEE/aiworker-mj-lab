@@ -2,6 +2,13 @@
 
 _cap 30, 최신이 위. REVIEW 단계는 상위 5개만 읽는다._
 
+- [2026-09-02] [002](2026-09/002.md) MP-0013 성공률은 raw 퍼센트 대신 Wilson
+  score 95% CI로 보고할 것 — n=50 근처에서 반폭이 ~±8~10%p라 "45/50=90%"가
+  실제로는 임계값 미달일 수 있음. `collision_state.py._forward`가 매 `is_valid`
+  마다 스크래치 모델 전체(양팔·베이스 등)에 `mj_kinematics`+`mj_collision`을
+  돌리는 구조 확인 — 2분 예산 초과 시 `state_checks` 카운터로 먼저 프로파일링
+  후 `<exclude>` 보강, 모델 축소는 실측 없이 하지 말 것. 신규 TODO 1건
+  (MP-0022, aggregate_results.py에 CI 계산 추가).
 - [2026-09-01] [001](2026-09/001.md) MP-0013 벤치마크 하네스: 주 지표는 예산 내
   성공률, TSV엔 seed별 raw 행(집계는 별도)을 남겨 나중에 percentile/CDF 재계산
   가능하게 할 것, baseline vs shortcut/time_parameterize는 변수 하나만 바꿔
