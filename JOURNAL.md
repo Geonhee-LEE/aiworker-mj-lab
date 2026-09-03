@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-03 — rrt-star-planner
+- **Pick**: 사용자 요청 — RRT-Connect 외 "향상된 다른 모션 플래닝 기법" 추가. `TODO.md`의 MP-0015/16/17(P5)이 정확히 이 백로그였음
+- **Outcome**: `rrt_connect.py` 자산을 재사용하는 단일 트리 RRT*(`planning/rrt_star.py`) 구현 — 고정 rewiring 반경(이론적 shrinking radius 대신, 7-DOF에서 이론식은 반경이 너무 빨리 줄어 rewiring이 거의 안 일어남), 거부 표집 기반 informed sampling. **중요 발견**: RRT-Connect의 기본 `goal_bias`(0.1)를 그대로 물려주면 실제 can-sort 장면에서 40초·6750회 반복 안에도 목표에 못 닿음 — 단일 트리는 bidirectional CONNECT처럼 한 반복에 여러 스텝을 전진 못 하기 때문(RRT-Connect가 고안된 이유이기도 한 트레이드오프). `goal_bias=0.3`/`goal_tolerance_rad=0.5`/`time_budget_s=30`으로 데모 기본값 조정해 해결. 데모에 `--planner {rrt_connect,rrt_star}` 추가, 31개 planning 테스트 통과, PR #4 생성
+- **Next**: PR #1~#4 사람 리뷰/병합, MP-0013 벤치마크 하네스(MP-0017 정식 비교표에 필요), PR #3 병합 후 RRT*에도 shortcut+시간 파라미터화 연결
+- **Full**: [journal/2026-09/03-rrt-star-planner.md](journal/2026-09/03-rrt-star-planner.md)
+
+
 ## 2026-09-03 — demo-natural-motion
 - **Pick**: 사용자 지적 — `--interactive` 데모에서 팔이 목적지에 도달은 하지만 중간 경로 자세가 부자연스러움. 원인: `_run_cycle`/`_run_interactive`가 RRT-Connect의 raw(지그재그) 경로를 그대로 재생. 사용자가 "RRT-Connect 외 다른 향상된 기법 추가 또는 부자연스러운 모션 개선을 먼저 진행"을 요청, 조사 결과 이미 구현·테스트 끝난 PR #1(MP-0005 shortcut)·PR #2(MP-0006 time_parameterize)가 이 문제를 직접 푸는 코드였음을 확인
 - **Outcome**: 두 PR을 병합하지 않고(사용자 선택) 파일 내용만 새 브랜치로 옮겨 데모 실행 경로에 연결. `_execute`를 waypoint 수렴-게이팅에서 `Trajectory` 표본 재생으로 교체. **중요 발견**: config의 하드웨어 관절 속도 한계(4.8 rad/s)를 그대로 재생에 쓰면 이 데모의 오픈루프 PD 토크 컨트롤러가 못 따라가 중간 추종 오차가 1.5 rad까지 벌어짐(`Trajectory`를 실제로 소비하는 첫 코드라 지금까지 발견 안 됐던 문제) — 재생 전용 보수적 속도(`--exec-max-speed-rad-s`, 기본 1.0 rad/s)를 config의 하드웨어 스펙과 분리해 해결. 43개 planning 테스트 통과, PR #3 생성

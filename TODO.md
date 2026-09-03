@@ -4,13 +4,12 @@ _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
 - Last update: `2026-09-03 KST`
-- Open (Doing + Today + Blocked + Backlog): **20**
+- Open (Doing + Today + Blocked + Backlog): **19**
 - Next ID: `MP-0024`
 
 ## Doing
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
-| MP-0016 | P2 | P5 | claude | [planner] `planning/rrt_star.py` 초안 | planning/p5-rrt-star-planner | ☐ |
 
 ## Today
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -22,6 +21,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0005 | P1 | P2 | claude | [stuck][planner] shortcut 평활화 — 구현·테스트 완료, PR #1 사람 리뷰 대기 | planning/p2-shortcut-smoothing | ☐ |
 | MP-0006 | P1 | P2 | claude | [stuck][planner] `time_parameterize` — 구현·테스트 완료, PR #2 사람 리뷰 대기 | planning/p2-time-parameterize | ☐ |
 | MP-0023 | P1 | P2 | claude | [planner] shortcut+시간 파라미터화를 데모 실행 경로에 연결 — 구현·테스트 완료, PR #3 사람 리뷰 대기 | planning/p2-demo-natural-motion | ☐ |
+| MP-0016 | P2 | P5 | claude | [planner] `planning/rrt_star.py` 초안 — 구현·테스트 완료, PR #4 사람 리뷰 대기 | planning/p5-rrt-star-planner | ☐ |
 
 ## Backlog
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -35,7 +35,6 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0012 | P1 | P4 | claude | [planner] `tests/offline_pose_ik.py`를 `planning.goals`로 위임(중복 제거) |  | ☐ |
 | MP-0013 | P0 | P4 | claude | [bench] `scripts/benchmark_planning.py` 작성 — TSV append, 2분 예산 |  | ☐ |
 | MP-0014 | P2 | P4 | claude | [bench] pose goal 20 seed 성공률 측정 |  | ☑ |
-| MP-0015 | P2 | P5 | claude | [research] RRT* rewiring + informed sampling 문헌조사 (rrt_star.py 설계로 충족, journal 참고) |  | ☐ |
 | MP-0017 | P3 | P5 | claude | [bench] RRT-Connect vs RRT* 50 seed 비교표 → `RESULTS.md` |  | ☐ |
 | MP-0018 | P2 | P0 | claude | [infra] `scripts/aggregate_results.py` — TSV→RESULTS.md 집계기 |  | ☐ |
 | MP-0019 | P2 | P0 | claude | [infra] `scripts/todo_tool.py` 단위 테스트(파싱·왕복) |  | ☐ |
@@ -46,6 +45,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 ## Done
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
+| MP-0015 | P2 | P5 | claude | [research] RRT* rewiring + informed sampling 문헌조사 (rrt_star.py 설계 과정으로 충족, journal/2026-09/03-rrt-star-planner.md 참고) |  | ☐ |
 | MP-0003 | P0 | P1 | claude | [planner] `tests/test_planning_core.py` — 무충돌 경로 속성 시험 20 seed |  | ☐ |
 | MP-0002 | P0 | P1 | claude | [planner] RRT-Connect core: `_Tree`, extend/connect, goal-bias sampler |  | ☐ |
 | MP-0001 | P0 | P0 | claude | [planner] `RightArmSpace` + `ArmCollisionChecker` + `EdgeChecker` (P0 기반) |  | ☐ |
