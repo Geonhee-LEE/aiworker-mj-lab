@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-03 — benchmark-harness
+- **Pick**: STATE.md 병목이 두 사이클 연속 같은 항목(MP-0013 벤치마크 하네스 부재). MP-0004/0007/0014/0017이 전부 대기 중이었고, 자동 researcher가 이미 설계 지침(`research/2026-09/001.md`, `002.md`)을 조사해 둠
+- **Outcome**: `scripts/benchmark_planning.py` — `demo_plan_right_arm.py`의 장면·목표 샘플링 재사용, `wall_budget_s` 가드로 2분 예산 보장. 도구를 바로 실제로 돌려 MP-0004도 같은 사이클에서 닫음: 50 seed×2 시나리오(장애물 유/무) 모두 성공률 100%, 계획 시간 중앙값 ~13ms. **작업 중 사고**: 동시에 도는 curator 프로세스와 워킹 디렉토리를 공유하다 브랜치 전환이 꼬여 main에 코드를 두 번 잘못 커밋 — 둘 다 push 전에 발견해 안전 브랜치+cherry-pick으로 완전히 복구, 원격엔 영향 없음. curator의 정당한 상태 커밋(`research/cron_activity.md`)은 별도 보존했으나 raw `git push origin main`이 auto-mode 분류기에 막혀 로컬에 남아 있음(사람 처리 필요)
+- **Next**: PR #1~#7 사람 리뷰/병합(7개로 늘어남), 로컬 main의 curator 커밋 push, MP-0007/0014/0017을 이 하네스로 확장
+- **Full**: [journal/2026-09/03-benchmark-harness.md](journal/2026-09/03-benchmark-harness.md)
+
+
 ## 2026-09-03 — chomp-posture-smoothing
 - **Pick**: 사용자 지적 — IK 계산 자주 실패·연속 동작이 부드럽지 않음·팔 자세가 기괴함 세 한계 중 "자세 기괴함"을 먼저 진행. 원인: RRT-Connect는 비용 함수가 없고 RRT*의 비용은 경로 길이일 뿐, shortcut도 경로를 짧게 할 뿐 매끄럽게 하지 않음
 - **Outcome**: `planning/chomp.py` — 시작·끝 고정, 가속도(2차 차분) 최소화 QP를 관절별 독립 1-D QP 7개로 풀어 `kinematics/optimization.py`의 기존 QP 유틸리티를 그대로 재사용. trust region + EdgeChecker 재검증 + 실패 시 원본 반환으로 무효 경로 불변식 유지. 데모 `--posture-smooth` 실측: 매끄러움 비용 0.14~2.06 → 대부분 0에 가깝게 개선, 재생 오차는 기존과 동일(~0.02 rad). 안전 폴백도 실제 장면에서 발동 확인. 5개 테스트 통과, PR #5 생성

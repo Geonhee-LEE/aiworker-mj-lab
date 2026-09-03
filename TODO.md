@@ -23,18 +23,18 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0023 | P1 | P2 | claude | [planner] shortcut+시간 파라미터화를 데모 실행 경로에 연결 — 구현·테스트 완료, PR #3 사람 리뷰 대기 | planning/p2-demo-natural-motion | ☐ |
 | MP-0016 | P2 | P5 | claude | [planner] `planning/rrt_star.py` 초안 — 구현·테스트 완료, PR #4 사람 리뷰 대기 | planning/p5-rrt-star-planner | ☐ |
 | MP-0024 | P1 | P2 | claude | [planner] CHOMP류 궤적 최적화 후처리(`planning/chomp.py`) — 구현·테스트 완료, PR #5 사람 리뷰 대기 | planning/chomp-posture-smoothing | ☐ |
+| MP-0013 | P0 | P4 | claude | [bench] `scripts/benchmark_planning.py` — 구현·테스트 완료, PR #7 사람 리뷰 대기 | planning/p4-benchmark-harness | ☐ |
+| MP-0004 | P1 | P1 | claude | [planner] can-sort 장면 RRT-Connect 성공률 측정 — 50 seed×2 시나리오 100% 성공(스코프를 10→50으로 확장), PR #7에 포함, 사람 리뷰 대기 | planning/p4-benchmark-harness | ☑ |
 
 ## Backlog
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
-| MP-0004 | P1 | P1 | claude | [planner] can-sort 장면 seed 10개 RRT-Connect 성공률 측정 |  | ☑ |
 | MP-0007 | P1 | P2 | claude | [bench] shortcut 전/후 경로 길이 비교 속성 시험 |  | ☐ |
 | MP-0008 | P1 | P3 | claude | [planner] `planning/execution.py` — `ArmTorqueController` 연결 |  | ☐ |
 | MP-0009 | P1 | P3 | claude | [planner] `test_planning_execution.py` 침투·오차 검증 |  | ☑ |
 | MP-0010 | P2 | P3 | claude | [docs] `docs/guide/motion-planning.md` 작성 + mkdocs nav 등록 |  | ☐ |
 | MP-0011 | P1 | P4 | claude | [planner] `planning/goals.py` Cartesian pose goal → IK 시드 다중 재시도 |  | ☐ |
 | MP-0012 | P1 | P4 | claude | [planner] `tests/offline_pose_ik.py`를 `planning.goals`로 위임(중복 제거) |  | ☐ |
-| MP-0013 | P0 | P4 | claude | [bench] `scripts/benchmark_planning.py` 작성 — TSV append, 2분 예산 |  | ☐ |
 | MP-0014 | P2 | P4 | claude | [bench] pose goal 20 seed 성공률 측정 |  | ☑ |
 | MP-0017 | P3 | P5 | claude | [bench] RRT-Connect vs RRT* 50 seed 비교표 → `RESULTS.md` |  | ☐ |
 | MP-0018 | P2 | P0 | claude | [infra] `scripts/aggregate_results.py` — TSV→RESULTS.md 집계기 |  | ☐ |
