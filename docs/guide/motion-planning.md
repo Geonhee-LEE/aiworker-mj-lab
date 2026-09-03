@@ -14,7 +14,7 @@ sampling-based 모션 플래너다. 베이스·리프트·헤드·손가락·왼
 - **기존 자산을 재사용한다.** FK는 `KinematicTree`, 관절 범위 클리핑 개념은
   `kinematics.constraints`와 같은 패턴을 따른다.
 
-## 현재 구현 (P0 + P1)
+## 현재 구현 (P0 + P1 + P5 대안 플래너)
 
 | 모듈 | 책임 |
 |---|---|
@@ -24,8 +24,87 @@ sampling-based 모션 플래너다. 베이스·리프트·헤드·손가락·왼
 | `local_path.EdgeChecker` | 두 configuration 사이 선분의 충돌 검사(이분 순서) |
 | `settings.load_collision_settings` | `config/default.yaml`의 `planning.collision.*` 로더 |
 | `rrt_connect.plan_rrt_connect` | 두 트리 EXTEND/CONNECT 표준 RRT-Connect. 결정론적 seed. 반환값에 `TreeSnapshot`(탐색한 전체 트리)도 포함 |
+| `rrt_star.plan_rrt_star` | 단일 트리 RRT*. 시간 예산이 끝날 때까지 계속 탐색하며 비용(경로 길이)을 개선 |
 
 평활화·시간 파라미터화(P2)와 정식 실행 모듈(P3)은 아직 없다.
+
+### RRT-Connect 알고리즘 요약
+
+두 트리(시작 쪽, 목표 쪽)를 번갈아 확장한다. 매 반복:
+
+1. `goal_bias` 확률로 목표를, 아니면 `RightArmSpace.sample()`로 관절 범위 안
+   균등 무작위 표본을 하나 뽑는다.
+2. 현재 트리(`tree_a`)를 그 표본 방향으로 `EXTEND`(최근접 노드에서
+   `step_size_rad`만큼 스티어 + `EdgeChecker`로 유효성 확인, 유효하면 노드 추가).
+3. `EXTEND`가 트인 방향으로 나아갔다면(`ADVANCED`), 반대 트리(`tree_b`)를
+   그 새 노드 쪽으로 `CONNECT`(닿거나 막힐 때까지 `EXTEND`를 반복)한다.
+4. `CONNECT`가 닿으면(`REACHED`) 두 트리의 root-to-node 경로를 이어 붙여
+   성공. 아니면 `tree_a`/`tree_b`를 swap하고 다음 반복.
+
+`time_budget_s`가 실제 종료 조건이고 `max_iterations`는 폭주 방지용 상한이다.
+`_Tree.nearest`는 KD-tree가 아니라 선형 탐색이다 — 7-D·수천 노드 규모에서는
+의존성 없이도 충분히 빠르다(§성능 참고). **첫 해를 찾으면 즉시 반환**하므로
+경로 품질(길이)이 운에 좌우된다 — 아래 RRT*가 이 문제를 다룬다.
+
+### RRT* 대안 플래너 (P5)
+
+`rrt_star.plan_rrt_star`는 시간 예산이 끝날 때까지 계속 탐색하며, 새 노드를
+삽입할 때마다 (1) 반경(`rewire_radius_rad`) 안 근접 노드 중 비용(root부터
+누적 거리)이 가장 낮은 쪽을 부모로 선택하고 (2) 반경 안 다른 노드들도 새
+노드를 거치는 편이 더 싸면 부모를 새 노드로 바꾸는(rewire) 방식으로
+점진적으로 경로 비용을 개선한다.
+
+**설계 선택 — 왜 단일 트리인가.** RRT-Connect의 두 트리 bidirectional
+connect와 rewiring을 결합하면 복잡도가 크게 늘어난다(양쪽 트리 모두
+rewiring을 지원해야 하고, 두 트리가 만나는 지점의 비용 계산도 더 복잡해진다).
+그래서 이 모듈은 의도적으로 표준 단일 트리 RRT*로 설계했다.
+
+**설계 선택 — 왜 고정 rewiring 반경인가.** 점근적 최적성을 위한 이론적
+shrinking radius(`gamma * (log n / n)^(1/d)`)는 7-DOF 관절 공간에서 반경이
+매우 빠르게 줄어들어 rewiring이 사실상 거의 일어나지 않는다. 대신 고정
+반경(`rewire_radius_rad`, CLI 기본값 `2 * step_size_rad`)을 쓴다 —
+`trajectory.py`가 코너 blending을 범위 밖으로 명시 보류한 것과 같은 종류의
+실용적 단순화다. 점근적 최적성을 엄밀히 보장하지는 않지만, 시간 예산 안에서
+비용을 계속 개선한다는 핵심 이득은 그대로 유지된다
+(`tests/test_planning_rrt_star.py::test_rewiring_improves_cost_over_time`이
+이 성질을 회귀 감시한다).
+
+**설계 선택 — informed sampling은 거부 표집으로.** 첫 해를 찾은 뒤부터는
+`dist(start, x) + dist(x, goal) < best_cost`인 표본만 받아들이는 거부
+표집을 쓴다(`informed_sampling=True`가 기본). 7-D 타원체의 회전행렬을 직접
+구성하는 정식 Informed RRT* 샘플러보다 훨씬 단순하면서, 이미 찾은 해보다
+더 나은 해가 지날 수 있는 영역으로 탐색을 좁히는 같은 효과를 낸다.
+
+**실측으로 발견한 튜닝 — RRT-Connect의 기본값을 그대로 물려주면 안 된다.**
+RRT-Connect는 두 트리가 서로를 향해 CONNECT하며 한 반복에 여러 스텝을
+한꺼번에 전진할 수 있어, `goal_bias=0.1`만으로도 이 저장소의 실제
+can-sort 장면에서 보통 1회 반복 안에 성공한다. RRT*는 단일 트리라 한
+반복에 `step_size_rad`만큼만 전진하는데, 실측 결과 같은 `goal_bias=0.1`·
+목표 연결 반경(`goal_tolerance_rad`)을 `step_size_rad`로 두면 이 장면에서
+40초·6750회 반복 안에도 목표에 못 닿는 경우가 있었다(단일 트리 RRT류가
+bidirectional 탐색보다 점-대-점 질의에 훨씬 느리다는 건 RRT-Connect가
+애초에 고안된 이유이기도 한 잘 알려진 트레이드오프다). `goal_bias=0.3`,
+`goal_tolerance_rad=0.5`로 올리자 같은 예산 안에서 안정적으로 성공했다 —
+데모 CLI는 `--planner rrt_star`일 때 이 값들과 더 넉넉한 기본
+`--time-budget-s`(30초, RRT-Connect는 5초)를 자동으로 쓴다. 그래도
+실제 장면에서 성공까지 보통 수천 회 반복·10~20초가 걸린다 — RRT-Connect의
+수 밀리초 대비 훨씬 느리다. 이건 **비용 최적화**와 **빠른 첫 해**라는
+서로 다른 목표를 고른 트레이드오프이지 버그가 아니다.
+
+```bash
+# RRT*로 계획 + 재생 (RRT-Connect보다 훨씬 오래 걸리지만 더 짧은 경로를 낸다)
+PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/demo_plan_right_arm.py \
+    --seed 3 --execute --planner rrt_star
+
+# 두 플래너의 경로 길이를 직접 비교
+PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/demo_plan_right_arm.py --seed 3 --execute
+PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/demo_plan_right_arm.py --seed 3 --execute --planner rrt_star
+```
+
+`--show-tree`로 뷰어에 그리면 RRT*는 단일 트리이므로 목표 쪽(파랑)에는
+목표점 하나만 표시된다(시작 쪽 초록 트리만 실제로 자란다) — 트리 시각화
+코드 자체는 두 플래너가 같은 `PlannerResult`/`TreeSnapshot` 인터페이스를
+공유해서 고칠 필요가 없었다.
 
 ## 직접 실행해 보기
 
@@ -240,5 +319,8 @@ raw 모델에서 `contype=2 conaffinity=0`으로 오른팔과 충돌하지 않�
 
 ## 다음 단계
 
-P2(shortcut 평활화 + 시간 파라미터화)부터는 자동 연구 루프(`docs/agents.md`)가
+RRT*(P5) 초안(`planning/rrt_star.py`)까지 구현·데모 연결이 끝났다. 다음은
+`MP-0017`(RRT-Connect vs RRT* 50-seed 정식 비교표, `RESULTS.md`) — 벤치마크
+하네스(`MP-0013`)가 먼저 있어야 한다. P2(shortcut 평활화 + 시간
+파라미터화)와 P3(정식 실행 모듈)는 자동 연구 루프(`docs/agents.md`)가
 `TODO.md`를 보고 진행한다. 로드맵 전체는 [`docs/prd.md`](../prd.md) §2를 참고.

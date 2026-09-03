@@ -1,4 +1,4 @@
-"""오른팔 RRT-Connect 모션 플래닝을 실제 can-sort 장면에서 직접 실행하는 데모.
+"""오른팔 RRT-Connect/RRT* 모션 플래닝을 실제 can-sort 장면에서 직접 실행하는 데모.
 
 실행 (저장소 루트에서):
 
@@ -8,9 +8,14 @@
     --seed N           목표 configuration 샘플링 seed (기본 0)
     --start "q0 .. q6"  시작 configuration 직접 지정 (기본: 미리 확인한 유효 자세)
     --goal "q0 .. q6"   목표 configuration 직접 지정 (기본: seed로 무작위 유효 표본)
+    --planner {rrt_connect,rrt_star}
+                        rrt_connect(기본)는 첫 해를 찾으면 즉시 반환한다. rrt_star는
+                        시간 예산이 끝날 때까지 계속 탐색하며 경로 비용을 개선한다
+    --rewire-radius-rad rrt_star 전용 rewiring 반경 (기본 2 * --step-size-rad)
     --execute           계획한 경로를 MuJoCo 물리로 재생하고 추종 오차를 보고
     --viewer            실시간 뷰어 창을 띄워 눈으로 확인
-    --show-tree         RRT-Connect가 탐색한 두 트리를 뷰어에 그린다(--viewer 자동 활성화)
+    --show-tree         탐색한 트리를 뷰어에 그린다(--viewer 자동 활성화). rrt_star는
+                        단일 트리라 목표 쪽(파랑)에는 목표점 하나만 표시된다
     --loop N            목표에 도착할 때마다 새 무작위 목표를 다시 계획·재생한다.
                         N<=0이면 뷰어를 닫거나 Ctrl-C할 때까지 계속 반복(기본 1회)
     --no-obstacle       탐색 영역에 추가한 장애물(빨간 구체 3개)을 빼고 비교
@@ -46,6 +51,7 @@ from ffw_sh5_grasp.planning import (
     EdgeChecker,
     RightArmSpace,
     plan_rrt_connect,
+    plan_rrt_star,
 )
 
 OBSTACLE_PREFIX = "planning_obstacle_"
@@ -336,6 +342,27 @@ def _solve_valid_ik(solver, checker, q_init, target_pos, context_qpos, rng, *, n
     return None, None, False
 
 
+def _plan_path(space, edge_checker, start, goal, rng, args):
+    """``args.planner``에 따라 RRT-Connect 또는 RRT*로 계획한다.
+
+    둘 다 같은 ``planning.rrt_connect.PlannerResult``를 반환하므로(RRT*는
+    단일 트리라 ``goal_tree``에 노드 1개짜리 스냅샷을 채워 넣는다) 트리
+    표시·경로 재생 코드는 어느 쪽을 골라도 그대로 동작한다.
+    """
+    if args.planner == "rrt_star":
+        return plan_rrt_star(
+            space, edge_checker, start, goal,
+            rng=rng, step_size_rad=args.step_size_rad, goal_bias=args.goal_bias,
+            max_iterations=args.max_iterations, time_budget_s=args.time_budget_s,
+            rewire_radius_rad=args.rewire_radius_rad, goal_tolerance_rad=args.goal_tolerance_rad,
+        )
+    return plan_rrt_connect(
+        space, edge_checker, start, goal,
+        rng=rng, step_size_rad=args.step_size_rad, goal_bias=args.goal_bias,
+        max_iterations=args.max_iterations, time_budget_s=args.time_budget_s,
+    )
+
+
 def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
     """노란 구슬을 마우스로 드래그할 때마다 그 위치로 IK + 계획 + 실행을 반복한다."""
     solver = JointSpaceKinematics(model, TREE_SITE_NAME, list(space.joint_names), tree=checker.tree)
@@ -408,11 +435,7 @@ def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
             print(f"  IK는 풀렸지만(pos_err={pos_err:.4f}) 충돌 없는 해를 못 찾았습니다. 다른 위치를 시도하세요.")
             continue
 
-        result = plan_rrt_connect(
-            space, edge_checker, current_q, q_goal,
-            rng=rng, step_size_rad=args.step_size_rad, goal_bias=args.goal_bias,
-            max_iterations=args.max_iterations, time_budget_s=args.time_budget_s,
-        )
+        result = _plan_path(space, edge_checker, current_q, q_goal, rng, args)
         print(
             f"  계획: success={result.success} reason={result.reason} "
             f"iterations={result.iterations} elapsed={result.elapsed_s:.3f}s"
@@ -430,11 +453,7 @@ def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
 def _run_cycle(cycle, model, data, space, checker, edge_checker, start, goal, rng, args, viewer):
     """계획 한 번 + (선택) 트리 표시 + (선택) 실행. 성공한 목표 configuration을 반환한다."""
     print(f"--- cycle {cycle}: start={np.round(start, 2).tolist()} goal={np.round(goal, 2).tolist()} ---")
-    result = plan_rrt_connect(
-        space, edge_checker, start, goal,
-        rng=rng, step_size_rad=args.step_size_rad, goal_bias=args.goal_bias,
-        max_iterations=args.max_iterations, time_budget_s=args.time_budget_s,
-    )
+    result = _plan_path(space, edge_checker, start, goal, rng, args)
     print(
         f"success={result.success} reason={result.reason} "
         f"iterations={result.iterations} nodes={result.node_counts} "
@@ -472,10 +491,40 @@ def main(argv=None):
     parser.add_argument("--start", type=_parse_q, default=None)
     parser.add_argument("--goal", type=_parse_q, default=None)
     parser.add_argument("--padding-m", type=float, default=0.012)
+    parser.add_argument(
+        "--planner", choices=["rrt_connect", "rrt_star"], default="rrt_connect",
+        help=(
+            "rrt_connect(기본)는 첫 해를 찾으면 즉시 반환한다. rrt_star는 시간 "
+            "예산이 끝날 때까지 계속 탐색하며 비용(경로 길이)이 더 낮은 해로 갱신한다"
+        ),
+    )
     parser.add_argument("--step-size-rad", type=float, default=0.3)
-    parser.add_argument("--goal-bias", type=float, default=0.1)
+    parser.add_argument(
+        "--goal-bias", type=float, default=None,
+        help=(
+            "기본 rrt_connect=0.1, rrt_star=0.3. rrt_star는 bidirectional CONNECT가 "
+            "없는 단일 트리라, 목표 쪽으로 매 반복 조금씩만 전진한다 — goal_bias가 "
+            "낮으면(0.1) 실측상 이 장면에서 40초/수천 반복 안에도 목표에 못 닿는 "
+            "경우가 흔해 더 높은 기본값을 쓴다"
+        ),
+    )
+    parser.add_argument(
+        "--goal-tolerance-rad", type=float, default=None,
+        help="rrt_star 전용, 목표 연결 판정 반경. 기본 0.5 (rrt_connect는 정확히 목표에 닿아야 성공)",
+    )
     parser.add_argument("--max-iterations", type=int, default=4000)
-    parser.add_argument("--time-budget-s", type=float, default=5.0)
+    parser.add_argument(
+        "--time-budget-s", type=float, default=None,
+        help=(
+            "기본 rrt_connect=5.0s, rrt_star=15.0s. rrt_star는 첫 해를 찾은 뒤에도 "
+            "계속 개선하고, 단일 트리라 bidirectional CONNECT처럼 한 반복에 여러 "
+            "스텝을 한꺼번에 전진하지도 못해 rrt_connect보다 훨씬 오래 걸린다"
+        ),
+    )
+    parser.add_argument(
+        "--rewire-radius-rad", type=float, default=None,
+        help="rrt_star 전용. 기본값은 2 * --step-size-rad",
+    )
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--viewer", action="store_true")
     parser.add_argument("--show-tree", action="store_true", help="--viewer를 자동으로 켠다")
@@ -490,6 +539,14 @@ def main(argv=None):
         help="목표를 마우스로 드래그하는 노란 구슬로 대체한다(--viewer 자동 활성화)",
     )
     args = parser.parse_args(argv)
+    if args.rewire_radius_rad is None:
+        args.rewire_radius_rad = 2.0 * args.step_size_rad
+    if args.time_budget_s is None:
+        args.time_budget_s = 30.0 if args.planner == "rrt_star" else 5.0
+    if args.goal_bias is None:
+        args.goal_bias = 0.3 if args.planner == "rrt_star" else 0.1
+    if args.goal_tolerance_rad is None:
+        args.goal_tolerance_rad = 0.5
     use_viewer = args.viewer or args.show_tree or args.interactive
     with_obstacle = not args.no_obstacle
 
