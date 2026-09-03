@@ -2,6 +2,14 @@
 
 _cap 30, 최신이 위. REVIEW 단계는 상위 5개만 읽는다._
 
+- [2026-09-03] [003](2026-09/003-vamp-mr.md) 사용자 제안 VAMP-MR(SIMD 가속
+  multi-arm 플래너) 검토 — GitHub API로 사실관계 확인 결과 기술 주장은
+  정확(10-100x, IROS 2026, Baxter dual-arm 지원 등). 다만 PRD Non-Goal(외부
+  플래닝 라이브러리, OMPL 명시 제외)과 정면 충돌 + `libompl-dev` 등 전이
+  의존성으로 실제로 OMPL을 끌고 들어옴 + sudo 시스템 패키지가 필요한 무거운
+  C++ 빌드. hydrax(MP-0021)와 같은 취급으로 owner=user TODO만 등록,
+  구현은 사용자의 명시적 PRD 수정 + 시스템 설치 승인 대기. 신규 TODO 1건
+  (MP-0025).
 - [2026-09-02] [002](2026-09/002.md) MP-0013 성공률은 raw 퍼센트 대신 Wilson
   score 95% CI로 보고할 것 — n=50 근처에서 반폭이 ~±8~10%p라 "45/50=90%"가
   실제로는 임계값 미달일 수 있음. `collision_state.py._forward`가 매 `is_valid`
