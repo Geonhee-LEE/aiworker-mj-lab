@@ -10,7 +10,10 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from ffw_sh5_grasp.config import load_settings  # noqa: E402
-from ffw_sh5_grasp.planning.settings import load_collision_settings  # noqa: E402
+from ffw_sh5_grasp.planning.settings import (  # noqa: E402
+    load_collision_settings,
+    load_trajectory_settings,
+)
 
 
 def test_schema_version_is_six():
@@ -23,6 +26,21 @@ def test_default_collision_settings_load():
     assert settings.padding_m > 0.0
     assert settings.clearance_report_m > settings.padding_m
     assert isinstance(settings.ignore_hand_internal_contacts, bool)
+
+
+def test_default_trajectory_settings_load():
+    settings = load_trajectory_settings()
+    assert settings.max_joint_speed_rad_s > 0.0
+    assert settings.max_joint_accel_rad_s2 > 0.0
+
+
+def test_trajectory_speed_matches_hardware_joint_limit():
+    settings = load_settings()
+    # imitation.teleop이 문서화한 FFW-SH5 follower URDF 관절 한계와 같은 값을
+    # 써서 계획한 궤적이 실행 시 하드웨어 한계를 넘지 않도록 맞춘다.
+    hardware_limit = settings.number("imitation.teleop.max_joint_speed_rad_s")
+    planning_limit = settings.number("planning.trajectory.max_joint_speed_rad_s")
+    assert planning_limit == hardware_limit
 
 
 def test_padding_is_between_cbf_safe_distance_and_buffer():

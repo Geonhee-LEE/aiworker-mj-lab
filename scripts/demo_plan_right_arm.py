@@ -17,6 +17,26 @@
     --interactive       목표를 마우스로 직접 옮긴다(--viewer 자동 활성화). teleop_app.py처럼
                         노란 구슬을 더블클릭으로 선택하고 Ctrl+마우스 오른쪽 버튼으로
                         드래그하면, 놓인 위치까지 IK를 풀고 그 자세로 다시 계획·재생한다.
+    --no-shortcut       raw RRT-Connect 경로와 비교하기 위해 shortcut 평활화를 끈다
+    --no-time-parameterize
+                        raw waypoint 간격과 비교하기 위해 사다리꼴 시간 파라미터화를 끈다
+    --exec-max-speed-rad-s / --exec-max-accel-rad-s2
+                        재생 궤적의 속도·가속도 상한(기본 1.0 rad/s, 2.0 rad/s²).
+                        config의 하드웨어 한계(4.8 rad/s)보다 훨씬 보수적이다 —
+                        아래 참고.
+
+계획한 경로는 기본적으로 shortcut 평활화(``planning.shortcut``) + 사다리꼴
+속도 프로파일 시간 파라미터화(``planning.trajectory``)를 거친 뒤 재생된다 —
+raw RRT-Connect 경로는 트리 확장 과정의 지그재그 waypoint를 그대로 담고 있어
+그대로 재생하면 팔이 부자연스럽게 움직인다.
+
+재생 속도 상한은 config의 ``planning.trajectory.max_joint_speed_rad_s``(실제
+FFW-SH5 하드웨어 한계, 4.8 rad/s)를 쓰지 않고 CLI 기본값(1.0 rad/s)을 쓴다 —
+이 데모가 재생에 쓰는 ``ArmTorqueController``는 오픈루프 PD + 중력보상
+토크 제어기라서, 하드웨어 한계 그대로의 빠른 기준 궤적을 그대로 따라가지
+못하고 추종 오차가 계속 벌어진다(실측: 4.8 rad/s 기준 궤적에서 중간 추종
+오차 최대 1.5 rad). 실제 로봇처럼 자체 서보/궤적 추종기가 있는 실행
+경로라면 하드웨어 한계를 그대로 써도 된다.
 
 기본적으로 오른팔이 실제로 뻗는 영역 안에 피해 가야 하는 장애물(빨간 구체
 3개, ``planning_obstacle_0..2``)을 추가한다. 저장소의 ``models/full_scene.xml``은
@@ -45,8 +65,12 @@ from ffw_sh5_grasp.planning import (
     ArmCollisionChecker,
     EdgeChecker,
     RightArmSpace,
+    path_length_rad,
     plan_rrt_connect,
+    shortcut_path,
+    time_parameterize,
 )
+from ffw_sh5_grasp.planning.settings import TrajectorySettings, load_trajectory_settings
 
 OBSTACLE_PREFIX = "planning_obstacle_"
 # (x, y, z, radius) 구체 3개. "테이블 위"가 아니라 오른팔이 무작위 관절
@@ -227,27 +251,45 @@ def _step_waypoint(model, data, controller, space, q_des, max_steps, converge_to
     return True
 
 
-def _execute(model, data, space, path, *, viewer, converge_tol_rad=0.02, max_wait_s=3.0):
-    """웨이포인트마다 실제로 수렴할 때까지 기다렸다가 다음으로 넘어간다.
+def _postprocess_path(space, edge_checker, path, rng, args, dt, trajectory_settings):
+    """RRT-Connect의 raw 경로를 (선택적으로) shortcut 평활화 + 시간 파라미터화한다.
 
-    관절 공간 거리로 재생 시간을 미리 계산하는 대신 수렴 게이팅을 쓰는 이유는,
-    ``ArmTorqueController``의 토크 제한 하에서 큰 다관절 동시 이동이 planner의
-    ``max_joint_speed_rad_s`` 가정보다 훨씬 느리게 추종될 수 있기 때문이다
-    (미리 정한 시간표대로 밀어붙이면 오차가 누적된다). 정식 시간 파라미터화는
-    P2에서 다룬다 — 이 함수는 데모/디버그 재생용이다.
+    raw 경로는 트리 확장 과정에서 생긴 지그재그 waypoint를 그대로 담고 있어
+    그대로 재생하면 팔이 부자연스럽게 움직인다. ``shortcut_path``로 불필요한
+    굴곡을 잘라내고, ``time_parameterize``로 매 waypoint에서 멈추지 않는
+    (세그먼트별로는 멈추는) 사다리꼴 속도 프로파일을 만든다. ``--no-shortcut``/
+    ``--no-time-parameterize``는 이 효과를 raw 경로와 비교하기 위한 디버그
+    플래그다.
+    """
+    smoothed = path
+    if not args.no_shortcut:
+        smoothed = shortcut_path(space, edge_checker, path, rng=rng, iterations=200)
+    if args.no_time_parameterize:
+        # 시간 파라미터화를 끈 비교 모드 — trajectory는 없다. 호출자는
+        # ``_execute_waypoints``로 예전(수렴 게이팅) 재생 방식을 써야 한다.
+        return smoothed, None
+    trajectory = time_parameterize(
+        space, smoothed,
+        max_speed_rad_s=trajectory_settings.max_joint_speed_rad_s,
+        max_accel_rad_s2=trajectory_settings.max_joint_accel_rad_s2,
+        control_period_s=dt,
+    )
+    return smoothed, trajectory
+
+
+def _execute_waypoints(model, data, space, path, *, viewer, converge_tol_rad=0.02, max_wait_s=3.0):
+    """시간 파라미터화 없이, waypoint마다 수렴할 때까지 기다렸다가 다음으로 넘어간다.
+
+    ``--no-time-parameterize`` 비교 모드 전용 — 사다리꼴 속도 프로파일이 만드는
+    표본이 아니라 raw/shortcut 후 waypoint 간격 그대로를 재생하므로, 관절
+    공간 거리로 재생 시간을 미리 계산할 수 없어 수렴 게이팅이 필요하다.
     """
     controller = ArmTorqueController(model, space.joint_names)
     dt = float(model.opt.timestep)
     max_steps_per_waypoint = max(1, int(round(max_wait_s / dt)))
 
-    if viewer is None:
-        for q_des in path[1:]:
-            _step_waypoint(model, data, controller, space, q_des, max_steps_per_waypoint,
-                            converge_tol_rad, on_frame=None)
-    else:
-        # 물리는 dt(보통 1 kHz)마다 진행하되, 화면 갱신은 ~60 Hz로만 한다.
-        # 매 물리 스텝마다 뷰어를 sync()하면 Wayland/GLFW 오버헤드 때문에
-        # 15-waypoint 경로 하나가 실제로 1분 넘게 걸릴 수 있다(실측).
+    on_frame = None
+    if viewer is not None:
         render_every = max(1, int(round(1.0 / (60.0 * dt))))
         frame_counter = 0
 
@@ -259,13 +301,62 @@ def _execute(model, data, space, path, *, viewer, converge_tol_rad=0.02, max_wai
                 viewer.sync()
             return viewer.is_running()
 
-        for q_des in path[1:]:
-            if not _step_waypoint(model, data, controller, space, q_des,
-                                   max_steps_per_waypoint, converge_tol_rad, on_frame):
-                break
+    for q_des in path[1:]:
+        if not _step_waypoint(model, data, controller, space, q_des, max_steps_per_waypoint,
+                               converge_tol_rad, on_frame):
+            break
 
     final_q = data.qpos[space.qpos_adrs]
     error = np.abs(final_q - path[-1])
+    return float(np.max(error))
+
+
+def _execute(model, data, space, trajectory, *, viewer, converge_tol_rad=0.02, settle_wait_s=1.0):
+    """시간 파라미터화된 궤적을 표본 하나당 물리 스텝 하나씩 재생한다.
+
+    ``trajectory.positions``는 이미 ``time_parameterize``가 물리 timestep
+    간격(``control_period_s=dt``)으로 속도·가속도 상한을 지키도록 만든
+    표본이므로, 예전(raw waypoint 재생)처럼 매 waypoint마다 수렴을 기다릴
+    필요가 없다. 다만 ``ArmTorqueController``의 토크 제한 때문에 실제 추종이
+    계획보다 살짝 늦을 수 있어, 재생이 끝난 뒤 마지막 목표에서만 짧게
+    수렴을 기다린다.
+    """
+    controller = ArmTorqueController(model, space.joint_names)
+    dt = float(model.opt.timestep)
+    positions = trajectory.positions
+
+    on_frame = None
+    if viewer is not None:
+        # 물리는 dt(보통 1 kHz)마다 진행하되, 화면 갱신은 ~60 Hz로만 한다.
+        # 매 물리 스텝마다 뷰어를 sync()하면 Wayland/GLFW 오버헤드 때문에
+        # 긴 경로 하나가 실제로 1분 넘게 걸릴 수 있다(실측).
+        render_every = max(1, int(round(1.0 / (60.0 * dt))))
+        frame_counter = 0
+
+        def on_frame():
+            nonlocal frame_counter
+            frame_counter += 1
+            time.sleep(dt)
+            if frame_counter % render_every == 0:
+                viewer.sync()
+            return viewer.is_running()
+
+    running = True
+    for q_des in positions[1:]:
+        if not running:
+            break
+        controller.apply(data, q_des)
+        mujoco.mj_step(model, data)
+        if on_frame is not None:
+            running = on_frame()
+
+    if running:
+        max_settle_steps = max(1, int(round(settle_wait_s / dt)))
+        _step_waypoint(model, data, controller, space, positions[-1], max_settle_steps,
+                        converge_tol_rad, on_frame)
+
+    final_q = data.qpos[space.qpos_adrs]
+    error = np.abs(final_q - positions[-1])
     return float(np.max(error))
 
 
@@ -336,7 +427,7 @@ def _solve_valid_ik(solver, checker, q_init, target_pos, context_qpos, rng, *, n
     return None, None, False
 
 
-def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
+def _run_interactive(model, data, space, checker, edge_checker, viewer, args, trajectory_settings):
     """노란 구슬을 마우스로 드래그할 때마다 그 위치로 IK + 계획 + 실행을 반복한다."""
     solver = JointSpaceKinematics(model, TREE_SITE_NAME, list(space.joint_names), tree=checker.tree)
     marker_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, MARKER_NAME)
@@ -420,14 +511,26 @@ def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
         if result.success:
             if args.show_tree:
                 _show_tree(viewer, checker, space, result, pause_s=args.tree_pause_s)
-            _draw_path(viewer, checker, space, result.path)
-            max_error = _execute(model, data, space, result.path, viewer=viewer)
+            smoothed, trajectory = _postprocess_path(
+                space, edge_checker, result.path, rng, args,
+                float(model.opt.timestep), trajectory_settings,
+            )
+            print(
+                f"  경로 길이(raw): {path_length_rad(space, result.path):.3f} rad → "
+                f"(평활화 후): {path_length_rad(space, smoothed):.3f} rad"
+            )
+            _draw_path(viewer, checker, space, smoothed)
+            if trajectory is not None:
+                max_error = _execute(model, data, space, trajectory, viewer=viewer)
+            else:
+                max_error = _execute_waypoints(model, data, space, smoothed, viewer=viewer)
             _clear_scene(viewer)
             print(f"  실행 완료. 최종 관절 오차(최대) = {max_error:.4f} rad")
             current_q = data.qpos[space.qpos_adrs].copy()
 
 
-def _run_cycle(cycle, model, data, space, checker, edge_checker, start, goal, rng, args, viewer):
+def _run_cycle(cycle, model, data, space, checker, edge_checker, start, goal, rng, args, viewer,
+                trajectory_settings):
     """계획 한 번 + (선택) 트리 표시 + (선택) 실행. 성공한 목표 configuration을 반환한다."""
     print(f"--- cycle {cycle}: start={np.round(start, 2).tolist()} goal={np.round(goal, 2).tolist()} ---")
     result = plan_rrt_connect(
@@ -445,6 +548,21 @@ def _run_cycle(cycle, model, data, space, checker, edge_checker, start, goal, rn
     if not result.success:
         return None
     print(f"path waypoints = {len(result.path)}")
+    smoothed, trajectory = _postprocess_path(
+        space, edge_checker, result.path, rng, args, float(model.opt.timestep), trajectory_settings,
+    )
+    if trajectory is not None:
+        print(
+            f"경로 길이(raw): {path_length_rad(space, result.path):.3f} rad → "
+            f"(평활화 후): {path_length_rad(space, smoothed):.3f} rad, "
+            f"궤적 표본 = {len(trajectory.positions)}, 소요 = {trajectory.times[-1]:.2f}s"
+        )
+    else:
+        print(
+            f"경로 길이(raw): {path_length_rad(space, result.path):.3f} rad → "
+            f"(평활화 후): {path_length_rad(space, smoothed):.3f} rad "
+            "(시간 파라미터화 없음 — waypoint 수렴 게이팅으로 재생)"
+        )
 
     if args.execute:
         # live data를 이 cycle의 시작점으로 맞춘 뒤 재생한다. (이 동기화 없이
@@ -457,13 +575,16 @@ def _run_cycle(cycle, model, data, space, checker, edge_checker, start, goal, rn
             # 지우지 않는다 — "이 경로를 따라가는 중"이라는 걸 눈으로
             # 비교할 수 있게. ``_execute``의 프레임 콜백은 user_scn을
             # 건드리지 않으므로 여기서 그린 것이 실행 내내 그대로 남는다.
-            _draw_path(viewer, checker, space, result.path)
-        max_error = _execute(model, data, space, result.path, viewer=viewer)
+            _draw_path(viewer, checker, space, smoothed)
+        if trajectory is not None:
+            max_error = _execute(model, data, space, trajectory, viewer=viewer)
+        else:
+            max_error = _execute_waypoints(model, data, space, smoothed, viewer=viewer)
         print(f"실행 완료. 최종 관절 오차(최대) = {max_error:.4f} rad")
         if viewer is not None:
             _clear_scene(viewer)
 
-    return result.path[-1]
+    return smoothed[-1]
 
 
 def main(argv=None):
@@ -489,6 +610,26 @@ def main(argv=None):
         "--interactive", action="store_true",
         help="목표를 마우스로 드래그하는 노란 구슬로 대체한다(--viewer 자동 활성화)",
     )
+    parser.add_argument(
+        "--no-shortcut", action="store_true",
+        help="raw RRT-Connect 경로와 비교하기 위해 shortcut 평활화를 끈다",
+    )
+    parser.add_argument(
+        "--no-time-parameterize", action="store_true",
+        help="raw waypoint 간격과 비교하기 위해 사다리꼴 시간 파라미터화를 끈다",
+    )
+    parser.add_argument(
+        "--exec-max-speed-rad-s", type=float, default=1.0,
+        help=(
+            "재생 궤적을 만들 때 쓰는 관절 속도 상한(rad/s). config의 "
+            "planning.trajectory.max_joint_speed_rad_s(실제 하드웨어 한계, 4.8)보다 "
+            "훨씬 보수적인 기본값이다 — 이 데모의 오픈루프 PD 토크 컨트롤러"
+            "(ArmTorqueController)는 4.8 rad/s 기준 궤적을 그대로 추종하지 못한다"
+            "(실측: 중간 추종 오차가 1.5 rad까지 벌어짐). 실제 로봇에서 자체 서보로"
+            "재생할 때는 하드웨어 한계를 그대로 써도 된다."
+        ),
+    )
+    parser.add_argument("--exec-max-accel-rad-s2", type=float, default=2.0)
     args = parser.parse_args(argv)
     use_viewer = args.viewer or args.show_tree or args.interactive
     with_obstacle = not args.no_obstacle
@@ -503,6 +644,14 @@ def main(argv=None):
     )
     checker.set_snapshot(data)
     edge_checker = EdgeChecker(space, checker.is_valid, resolution_rad=0.05)
+    # config가 문서화하는 하드웨어 관절 속도·가속도 한계 자체는 여전히 유효한지
+    # 확인한다(스키마·일관성 검증) — 다만 이 데모의 시뮬레이션 재생에는 쓰지
+    # 않는다. 아래 참고.
+    load_trajectory_settings()
+    trajectory_settings = TrajectorySettings(
+        max_joint_speed_rad_s=args.exec_max_speed_rad_s,
+        max_joint_accel_rad_s2=args.exec_max_accel_rad_s2,
+    )
 
     rng = np.random.default_rng(args.seed)
     start = args.start if args.start is not None else DEFAULT_START
@@ -526,7 +675,7 @@ def main(argv=None):
                 return 1
             reached = _run_cycle(
                 cycle_count, model, data, space, checker, edge_checker,
-                current_start, goal, rng, args, viewer,
+                current_start, goal, rng, args, viewer, trajectory_settings,
             )
             if reached is None:
                 return 1
@@ -546,7 +695,7 @@ def main(argv=None):
             # home 자세를 기준으로 삼아 상자와 겹치는 무효한 시작점을 쓰게 된다.)
             space.write(data.qpos, start)
             mujoco.mj_forward(model, data)
-            _run_interactive(model, data, space, checker, edge_checker, viewer, args)
+            _run_interactive(model, data, space, checker, edge_checker, viewer, args, trajectory_settings)
             rc = 0
         else:
             rc = run_all(viewer)
