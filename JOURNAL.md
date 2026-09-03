@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-03 — demo-natural-motion
+- **Pick**: 사용자 지적 — `--interactive` 데모에서 팔이 목적지에 도달은 하지만 중간 경로 자세가 부자연스러움. 원인: `_run_cycle`/`_run_interactive`가 RRT-Connect의 raw(지그재그) 경로를 그대로 재생. 사용자가 "RRT-Connect 외 다른 향상된 기법 추가 또는 부자연스러운 모션 개선을 먼저 진행"을 요청, 조사 결과 이미 구현·테스트 끝난 PR #1(MP-0005 shortcut)·PR #2(MP-0006 time_parameterize)가 이 문제를 직접 푸는 코드였음을 확인
+- **Outcome**: 두 PR을 병합하지 않고(사용자 선택) 파일 내용만 새 브랜치로 옮겨 데모 실행 경로에 연결. `_execute`를 waypoint 수렴-게이팅에서 `Trajectory` 표본 재생으로 교체. **중요 발견**: config의 하드웨어 관절 속도 한계(4.8 rad/s)를 그대로 재생에 쓰면 이 데모의 오픈루프 PD 토크 컨트롤러가 못 따라가 중간 추종 오차가 1.5 rad까지 벌어짐(`Trajectory`를 실제로 소비하는 첫 코드라 지금까지 발견 안 됐던 문제) — 재생 전용 보수적 속도(`--exec-max-speed-rad-s`, 기본 1.0 rad/s)를 config의 하드웨어 스펙과 분리해 해결. 43개 planning 테스트 통과, PR #3 생성
+- **Next**: PR #1/#2/#3 사람 리뷰/병합, `planning/p5-rrt-star-planner`(MP-0016, RRT* 대안 플래너) 착수
+- **Full**: [journal/2026-09/03-demo-natural-motion.md](journal/2026-09/03-demo-natural-motion.md)
+
+
 ## 2026-08-31 11:10 — p2-time-parameterize
 - **Pick**: MP-0006 — `planning.trajectory.time_parameterize` 사다리꼴 속도 프로파일. `research/feed.md`의 같은 날 researcher 노트가 이 TODO를 정확히 다뤄 설계 출발점으로 삼음
 - **Outcome**: 처음 구현한 "웨이포인트에서 안 멈추는 전역 단일 프로파일"이 다중 waypoint 합성 경로 시험에서 가속도 상한 위반(상한 4.0 vs 실측 173 rad/s²)을 냄 — 세그먼트 경계(코너)에서 관절 속도 방향이 불연속으로 바뀌기 때문. research 노트가 권장한 "세그먼트별 독립 사다리꼴 + 매 waypoint 정지"(moveit 계열)로 재구현해 해결. 모든 관절이 같은 스칼라 상한을 쓰므로 표준 다관절 동기화가 Linf 세그먼트 거리와 수학적으로 동치임을 확인. `max_joint_speed_rad_s`는 `imitation.teleop`의 실기 한계(4.8)를 재사용, 신규 11개 포함 37개 planning 테스트 통과
