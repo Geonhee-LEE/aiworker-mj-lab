@@ -17,6 +17,9 @@
     --interactive       목표를 마우스로 직접 옮긴다(--viewer 자동 활성화). teleop_app.py처럼
                         노란 구슬을 더블클릭으로 선택하고 Ctrl+마우스 오른쪽 버튼으로
                         드래그하면, 놓인 위치까지 IK를 풀고 그 자세로 다시 계획·재생한다.
+    --posture-smooth    CHOMP류 가속도 최소화로 경로 자세를 매끄럽게 한다(opt-in).
+                        콘솔에 매끄러움 비용 전/후 값을 함께 찍는다
+    --posture-trust-region-rad  --posture-smooth 전용 trust region (기본 --step-size-rad)
 
 기본적으로 오른팔이 실제로 뻗는 영역 안에 피해 가야 하는 장애물(빨간 구체
 3개, ``planning_obstacle_0..2``)을 추가한다. 저장소의 ``models/full_scene.xml``은
@@ -45,7 +48,9 @@ from ffw_sh5_grasp.planning import (
     ArmCollisionChecker,
     EdgeChecker,
     RightArmSpace,
+    path_smoothness_cost,
     plan_rrt_connect,
+    smooth_posture,
 )
 
 OBSTACLE_PREFIX = "planning_obstacle_"
@@ -336,6 +341,23 @@ def _solve_valid_ik(solver, checker, q_init, target_pos, context_qpos, rng, *, n
     return None, None, False
 
 
+def _maybe_smooth_posture(space, edge_checker, path, args, *, prefix=""):
+    """``--posture-smooth``가 켜져 있으면 CHOMP류 후처리를 적용하고 비용을 출력한다.
+
+    실패(폴백)해도 원본 ``path``와 동일한 배열이 반환되므로 호출자는 항상
+    반환값을 그대로 재생·시각화에 쓰면 된다.
+    """
+    if not args.posture_smooth:
+        return path
+    before = path_smoothness_cost(path)
+    smoothed = smooth_posture(
+        space, edge_checker, path, trust_region_rad=args.posture_trust_region_rad
+    )
+    after = path_smoothness_cost(smoothed)
+    print(f"{prefix}자세 매끄러움 비용: {before:.4f} → {after:.4f}")
+    return smoothed
+
+
 def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
     """노란 구슬을 마우스로 드래그할 때마다 그 위치로 IK + 계획 + 실행을 반복한다."""
     solver = JointSpaceKinematics(model, TREE_SITE_NAME, list(space.joint_names), tree=checker.tree)
@@ -420,8 +442,9 @@ def _run_interactive(model, data, space, checker, edge_checker, viewer, args):
         if result.success:
             if args.show_tree:
                 _show_tree(viewer, checker, space, result, pause_s=args.tree_pause_s)
-            _draw_path(viewer, checker, space, result.path)
-            max_error = _execute(model, data, space, result.path, viewer=viewer)
+            path = _maybe_smooth_posture(space, edge_checker, result.path, args, prefix="  ")
+            _draw_path(viewer, checker, space, path)
+            max_error = _execute(model, data, space, path, viewer=viewer)
             _clear_scene(viewer)
             print(f"  실행 완료. 최종 관절 오차(최대) = {max_error:.4f} rad")
             current_q = data.qpos[space.qpos_adrs].copy()
@@ -445,6 +468,7 @@ def _run_cycle(cycle, model, data, space, checker, edge_checker, start, goal, rn
     if not result.success:
         return None
     print(f"path waypoints = {len(result.path)}")
+    path = _maybe_smooth_posture(space, edge_checker, result.path, args)
 
     if args.execute:
         # live data를 이 cycle의 시작점으로 맞춘 뒤 재생한다. (이 동기화 없이
@@ -457,13 +481,13 @@ def _run_cycle(cycle, model, data, space, checker, edge_checker, start, goal, rn
             # 지우지 않는다 — "이 경로를 따라가는 중"이라는 걸 눈으로
             # 비교할 수 있게. ``_execute``의 프레임 콜백은 user_scn을
             # 건드리지 않으므로 여기서 그린 것이 실행 내내 그대로 남는다.
-            _draw_path(viewer, checker, space, result.path)
-        max_error = _execute(model, data, space, result.path, viewer=viewer)
+            _draw_path(viewer, checker, space, path)
+        max_error = _execute(model, data, space, path, viewer=viewer)
         print(f"실행 완료. 최종 관절 오차(최대) = {max_error:.4f} rad")
         if viewer is not None:
             _clear_scene(viewer)
 
-    return result.path[-1]
+    return path[-1]
 
 
 def main(argv=None):
@@ -489,7 +513,21 @@ def main(argv=None):
         "--interactive", action="store_true",
         help="목표를 마우스로 드래그하는 노란 구슬로 대체한다(--viewer 자동 활성화)",
     )
+    parser.add_argument(
+        "--posture-smooth", action="store_true",
+        help=(
+            "CHOMP류 가속도 최소화 후처리로 경로 자세를 매끄럽게 한다(opt-in — "
+            "아직 실제 로봇 장면에서 충분히 검증되지 않은 새 기법). 폴백 시 원본 "
+            "경로를 그대로 쓴다"
+        ),
+    )
+    parser.add_argument(
+        "--posture-trust-region-rad", type=float, default=None,
+        help="--posture-smooth 전용. 기본 --step-size-rad와 같음",
+    )
     args = parser.parse_args(argv)
+    if args.posture_trust_region_rad is None:
+        args.posture_trust_region_rad = args.step_size_rad
     use_viewer = args.viewer or args.show_tree or args.interactive
     with_obstacle = not args.no_obstacle
 
