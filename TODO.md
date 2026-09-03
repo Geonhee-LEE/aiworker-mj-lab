@@ -4,8 +4,8 @@ _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
 - Last update: `2026-09-03 KST`
-- Open (Doing + Today + Blocked + Backlog): **19**
-- Next ID: `MP-0024`
+- Open (Doing + Today + Blocked + Backlog): **20**
+- Next ID: `MP-0025`
 
 ## Doing
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -22,6 +22,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0006 | P1 | P2 | claude | [stuck][planner] `time_parameterize` — 구현·테스트 완료, PR #2 사람 리뷰 대기 | planning/p2-time-parameterize | ☐ |
 | MP-0023 | P1 | P2 | claude | [planner] shortcut+시간 파라미터화를 데모 실행 경로에 연결 — 구현·테스트 완료, PR #3 사람 리뷰 대기 | planning/p2-demo-natural-motion | ☐ |
 | MP-0016 | P2 | P5 | claude | [planner] `planning/rrt_star.py` 초안 — 구현·테스트 완료, PR #4 사람 리뷰 대기 | planning/p5-rrt-star-planner | ☐ |
+| MP-0024 | P1 | P2 | claude | [planner] CHOMP류 궤적 최적화 후처리(`planning/chomp.py`) — 구현·테스트 완료, PR #5 사람 리뷰 대기 | planning/chomp-posture-smoothing | ☐ |
 
 ## Backlog
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |

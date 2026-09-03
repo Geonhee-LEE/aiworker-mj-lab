@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-03 — chomp-posture-smoothing
+- **Pick**: 사용자 지적 — IK 계산 자주 실패·연속 동작이 부드럽지 않음·팔 자세가 기괴함 세 한계 중 "자세 기괴함"을 먼저 진행. 원인: RRT-Connect는 비용 함수가 없고 RRT*의 비용은 경로 길이일 뿐, shortcut도 경로를 짧게 할 뿐 매끄럽게 하지 않음
+- **Outcome**: `planning/chomp.py` — 시작·끝 고정, 가속도(2차 차분) 최소화 QP를 관절별 독립 1-D QP 7개로 풀어 `kinematics/optimization.py`의 기존 QP 유틸리티를 그대로 재사용. trust region + EdgeChecker 재검증 + 실패 시 원본 반환으로 무효 경로 불변식 유지. 데모 `--posture-smooth` 실측: 매끄러움 비용 0.14~2.06 → 대부분 0에 가깝게 개선, 재생 오차는 기존과 동일(~0.02 rad). 안전 폴백도 실제 장면에서 발동 확인. 5개 테스트 통과, PR #5 생성
+- **Next**: PR #1~#5 사람 리뷰/병합, 남은 두 한계(IK 실패·연속 동작) 사용자 우선순위 확인 후 진행
+- **Full**: [journal/2026-09/03-chomp-posture-smoothing.md](journal/2026-09/03-chomp-posture-smoothing.md)
+
+
 ## 2026-09-03 — rrt-star-planner
 - **Pick**: 사용자 요청 — RRT-Connect 외 "향상된 다른 모션 플래닝 기법" 추가. `TODO.md`의 MP-0015/16/17(P5)이 정확히 이 백로그였음
 - **Outcome**: `rrt_connect.py` 자산을 재사용하는 단일 트리 RRT*(`planning/rrt_star.py`) 구현 — 고정 rewiring 반경(이론적 shrinking radius 대신, 7-DOF에서 이론식은 반경이 너무 빨리 줄어 rewiring이 거의 안 일어남), 거부 표집 기반 informed sampling. **중요 발견**: RRT-Connect의 기본 `goal_bias`(0.1)를 그대로 물려주면 실제 can-sort 장면에서 40초·6750회 반복 안에도 목표에 못 닿음 — 단일 트리는 bidirectional CONNECT처럼 한 반복에 여러 스텝을 전진 못 하기 때문(RRT-Connect가 고안된 이유이기도 한 트레이드오프). `goal_bias=0.3`/`goal_tolerance_rad=0.5`/`time_budget_s=30`으로 데모 기본값 조정해 해결. 데모에 `--planner {rrt_connect,rrt_star}` 추가, 31개 planning 테스트 통과, PR #4 생성
