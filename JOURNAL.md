@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-05 — p7-1-base-pose
+- **Pick**: PR #9(PRD)·#10(P7.0 reachability map)이 병합된 뒤 계획대로 **MP-0027** P7.1 `planning/base_pose.py` 착수 — "decoupled" 패턴의 두 번째 조각(베이스를 어디에 둘지 고르기)
+- **Outcome**: `world_to_base_frame`(월드→베이스 SE(2) 변환, base_link이 z로는 절대 안 움직인다는 실측에 근거해 z는 통과시킴), `BaseFootprintChecker`(`ArmCollisionChecker`와 같은 scratch-model 아키텍처 재현), `select_base_pose`(reachability 점수·발자국 충돌·현재 위치 근접도로 후보 순위 — yaw는 로봇의 "정면" 축을 가정하지 않고 후보 각도 집합을 위치·방향 양쪽에 재사용). 베이스 주행은 `WholeBodyIK`(손 목표 반응형이라 지점-대-지점엔 안 맞음) 대신 기존 `SwerveDrive`를 목표-오차 비례 루프로 얇게 감싼 `planning/mobile_execution.py`로 처리. **핵심 발견**: `build_reachability_map`이 실은 "베이스 원점 전용"이 아니라 grid point를 그냥 절대 world IK 타겟으로 쓴다는 걸 확인해, 이 함수를 그대로 재사용(새 IK 검증 코드 없이)해 임의 베이스 위치에서의 진짜 IK 도달성을 검증하는 핵심 회귀 테스트를 만들 수 있었다 — 먼 베이스 위치(3,3,0)에서는 도달 불가능하던 타겟이 `select_base_pose`가 고른 위치에서는 도달 가능해짐을 실제 IK로 증명. 실제 장면엔 베이스 발자국 높이대에 겹치는 정적 장애물이 없어(table이 그 위에 있음) 참-충돌 테스트는 합성 MJCF로 대신함. 13개 신규 테스트 + 기존 47개 모두 통과, PR #11 생성
+- **Next**: PR #3/#4/#5/#7/#8/#11 사람 리뷰/병합, P7 Tier 2(결합형 `WholeBodySpace`, 우선순위 낮음), 사용자가 정하면 IK 실패(`MP-0011`)/연속 동작(`MP-0021`) 진행
+- **Full**: [journal/2026-09/05-p7-1-base-pose.md](journal/2026-09/05-p7-1-base-pose.md)
+
+
 ## 2026-09-04 — p7-reachability-map
 - **Pick**: 사용자 요청 — 오른팔 단독이 아니라 모바일 매니퓰레이터(베이스+팔) 전체의 IK·모션 플래닝 설계. PRD Non-Goals("왼팔·베이스·리프트 계획...범위 밖")를 명시적으로 넘어서는 요청이라 조사부터 시작
 - **Outcome**: 조사 결과 로봇은 실제로 모바일(수동 평면 가상 관절+스워브 드라이브)이고, 반응형 whole-body IK(`control.whole_body.WholeBodyIK`)와 베이스 실행 계층(`control.base`)이 이미 있어 재구현 불필요 — 빠진 건 전역 모션 플래닝뿐. 실전 시스템 표준인 decoupled 패턴(reachability map 기반 베이스 배치 + 기존 팔 계획기 재사용)을 Tier 1으로 설계, 완전 결합 `WholeBodySpace`는 Tier 2(후속)로 미룸. PRD를 먼저 갱신(PR #9, Non-Goals에서 베이스·리프트 제외+P7 로드맵 추가)한 뒤 P7.0 `planning/reachability.py`(PR #10, MP-0026) 구현 — 새 IK 없이 기존 `_ik_attempt` 패턴 재사용, 격자 경계는 3000-표본 백분위 실측 근거. 기본 격자(504점) 빌드 81초, 도달 가능/불가능 분리 확인. 47개 테스트 통과. `todo_tool.py`의 `PHASES`가 P6까지만 있어 P7 행이 거부되던 걸 같은 브랜치에서 수정

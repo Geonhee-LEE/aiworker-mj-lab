@@ -1,38 +1,41 @@
 # Research State — auto-generated each cycle
 
-_Last updated: 2026-09-04 · cycle p7-reachability-map_
+_Last updated: 2026-09-05 · cycle p7-1-base-pose_
 
 ## North star distance
 
 P0·P1이 완료·병합됐다. P2·P4·P5는 구현·테스트 완료 상태로 리뷰 대기
-(PR #3/#4/#5/#7). P3(정식 실행 모듈)도 완료됐다(PR #8).
+(PR #3/#4/#5/#7). P3(정식 실행 모듈)도 완료됐다(PR #8). PR #9(PRD)와
+#10(P7.0 reachability map)도 완료·병합됐다.
 
 **PRD 범위가 P7(모바일 매니퓰레이터 계획)까지 확장됐다** — 사용자가
 오른팔 단독이 아니라 베이스까지 포함한 IK·모션 플래닝 설계를 명시적으로
-요청(2026-09-04). PR #9(docs)가 Non-Goals에서 베이스·리프트를 제외하고
-로드맵에 P7을 추가했다. 조사 결과 이 로봇은 실제로 모바일(수동 평면
-가상 관절 + 스워브 드라이브)이고, 반응형 whole-body IK
-(`control.whole_body.WholeBodyIK`)와 베이스 실행 계층(`control.base`)은
-이미 있다 — 빠진 건 전역 모션 플래닝뿐이다. 실전 시스템의 표준
-"decoupled" 패턴(reachability map 기반 베이스 배치 + 기존 팔 계획기
-재사용)을 Tier 1으로 설계했다.
+요청(2026-09-04). 조사 결과 이 로봇은 실제로 모바일(수동 평면 가상 관절 +
+스워브 드라이브)이고, 반응형 whole-body IK(`control.whole_body.WholeBodyIK`)와
+베이스 실행 계층(`control.base`)은 이미 있다 — 빠진 건 전역 모션 플래닝뿐이다.
+실전 시스템의 표준 "decoupled" 패턴(reachability map 기반 베이스 배치 +
+기존 팔 계획기 재사용)을 Tier 1으로 설계했다.
 
-**P7.0(reachability map)이 이번 cycle에 착수·완료됐다** —
-`planning/reachability.py`(PR #10, MP-0026). 새 IK를 만들지 않고 기존
-`_ik_attempt`/`_solve_valid_ik` 패턴을 재사용. 실측: 기본 격자(504점)
-전체 빌드 81초(로봇 1대당 1회 캐시하는 오프라인 아티팩트로는 허용
-범위), 도달 가능/불가능 지점이 실제로 갈리는 것 확인.
+**P7.0(reachability map, PR #10)이 병합됐고, 이번 cycle에 P7.1(베이스
+자세 선택)이 착수·완료됐다** — `planning/base_pose.py`(PR #11,
+MP-0027). `world_to_base_frame`(월드→베이스 SE(2) 변환), `select_base_pose`
+(reachability 점수·발자국 충돌·현재 위치 근접도로 후보 순위), 그리고
+`ArmCollisionChecker`와 같은 아키텍처를 그대로 재현한 `BaseFootprintChecker`.
+베이스 주행은 `WholeBodyIK`(손 목표 반응형이라 지점-대-지점 주행에 안
+맞음) 대신 기존 `SwerveDrive`를 얇게 감싼 `planning/mobile_execution.py`로
+처리 — 새 저수준 제어 없음. 핵심 회귀 테스트는 `build_reachability_map`을
+그대로 재사용해 먼 베이스 위치에서는 진짜 IK로 도달 불가능했던 타겟이
+`select_base_pose`가 고른 위치에서는 도달 가능해짐을 실증한다.
 
-**열 개 PR(#1~#10) 중 아홉(#1·#2는 병합됨, 나머지 #3/#4/#5/#7/#8/#9/#10
-리뷰 대기)**이다.
+**열한 개 PR(#1~#11) 중 넷(#1·#2·#9·#10)이 병합됐고, 나머지
+(#3/#4/#5/#7/#8/#11)가 리뷰 대기**다.
 
 ## Current bottleneck
 
-**PR #3/#4/#5/#7/#8/#9/#10 사람 리뷰/병합 대기** — 일곱 개가 쌓였다.
+**PR #3/#4/#5/#7/#8/#11 사람 리뷰/병합 대기** — 여섯 개가 쌓였다.
 **PR #4·#5는 PR #1/#2 병합 여파로 `__init__.py`에서 충돌 상태**(export
-합집합으로 수동 해결 필요, 절차는 이미 확립돼 있다). PR #9(PRD)와
-#10(reachability)은 서로 독립이지만, PR #9가 먼저 병합돼야 PRD 문서가
-P7을 공식적으로 인정한 상태가 된다.
+합집합으로 수동 해결 필요, 절차는 이미 확립돼 있다). PR #11(base_pose)은
+독립적이라 바로 병합 가능하다.
 
 ## Open experiments
 
@@ -43,8 +46,7 @@ P7을 공식적으로 인정한 상태가 된다.
 | planning/chomp-posture-smoothing | 2026-09-03 | MP-0024 CHOMP류 궤적 최적화, PR #5 리뷰 대기(`__init__.py` 충돌 발생) | 1 |
 | planning/p4-benchmark-harness | 2026-09-03 | MP-0013+MP-0004 벤치마크 하네스+첫 측정, PR #7 리뷰 대기 | 1 |
 | planning/p3-execution-module | 2026-09-04 | MP-0008+MP-0009 P3 실행 모듈, PR #8 리뷰 대기 | 0 |
-| docs/prd-mobile-manipulator-scope | 2026-09-04 | PRD를 P7까지 확장, PR #9 리뷰 대기 | 0 |
-| planning/p7-reachability-map | 2026-09-04 | MP-0026 P7.0 reachability map + todo_tool.py P7 지원, PR #10 리뷰 대기 | 0 |
+| planning/p7-1-base-pose | 2026-09-05 | MP-0027 P7.1 base_pose.py + mobile_execution.py, PR #11 리뷰 대기 | 0 |
 
 ## Recent learnings (last 3 cycles)
 
@@ -68,30 +70,46 @@ P7을 공식적으로 인정한 상태가 된다.
   `todo_tool.py`의 `PHASES` 튜플)과 어긋나면 도구가 조용히 새 값을
   거부한다** — 새 Phase를 추가할 땐 PRD뿐 아니라 그걸 검증하는 도구도
   같이 고쳐야 한다.
+- **`build_reachability_map`은 실제로 "베이스 원점 전용"이 아니다** —
+  grid point는 내부적으로 그냥 절대 world IK 타겟으로 쓰인다("베이스
+  원점" 요구사항은 결과를 나중에 재사용 가능한 상대 좌표로 해석하기
+  위한 호출자 쪽 약속일 뿐). 그래서 P7.1 테스트에서 이 함수를 그대로
+  재사용해 "임의의 베이스 위치에서 실제 IK로 도달 가능한가"를 검증할 수
+  있었다 — 새 IK 검증 코드를 안 만들고도 진짜 회귀 증명이 가능했던 이유.
+- **베이스 yaw를 "로봇이 목표 쪽을 정면으로 바라본다"고 가정하면 틀릴 수
+  있다** — reachability 격자 실측이 +x보다 -y로 더 넓게 퍼져 있어(P7.0
+  기본 격자 y∈[-1.1, 0.2]), 어느 축이 "정면"인지 모델에 새기지 않고
+  같은 후보 각도 집합을 위치·방향 양쪽에 재사용해 전체 조합을 탐색하는
+  쪽이 더 안전했다.
+- **실제 장면(full_scene.xml can-sort)엔 베이스 발자국 높이대([0.27,
+  0.51]m)에 겹치는 정적 장애물이 없다** — table은 z∈[0.63, 0.73]로 그
+  위에 있다. `BaseFootprintChecker`의 참-충돌 테스트는 합성 MJCF로
+  대신 검증했다 — 실제 장면에 낮은 장애물이 생기기 전까진 이 한계가
+  유효하다.
 
 ## Next claude-actionable
 
-1. PR #3/#4/#5/#7/#8이 병합되면 `benchmark_planning.py`에
+1. PR #3/#4/#5/#7/#8/#11이 병합되면 `benchmark_planning.py`에
    `--planner`/`--postprocess` 플래그를 추가해 MP-0007/MP-0017 비교
    벤치마크로 확장.
-2. **MP-0027** P7.1 `planning/base_pose.py` — PR #9·#10 병합 후 착수.
-   reachability map으로 베이스 자세 선택 + 베이스 발자국 충돌 검사 +
-   기존 팔 계획기와 end-to-end 데모.
+2. P7 Tier 2(결합형 `WholeBodySpace`, 후속) — `select_base_pose` +
+   고정-베이스 파이프라인의 decoupled 방식이 자리잡았으니, 우선순위가
+   바뀌지 않는 한 급하지 않음.
 3. 사용자가 우선순위를 정하면 나머지 두 한계(IK 실패 개선 — `MP-0011`;
    연속 동작 부드러움 — `MP-0021`) 중 하나를 이어서 진행.
 
 ## Next user-blocked
 
-1. **PR #3/#4/#5/#7/#8/#9/#10 사람 리뷰/병합** — PR #4·#5는 `__init__.py`
+1. **PR #3/#4/#5/#7/#8/#11 사람 리뷰/병합** — PR #4·#5는 `__init__.py`
    충돌 해결이 필요(export 합집합으로 수동 병합, 절차는 확립됨).
 2. **MP-0020** Telegram 봇 생성 및 `telegram_setup.sh` 실행 (사람만 가능).
 
 ## Cycles to date
 
-15 (2026-08-30~09-04 사람 주도: P0 부트스트랩, P1 RRT-Connect 구현, 데모
+16 (2026-08-30~09-05 사람 주도: P0 부트스트랩, P1 RRT-Connect 구현, 데모
 반복/트리 시각화, 장애물 재배치, Q-space 시각화+CVD 팔레트, 인터랙티브 마우스
 목표+버그 수정 3건, nullspace 정칙화+hydrax 조사, 데모 실행 경로에 shortcut+
 시간 파라미터화 연결, RRT* 대안 플래너, CHOMP류 궤적 최적화 후처리, 벤치마크
 하네스+P1 성공률 첫 측정, PR #1/#2 병합+P3 실행 모듈, PRD를 P7(모바일
-매니퓰레이터)까지 확장 + P7.0 reachability map; 자율 루프: shortcut 평활화,
-시간 파라미터화)
+매니퓰레이터)까지 확장 + P7.0 reachability map, P7.1 베이스 자세 선택; 자율
+루프: shortcut 평활화, 시간 파라미터화)
