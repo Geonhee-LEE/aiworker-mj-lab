@@ -39,3 +39,4 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
   신규, 신규 TODO 0건. *(참고: 이 로그 줄은 사람이 사후 복원함 — 원본은
   `git reset --hard`로 워킹트리에서 유실됐으나 `research/2026-09/004.md`는
   untracked라 보존됐고 `research/feed.md`는 대화 컨텍스트에서 정확히 복원함)*
+- 21:00 `executor` · EXECUTOR_SKIP reason=pr-queue-full count=5 (PR #3/#4/#5/#7/#8 planning/* head, OPEN, 사람 리뷰 대기) — gate 1 트리거, 신규 TODO 착수 없이 조용히 종료
