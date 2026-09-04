@@ -16,7 +16,8 @@
 
 ### 비-목표 (Non-Goals)
 
-- 왼팔·베이스·리프트 계획 (P6 이후 후보, 이 PRD 범위 밖)
+- 왼팔·양팔 협조 계획 (P6 이후 후보, 이 PRD 범위 밖) — 베이스·리프트는
+  P7(모바일 매니퓰레이터 계획)로 범위에 편입됐다(2026-09-04, 사용자 요청)
 - 동적 장애물 회피(움직이는 물체) — 그 몫은 여전히 whole-body IK의 CBF
 - OMPL/cuRobo 등 외부 플래닝 라이브러리 도입 — 저장소 원칙상 직접 구현
 - 학습 기반 플래너(러닝 기반 샘플링, 신경망 유도) — 이 로드맵에서는 다루지 않음
@@ -32,6 +33,7 @@
 | P4 | Cartesian goal + 벤치마크 하네스 | pose 목표 성공률 ≥ 85%, 벤치마크 2분 이내 완주 | ⬜ 미착수 |
 | P5 | RRT* / informed sampling 비교 연구 | 동일 seed에서 baseline 대비 경로 길이·시간 trade-off 표 산출 | 🟡 `planning.rrt_star` 구현·테스트 완료, 리뷰 대기(PR #4). 정식 50-seed 비교표(MP-0017)는 벤치마크 하네스 대기 |
 | P6 | (비-목표 재검토) 왼팔·양팔 협조 계획 후보 | 사람 결정 대기 | ⬜ 미착수 |
+| P7 | 모바일 매니퓰레이터(베이스+팔) IK·모션 플래닝 | P7.0: reachability map 빌드·쿼리 테스트 통과. P7.1: "베이스 이동 없이 못 닿는" 목표에서 베이스 재배치 후 기존 팔 계획기로 end-to-end 성공 | ⬜ 착수 중 |
 
 **자세 매끄러움 후처리를 P2로 편입한 이유**: 원래 로드맵에 없던 항목이다.
 사용자가 실제 데모(`--interactive`)로 확인한 세 가지 남은 한계 — IK 계산
@@ -39,6 +41,17 @@
 shortcut/시간 파라미터화만으로는 풀리지 않는 별도 문제였다(§3
 R-F-004b 참고). 나머지 두 한계는 각각 R-F-009(계획), R-F-010(계획)로
 로드맵에 새로 추가했다 — 아직 착수 전이다.
+
+**P7(모바일 매니퓰레이터)을 새로 편입한 이유**: 사용자가 오른팔 단독이
+아니라 베이스까지 포함한 IK·모션 플래닝 설계를 명시적으로 요청했다
+(2026-09-04). 조사 결과 이 로봇은 실제로 모바일(수동 평면 가상 관절 +
+스워브 드라이브)이고, 반응형 whole-body IK(`control.whole_body.WholeBodyIK`)
+와 베이스 실행 계층(`control.base`)은 이미 존재한다 — 빠진 건 전역
+모션 플래닝뿐이다. 실전 모바일 매니퓰레이션 시스템의 표준 패턴(reachability
+map 기반 베이스 배치 후 기존 고정-베이스 팔 계획기 재사용, "decoupled")을
+Tier 1으로 먼저 도입하고, 완전 결합(coupled) SE(2)×Rⁿ 샘플링 계획은 정적
+베이스 자세로 안 풀리는 경우를 위한 후속 Tier 2로 미룬다. 왼팔·양팔 협조
+계획(P6)과는 별개 축이다 — 혼동하지 않는다.
 
 ## 3. 기능 요구 (Functional Requirements)
 
@@ -110,6 +123,24 @@ Notion 등 외부 서비스 없이 `TODO.md` 파일이 작업 상태의 유일�
 실행 레이어가 sampling-based 전역 계획과 별개로 담당. 어느 쪽을 먼저
 할지는 P3 설계 시점에 결정한다.
 
+### R-F-011 Reachability map (역-도달가능성 지도) (신규, P7.0)
+
+`planning.reachability.build_reachability_map`/`ReachabilityMap` — 베이스
+프레임 기준 상대 위치 격자마다 고정-베이스 오른팔 IK 성공률을 오프라인으로
+한 번 표로 만든다(로봇 1대당 1회, 회전·이동에 불변이라 재사용 가능).
+기존 `_solve_valid_ik`(여러 시드 중 수렴+무충돌 첫 해)와 같은 IK 재시도
+패턴을 재사용하고 새 IK 알고리즘을 만들지 않는다.
+
+### R-F-012 베이스 자세 선택 (신규, P7.1)
+
+`planning.base_pose.select_base_pose` — 월드 프레임 목표 주위 후보 베이스
+(x, y, yaw)를 R-F-011의 reachability map 점수·베이스 발자국 충돌 없음·
+현재 베이스 위치와의 근접도로 정렬해 최선을 고른다. 베이스 이동 실행은
+새 컨트롤러를 만들지 않고 기존 `control.whole_body.WholeBodyIK`+
+`control.base.SwerveDrive`를 그대로 쓴다(§7 기존 자산 재사용 우선). 베이스가
+목표 자세에 도착하면 기존 고정-베이스 팔 계획 파이프라인(R-F-001~004b)을
+무수정으로 재사용한다("decoupled" 패턴, P7 로드맵 설명 참고).
+
 ## 4. 비기능 요구 (Non-Functional Requirements)
 
 ### R-NF-001 자율성
@@ -161,6 +192,13 @@ executor는 사람 개입 없이 조사→구현→테스트→PR까지 완결�
 
 - [ ] 왼팔·양팔 협조 계획으로 범위를 넓힐지 결정
 
+### 장기 (P7 마무리)
+
+- [ ] "베이스 이동 없이 못 닿는" 실제 장면 시나리오에서 reachability
+  map 기반 베이스 재배치 → 기존 팔 계획기 end-to-end 성공 확인
+- [ ] 정적 베이스 자세로 안 풀리는 시나리오(좁은 통로 등)가 실측으로
+  확인되면 Tier 2(coupled `WholeBodySpace`) 착수 여부 결정
+
 ## 6. 위험 + 완화 (Risks)
 
 | 위험 | 영향 | 완화 |
@@ -187,4 +225,4 @@ executor는 사람 개입 없이 조사→구현→테스트→PR까지 완결�
 - `STATE.md`, `JOURNAL.md`, `RESULTS.md` — 에이전트가 매 cycle 재작성/append한다.
 - `docs/agents.md`, `docs/skills.md` — Curator가 stale 감지 시 PR을 올리고 사람이 머지한다.
 
-_Last manual update: 2026-09-03 KST_
+_Last manual update: 2026-09-04 KST_
