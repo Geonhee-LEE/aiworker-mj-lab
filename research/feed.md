@@ -2,6 +2,12 @@
 
 _cap 30, 최신이 위. REVIEW 단계는 상위 5개만 읽는다._
 
+- [2026-09-04] [004](2026-09/004.md) 병목이 PR 리뷰 큐라 신규 설계보다 다음
+  착수 후보(MP-0008 실행 feedforward, MP-0011 IK 시딩) 검증에 집중. 문헌
+  확인 결과 둘 다 기존 계획(velocity feedforward는 보류 후 필요시 추가,
+  IK는 이전 성공 해+reachability 격자 시딩)이 이미 올바른 방향임을 재확인
+  — 특이점 근처에서는 warm-start만으론 부족해 무작위 재시도 폴백 병행이
+  필요하다는 근거(GNN warm-start 100%→93% 사례)만 추가. 신규 TODO 0건.
 - [2026-09-03] [003](2026-09/003-vamp-mr.md) 사용자 제안 VAMP-MR(SIMD 가속
   multi-arm 플래너) 검토 — GitHub API로 사실관계 확인 결과 기술 주장은
   정확(10-100x, IROS 2026, Baxter dual-arm 지원 등). 다만 PRD Non-Goal(외부

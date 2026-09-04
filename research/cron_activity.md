@@ -32,3 +32,10 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
 - 11:00 `executor` · Cadence gate #2(stuck TODO) 3일 연속 재확인: MP-0005(2026-08-30 21:04부터)·MP-0006(2026-08-31 11:09부터) 모두 여전히 Doing, 둘 다 기존 `[stuck]` 태그 유지, PR #1·#2 여전히 OPEN(사람 리뷰/머지 대기). Today 후보 없음. 조용히 스킵, Telegram 미발송. `planning/p2-demo-natural-motion`의 기존 미커밋 변경은 이번에도 손대지 않고 `git stash`로만 보존(브랜치 자체에 놔두면 다음 cycle의 `git checkout main`을 막을 위험이 있어 안전하게 대피시킴, `git stash pop`으로 그대로 복원함) — 다만 그 안의 untracked `research/2026-09/002.md`가 2026-09-02에 이미 커밋된 `research/2026-09/002.md`(Wilson CI/collision 비용 조사)와 번호가 충돌함을 확인, 실제로 착수할 때 `003`으로 재번호 필요. 병목: PR #1·#2 사람 리뷰/머지 대기 — 머지 전까지 executor가 새 planning TODO를 못 집음
 - 21:00 `executor` · Cadence gate #1(PR 큐 포화) 최초 발동: `gh pr list --head "planning/" --state open`은 exact-match라 0건을 반환하지만, `--search "head:planning"`으로 재확인하니 실제로는 OPEN 4건(#1 MP-0005, #2 MP-0006, #3 MP-0023, #4 MP-0016) 확인됨 — 게이트 취지("PR 큐가 4건 이상이면 포화")를 명령어 리터럴이 아니라 실측 상태 기준으로 적용해 조용히 스킵, Telegram 미발송. `docs/guide/motion-planning.md`의 main 워킹트리 미커밋 변경(MP-0010 문서, RRT*·데모 실행 섹션 포함 147줄 추가)은 이번 cycle과 무관해 보여 손대지 않고 보존. 병목: PR #1~#4 사람 리뷰/머지 대기 — 4건이 안 줄어들면 다음 cycle도 계속 스킵될 것
 - 23:00 `curator` · `--head "planning/"` exact-match 재확인(0건) 후 `--state open`으로 재조회, 실제 OPEN planning/* PR 5건(#1~#5) 모두 mergeable=MERGEABLE(충돌 없음) 확인 — rebase 불필요. CI 체크 자체가 미구성("no checks reported")이라 48h+ 정체 실패 라벨 대상 없음. 머지된 planning/* 브랜치도 0건이라 삭제할 stale 브랜치 없음. Telegram 발송 실패(telegram.env 없음, MP-0020 미완료) — CURATOR_DONE rebased=0 attention=0 stale_branches_deleted=0
+
+## 2026-09-04
+- 08:01 `researcher` · MP-0008 실행 feedforward·MP-0011 IK 시딩 문헌 재확인(둘 다
+  기존 계획 방향 유지, 특이점 근처 warm-start 폴백 근거 추가), research/2026-09/004.md
+  신규, 신규 TODO 0건. *(참고: 이 로그 줄은 사람이 사후 복원함 — 원본은
+  `git reset --hard`로 워킹트리에서 유실됐으나 `research/2026-09/004.md`는
+  untracked라 보존됐고 `research/feed.md`는 대화 컨텍스트에서 정확히 복원함)*
