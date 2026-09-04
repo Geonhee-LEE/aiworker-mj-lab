@@ -2,12 +2,13 @@
 
 ``kinematics/__init__.py``와 같은 스타일로, 각 하위 모듈의 공개 이름을 여기
 한 곳에 모아 재수출한다. P0(관절공간 추상화 + 충돌 검사기), P1(RRT-Connect
-코어), shortcut 평활화와 시간 파라미터화(P2)가 구현되어 있다. 실행 연결(P3)은
-아직 없다.
+코어), shortcut 평활화와 시간 파라미터화(P2), 정식 실행 연결(P3)이
+구현되어 있다.
 """
 
 from .arm_state import RIGHT_ARM_JOINTS, RightArmSpace
 from .collision_state import ArmCollisionChecker, CollisionReport
+from .execution import ExecutionReport, follow_trajectory
 from .local_path import EdgeChecker
 from .obstacles import RIGHT_ARM_BODIES, right_arm_collision_pairs
 from .rrt_connect import (
@@ -25,10 +26,12 @@ __all__ = [
     "ArmCollisionChecker",
     "CollisionReport",
     "EdgeChecker",
+    "ExecutionReport",
     "PlannerResult",
     "RightArmSpace",
     "Trajectory",
     "TreeSnapshot",
+    "follow_trajectory",
     "path_length_rad",
     "plan_rrt_connect",
     "right_arm_collision_pairs",
