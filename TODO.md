@@ -4,8 +4,8 @@ _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
 - Last update: `2026-09-04 KST`
-- Open (Doing + Today + Blocked + Backlog): **19**
-- Next ID: `MP-0026`
+- Open (Doing + Today + Blocked + Backlog): **21**
+- Next ID: `MP-0028`
 
 ## Doing
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -25,10 +25,12 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0004 | P1 | P1 | claude | [planner] can-sort 장면 RRT-Connect 성공률 측정 — 50 seed×2 시나리오 100% 성공(스코프를 10→50으로 확장), PR #7에 포함, 사람 리뷰 대기 | planning/p4-benchmark-harness | ☑ |
 | MP-0008 | P1 | P3 | claude | [planner] `planning/execution.py` — 구현·테스트 완료, PR #8 사람 리뷰 대기. 실측 seed 4개 site 오차 0.07~0.09mm(목표 5mm 대비 60배 여유), 침투 0건 | planning/p3-execution-module | ☐ |
 | MP-0009 | P1 | P3 | claude | [planner] `test_planning_execution.py` 침투·오차 검증 — PR #8에 포함, 사람 리뷰 대기 | planning/p3-execution-module | ☑ |
+| MP-0026 | P1 | P7 | claude | [planner] P7.0 `planning/reachability.py` reachability map — 구현·테스트 완료, PR #10 사람 리뷰 대기. 실측: 기본 격자(504점) 빌드 81초 | planning/p7-reachability-map | ☐ |
 
 ## Backlog
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
+| MP-0027 | P1 | P7 | claude | [planner] P7.1 `planning/base_pose.py` — reachability map으로 베이스 자세 선택 + 베이스 발자국 충돌 검사 + 기존 팔 계획기와 end-to-end 데모(PR #10·#9 병합 후 착수) |  | ☐ |
 | MP-0007 | P1 | P2 | claude | [bench] shortcut 전/후 경로 길이 비교 속성 시험 |  | ☐ |
 | MP-0010 | P2 | P3 | claude | [docs] `docs/guide/motion-planning.md` 작성 + mkdocs nav 등록 |  | ☐ |
 | MP-0011 | P1 | P4 | claude | [planner] `planning/goals.py` Cartesian pose goal → IK 시드 다중 재시도 |  | ☐ |

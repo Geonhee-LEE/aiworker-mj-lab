@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-04 — p7-reachability-map
+- **Pick**: 사용자 요청 — 오른팔 단독이 아니라 모바일 매니퓰레이터(베이스+팔) 전체의 IK·모션 플래닝 설계. PRD Non-Goals("왼팔·베이스·리프트 계획...범위 밖")를 명시적으로 넘어서는 요청이라 조사부터 시작
+- **Outcome**: 조사 결과 로봇은 실제로 모바일(수동 평면 가상 관절+스워브 드라이브)이고, 반응형 whole-body IK(`control.whole_body.WholeBodyIK`)와 베이스 실행 계층(`control.base`)이 이미 있어 재구현 불필요 — 빠진 건 전역 모션 플래닝뿐. 실전 시스템 표준인 decoupled 패턴(reachability map 기반 베이스 배치 + 기존 팔 계획기 재사용)을 Tier 1으로 설계, 완전 결합 `WholeBodySpace`는 Tier 2(후속)로 미룸. PRD를 먼저 갱신(PR #9, Non-Goals에서 베이스·리프트 제외+P7 로드맵 추가)한 뒤 P7.0 `planning/reachability.py`(PR #10, MP-0026) 구현 — 새 IK 없이 기존 `_ik_attempt` 패턴 재사용, 격자 경계는 3000-표본 백분위 실측 근거. 기본 격자(504점) 빌드 81초, 도달 가능/불가능 분리 확인. 47개 테스트 통과. `todo_tool.py`의 `PHASES`가 P6까지만 있어 P7 행이 거부되던 걸 같은 브랜치에서 수정
+- **Next**: PR #9/#10 포함 7개 PR 사람 리뷰/병합 대기, **MP-0027** P7.1 `planning/base_pose.py`(reachability map 소비+베이스 발자국 충돌+end-to-end 데모)
+- **Full**: [journal/2026-09/04-p7-reachability-map.md](journal/2026-09/04-p7-reachability-map.md)
+
+
 ## 2026-09-04 — p3-execution-module
 - **Pick**: 사용자 요청 — PRD를 고려해 다음 작업 진행. 로드맵상 다음 미착수 단계는 P3(정식 실행 모듈). `Trajectory`가 필요해 사용자 승인 하에 PR #1(shortcut)·#2(time_parameterize)를 먼저 병합(독립 코드 리뷰+로컬 merge dry-run으로 안전 확인 후)
 - **Outcome**: PR #2 병합 시 `__init__.py`에서 PR #1과 충돌 — export 합집합으로 수동 해결. `planning/execution.py`의 `follow_trajectory`가 `ArmTorqueController` 토크만으로 재생하는 폐루프 함수를 제공, 매 표본마다 `ArmCollisionChecker.is_valid` 재확인으로 "침투 없음"을 직접 검증. 실측: 4개 seed 모두 최종 site 오차 0.07~0.09mm(PRD 목표 5mm 대비 60배 여유), 침투 0건 — velocity feedforward 없이도 여유 있게 충족. **작업 중 사고 2건**: `git reset --hard`를 상태 확인 없이 실행해 cron 루프의 미커밋 변경을 날렸다가 대화 컨텍스트로 정확히 복원, `git checkout -b <기존 브랜치>`가 조용히 실패해 main에 남은 채 명령을 실행한 사고가 두 번 더 반복(이 세션 통산 세 번째) — 둘 다 push 전 발견해 원격 영향 없이 복구
