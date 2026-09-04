@@ -16,7 +16,7 @@ TODO_PATH = REPO_ROOT / "TODO.md"
 
 STATUSES = ("Doing", "Today", "Blocked", "Backlog", "Done")
 PRIORITIES = ("P0", "P1", "P2", "P3")
-PHASES = ("P0", "P1", "P2", "P3", "P4", "P5", "P6")
+PHASES = ("P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7")
 OWNERS = ("claude", "user")
 COLUMNS = ("ID", "Priority", "Phase", "Owner", "Title", "Branch", "UserTest")
 ID_RE = re.compile(r"^MP-(\d{4})$")
