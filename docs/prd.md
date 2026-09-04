@@ -23,15 +23,22 @@
 
 ## 2. Phased Roadmap
 
-| Phase | 결과물 | Exit criterion |
-|---|---|---|
-| P0 | `RightArmSpace` + `ArmCollisionChecker` + `EdgeChecker` | validity 테스트 통과, live `MjData` 무오염 확인 |
-| P1 | RRT-Connect 코어 | can-sort 50 seed 성공률 ≥ 90%, 충돌 경로 미반환 속성 시험 통과 |
-| P2 | shortcut 평활화 + 시간 파라미터화 | 경로 길이 중앙값 30%+ 단축, 속도/가속도 상한 위반 0 |
-| P3 | MuJoCo 실행 연결 | headless 재생 시 침투 없음, 최종 site 오차 ≤ 5 mm |
-| P4 | Cartesian goal + 벤치마크 하네스 | pose 목표 성공률 ≥ 85%, 벤치마크 2분 이내 완주 |
-| P5 | RRT* / informed sampling 비교 연구 | 동일 seed에서 baseline 대비 경로 길이·시간 trade-off 표 산출 |
-| P6 | (비-목표 재검토) 왼팔·양팔 협조 계획 후보 | 사람 결정 대기 |
+| Phase | 결과물 | Exit criterion | 상태 |
+|---|---|---|---|
+| P0 | `RightArmSpace` + `ArmCollisionChecker` + `EdgeChecker` | validity 테스트 통과, live `MjData` 무오염 확인 | ✅ 완료·병합 |
+| P1 | RRT-Connect 코어 | can-sort 50 seed 성공률 ≥ 90%, 충돌 경로 미반환 속성 시험 통과 | ✅ 코어 완료·병합. 정식 50-seed TSV 측정(MP-0004)은 벤치마크 하네스 대기 |
+| P2 | shortcut 평활화 + 시간 파라미터화 + 자세 매끄러움 후처리 | 경로 길이 중앙값 30%+ 단축, 속도/가속도 상한 위반 0 | 🟡 구현·테스트 완료, 리뷰 대기(PR #1 shortcut, #2 time_parameterize, #3 데모 연결, #5 CHOMP 자세 후처리) |
+| P3 | MuJoCo 실행 연결 | headless 재생 시 침투 없음, 최종 site 오차 ≤ 5 mm | ⬜ 미착수 — `planning.execution` 모듈 없음. 데모 스크립트가 데모/디버그용 재생만 제공 |
+| P4 | Cartesian goal + 벤치마크 하네스 | pose 목표 성공률 ≥ 85%, 벤치마크 2분 이내 완주 | ⬜ 미착수 |
+| P5 | RRT* / informed sampling 비교 연구 | 동일 seed에서 baseline 대비 경로 길이·시간 trade-off 표 산출 | 🟡 `planning.rrt_star` 구현·테스트 완료, 리뷰 대기(PR #4). 정식 50-seed 비교표(MP-0017)는 벤치마크 하네스 대기 |
+| P6 | (비-목표 재검토) 왼팔·양팔 협조 계획 후보 | 사람 결정 대기 | ⬜ 미착수 |
+
+**자세 매끄러움 후처리를 P2로 편입한 이유**: 원래 로드맵에 없던 항목이다.
+사용자가 실제 데모(`--interactive`)로 확인한 세 가지 남은 한계 — IK 계산
+실패, 연속 동작 부자연스러움, **팔 자세의 기괴함** — 중 마지막 것은
+shortcut/시간 파라미터화만으로는 풀리지 않는 별도 문제였다(§3
+R-F-004b 참고). 나머지 두 한계는 각각 R-F-009(계획), R-F-010(계획)로
+로드맵에 새로 추가했다 — 아직 착수 전이다.
 
 ## 3. 기능 요구 (Functional Requirements)
 
@@ -55,6 +62,18 @@ seed 결정론, 시간 예산과 반복 상한을 모두 갖는다.
 
 shortcut 평활화(`planning.shortcut`)와 제어 주기 시간 파라미터화(`planning.trajectory`).
 
+### R-F-004b 자세 매끄러움 후처리 (신규)
+
+`planning.chomp.smooth_posture` — RRT-Connect/RRT*는 redundant DOF를 무작위로
+표본화하므로, 경로 길이·시간과 무관하게 이웃 waypoint와 비교해 관절값이
+튀는("기괴한") 지점이 남을 수 있다. shortcut 평활화(R-F-004)는 경로를
+짧게 만들 뿐 매끄럽게 만들지는 않으므로 별도 요구사항으로 분리했다. CHOMP류
+가속도(2차 차분) 최소화 QP로 시작·끝 waypoint를 고정한 채 내부 waypoint를
+지역적으로 다듬는다. 콜리전 제약이 없는 QP이므로 trust region + 재검증 +
+실패 시 원본 반환으로 "절대 무효 경로를 반환하지 않는다"(R-NF-005 인접
+원칙)를 지킨다. `kinematics.optimization`의 기존 QP 유틸리티를 재사용하고
+수정하지 않는다(§7 기존 자산 재사용 우선 원칙).
+
 ### R-F-005 실행 연결
 
 `planning.execution.follow_trajectory` — 기존 `ArmTorqueController`로 궤적을 재생한다.
@@ -74,6 +93,22 @@ Telegram으로 보고한다. `docs/agents.md`에 상세 정의.
 
 Notion 등 외부 서비스 없이 `TODO.md` 파일이 작업 상태의 유일한 권위다.
 `scripts/todo_tool.py`로 기계적으로만 수정한다.
+
+### R-F-009 IK 목표 탐색 개선 (계획, 미착수)
+
+사용자가 관찰: `--interactive` 데모에서 IK 계산이 자주 실패한다. 현재
+`_solve_valid_ik`는 순수 무작위 재시도(`n_restarts=25`)에 의존해 성공률이
+운에 좌우된다. `planning.goals`(기존 `MP-0011` 백로그)에서 목표 근처의
+구조화된 시드(이전 성공 해, 거친 reachability 격자 등)로 개선한다.
+
+### R-F-010 연속 동작 매끄러움 (계획, 미착수)
+
+사용자가 관찰: 목표를 연속으로 바꾸며 조작할 때 매 목표 전환마다 속도가
+0으로 끊긴다(계획→정지 재생→재계획 구조 때문). 두 층의 해법 후보가 있다:
+(1) `planning.execution`(R-F-005/P3)이 이전 재생 속도를 이어받는 방식으로
+설계, (2) receding-horizon 저수준 제어(`MP-0021`, hydrax/MPPI 계열) — P3
+실행 레이어가 sampling-based 전역 계획과 별개로 담당. 어느 쪽을 먼저
+할지는 P3 설계 시점에 결정한다.
 
 ## 4. 비기능 요구 (Non-Functional Requirements)
 
@@ -107,7 +142,9 @@ executor는 사람 개입 없이 조사→구현→테스트→PR까지 완결�
 - [x] can-sort 장면에서 RRT-Connect가 seed 10개 중 10개 성공 — 합성 공간
   100/100 seed + 실제 장면 seeded 질의로 확인(`tests/test_planning_rrt_scene.py`).
   정식 TSV 벤치마크(seed 50개, MP-0004/MP-0013)는 아직 대기
-- [ ] 자동화 cron 8종이 모두 최소 1회 수동 스모크 통과
+- [ ] 자동화 cron 8종이 모두 최소 1회 수동 스모크 통과 — researcher/brief/
+  executor/wrap은 `research/cron_activity.md` 로그로 반복 확인됨. curator·
+  weekly_rollup·telegram_poll·urgent_agent는 미확인
 
 ### 중기 (P3-P4 마무리)
 
@@ -150,4 +187,4 @@ executor는 사람 개입 없이 조사→구현→테스트→PR까지 완결�
 - `STATE.md`, `JOURNAL.md`, `RESULTS.md` — 에이전트가 매 cycle 재작성/append한다.
 - `docs/agents.md`, `docs/skills.md` — Curator가 stale 감지 시 PR을 올리고 사람이 머지한다.
 
-_Last manual update: 2026-08-30 KST_
+_Last manual update: 2026-09-03 KST_

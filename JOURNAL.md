@@ -2,6 +2,41 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-03 — benchmark-harness
+- **Pick**: STATE.md 병목이 두 사이클 연속 같은 항목(MP-0013 벤치마크 하네스 부재). MP-0004/0007/0014/0017이 전부 대기 중이었고, 자동 researcher가 이미 설계 지침(`research/2026-09/001.md`, `002.md`)을 조사해 둠
+- **Outcome**: `scripts/benchmark_planning.py` — `demo_plan_right_arm.py`의 장면·목표 샘플링 재사용, `wall_budget_s` 가드로 2분 예산 보장. 도구를 바로 실제로 돌려 MP-0004도 같은 사이클에서 닫음: 50 seed×2 시나리오(장애물 유/무) 모두 성공률 100%, 계획 시간 중앙값 ~13ms. **작업 중 사고**: 동시에 도는 curator 프로세스와 워킹 디렉토리를 공유하다 브랜치 전환이 꼬여 main에 코드를 두 번 잘못 커밋 — 둘 다 push 전에 발견해 안전 브랜치+cherry-pick으로 완전히 복구, 원격엔 영향 없음. curator의 정당한 상태 커밋(`research/cron_activity.md`)은 별도 보존했으나 raw `git push origin main`이 auto-mode 분류기에 막혀 로컬에 남아 있음(사람 처리 필요)
+- **Next**: PR #1~#7 사람 리뷰/병합(7개로 늘어남), 로컬 main의 curator 커밋 push, MP-0007/0014/0017을 이 하네스로 확장
+- **Full**: [journal/2026-09/03-benchmark-harness.md](journal/2026-09/03-benchmark-harness.md)
+
+
+## 2026-09-03 — chomp-posture-smoothing
+- **Pick**: 사용자 지적 — IK 계산 자주 실패·연속 동작이 부드럽지 않음·팔 자세가 기괴함 세 한계 중 "자세 기괴함"을 먼저 진행. 원인: RRT-Connect는 비용 함수가 없고 RRT*의 비용은 경로 길이일 뿐, shortcut도 경로를 짧게 할 뿐 매끄럽게 하지 않음
+- **Outcome**: `planning/chomp.py` — 시작·끝 고정, 가속도(2차 차분) 최소화 QP를 관절별 독립 1-D QP 7개로 풀어 `kinematics/optimization.py`의 기존 QP 유틸리티를 그대로 재사용. trust region + EdgeChecker 재검증 + 실패 시 원본 반환으로 무효 경로 불변식 유지. 데모 `--posture-smooth` 실측: 매끄러움 비용 0.14~2.06 → 대부분 0에 가깝게 개선, 재생 오차는 기존과 동일(~0.02 rad). 안전 폴백도 실제 장면에서 발동 확인. 5개 테스트 통과, PR #5 생성
+- **Next**: PR #1~#5 사람 리뷰/병합, 남은 두 한계(IK 실패·연속 동작) 사용자 우선순위 확인 후 진행
+- **Full**: [journal/2026-09/03-chomp-posture-smoothing.md](journal/2026-09/03-chomp-posture-smoothing.md)
+
+
+## 2026-09-03 — rrt-star-planner
+- **Pick**: 사용자 요청 — RRT-Connect 외 "향상된 다른 모션 플래닝 기법" 추가. `TODO.md`의 MP-0015/16/17(P5)이 정확히 이 백로그였음
+- **Outcome**: `rrt_connect.py` 자산을 재사용하는 단일 트리 RRT*(`planning/rrt_star.py`) 구현 — 고정 rewiring 반경(이론적 shrinking radius 대신, 7-DOF에서 이론식은 반경이 너무 빨리 줄어 rewiring이 거의 안 일어남), 거부 표집 기반 informed sampling. **중요 발견**: RRT-Connect의 기본 `goal_bias`(0.1)를 그대로 물려주면 실제 can-sort 장면에서 40초·6750회 반복 안에도 목표에 못 닿음 — 단일 트리는 bidirectional CONNECT처럼 한 반복에 여러 스텝을 전진 못 하기 때문(RRT-Connect가 고안된 이유이기도 한 트레이드오프). `goal_bias=0.3`/`goal_tolerance_rad=0.5`/`time_budget_s=30`으로 데모 기본값 조정해 해결. 데모에 `--planner {rrt_connect,rrt_star}` 추가, 31개 planning 테스트 통과, PR #4 생성
+- **Next**: PR #1~#4 사람 리뷰/병합, MP-0013 벤치마크 하네스(MP-0017 정식 비교표에 필요), PR #3 병합 후 RRT*에도 shortcut+시간 파라미터화 연결
+- **Full**: [journal/2026-09/03-rrt-star-planner.md](journal/2026-09/03-rrt-star-planner.md)
+
+
+## 2026-09-03 — demo-natural-motion
+- **Pick**: 사용자 지적 — `--interactive` 데모에서 팔이 목적지에 도달은 하지만 중간 경로 자세가 부자연스러움. 원인: `_run_cycle`/`_run_interactive`가 RRT-Connect의 raw(지그재그) 경로를 그대로 재생. 사용자가 "RRT-Connect 외 다른 향상된 기법 추가 또는 부자연스러운 모션 개선을 먼저 진행"을 요청, 조사 결과 이미 구현·테스트 끝난 PR #1(MP-0005 shortcut)·PR #2(MP-0006 time_parameterize)가 이 문제를 직접 푸는 코드였음을 확인
+- **Outcome**: 두 PR을 병합하지 않고(사용자 선택) 파일 내용만 새 브랜치로 옮겨 데모 실행 경로에 연결. `_execute`를 waypoint 수렴-게이팅에서 `Trajectory` 표본 재생으로 교체. **중요 발견**: config의 하드웨어 관절 속도 한계(4.8 rad/s)를 그대로 재생에 쓰면 이 데모의 오픈루프 PD 토크 컨트롤러가 못 따라가 중간 추종 오차가 1.5 rad까지 벌어짐(`Trajectory`를 실제로 소비하는 첫 코드라 지금까지 발견 안 됐던 문제) — 재생 전용 보수적 속도(`--exec-max-speed-rad-s`, 기본 1.0 rad/s)를 config의 하드웨어 스펙과 분리해 해결. 43개 planning 테스트 통과, PR #3 생성
+- **Next**: PR #1/#2/#3 사람 리뷰/병합, `planning/p5-rrt-star-planner`(MP-0016, RRT* 대안 플래너) 착수
+- **Full**: [journal/2026-09/03-demo-natural-motion.md](journal/2026-09/03-demo-natural-motion.md)
+
+
+## 2026-08-31 11:10 — p2-time-parameterize
+- **Pick**: MP-0006 — `planning.trajectory.time_parameterize` 사다리꼴 속도 프로파일. `research/feed.md`의 같은 날 researcher 노트가 이 TODO를 정확히 다뤄 설계 출발점으로 삼음
+- **Outcome**: 처음 구현한 "웨이포인트에서 안 멈추는 전역 단일 프로파일"이 다중 waypoint 합성 경로 시험에서 가속도 상한 위반(상한 4.0 vs 실측 173 rad/s²)을 냄 — 세그먼트 경계(코너)에서 관절 속도 방향이 불연속으로 바뀌기 때문. research 노트가 권장한 "세그먼트별 독립 사다리꼴 + 매 waypoint 정지"(moveit 계열)로 재구현해 해결. 모든 관절이 같은 스칼라 상한을 쓰므로 표준 다관절 동기화가 Linf 세그먼트 거리와 수학적으로 동치임을 확인. `max_joint_speed_rad_s`는 `imitation.teleop`의 실기 한계(4.8)를 재사용, 신규 11개 포함 37개 planning 테스트 통과
+- **Next**: MP-0013 벤치마크 하네스(PR 대기열이 늘고 있어 우선순위 상향), PR #1(MP-0005)·PR #2(MP-0006) 리뷰/병합, P3 실행 연결(MP-0008)
+- **Full**: [journal/2026-08/31-11-p2-time-parameterize.md](journal/2026-08/31-11-p2-time-parameterize.md)
+
+
 ## 2026-08-31 07:17 — nullspace-regularization-natural-posture
 - **Pick**: 사용자 지적 — 목적지엔 가지만 팔 자세가 부자연스러움, 매니퓰레이터 모션 플래닝을 보통 이렇게 푸는지 질문 + hydrax(sampling MPC) 참조 가능성 문의
 - **Outcome**: position-only IK의 남는 4개 자유도에 표준 nullspace redundancy resolution(현재 관절값에 최대한 가깝게 유지) 추가. 분석해보니 "부자연스러운" 사례 하나는 실제로 가장 가까운 해가 장애물과 충돌해서 정당하게 크게 재배치된 것 — 정칙화는 이런 경우 충돌 회피를 우선한다(의도된 동작). hydrax는 RRT 대체가 아니라 P3(정식 실행) 보완 후보로 조사만 하고 구현은 사용자 확인 대기

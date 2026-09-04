@@ -1,0 +1,2 @@
+timestamp	commit	metric	status	description
+2026-08-30T12:03:00Z	3c86f87	qual:tests-pass	keep	shortcut_path: 무작위 shortcut, 30 planning tests(신규 6개 포함) 통과. 합성 slab 시나리오(box-space 좁은 틈, 30 seed)에서 median length reduction 23%(PRD 30% 목표는 시간 파라미터화 포함 P2 전체 exit criterion, 이 TODO 단독 범위 아님). 실제 can-sort 장면 측정은 벤치마크 하네스(MP-0013) 완료 후.
