@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-04 — p3-execution-module
+- **Pick**: 사용자 요청 — PRD를 고려해 다음 작업 진행. 로드맵상 다음 미착수 단계는 P3(정식 실행 모듈). `Trajectory`가 필요해 사용자 승인 하에 PR #1(shortcut)·#2(time_parameterize)를 먼저 병합(독립 코드 리뷰+로컬 merge dry-run으로 안전 확인 후)
+- **Outcome**: PR #2 병합 시 `__init__.py`에서 PR #1과 충돌 — export 합집합으로 수동 해결. `planning/execution.py`의 `follow_trajectory`가 `ArmTorqueController` 토크만으로 재생하는 폐루프 함수를 제공, 매 표본마다 `ArmCollisionChecker.is_valid` 재확인으로 "침투 없음"을 직접 검증. 실측: 4개 seed 모두 최종 site 오차 0.07~0.09mm(PRD 목표 5mm 대비 60배 여유), 침투 0건 — velocity feedforward 없이도 여유 있게 충족. **작업 중 사고 2건**: `git reset --hard`를 상태 확인 없이 실행해 cron 루프의 미커밋 변경을 날렸다가 대화 컨텍스트로 정확히 복원, `git checkout -b <기존 브랜치>`가 조용히 실패해 main에 남은 채 명령을 실행한 사고가 두 번 더 반복(이 세션 통산 세 번째) — 둘 다 push 전 발견해 원격 영향 없이 복구
+- **Next**: PR #3/#4/#5/#7/#8 사람 리뷰/병합(PR #4/#5는 이제 `__init__.py` 충돌 상태), MP-0007/MP-0017 비교 벤치마크, 사용자가 정하면 IK 실패/연속 동작 한계 진행
+- **Full**: [journal/2026-09/04-p3-execution-module.md](journal/2026-09/04-p3-execution-module.md)
+
+
 ## 2026-09-03 — benchmark-harness
 - **Pick**: STATE.md 병목이 두 사이클 연속 같은 항목(MP-0013 벤치마크 하네스 부재). MP-0004/0007/0014/0017이 전부 대기 중이었고, 자동 researcher가 이미 설계 지침(`research/2026-09/001.md`, `002.md`)을 조사해 둠
 - **Outcome**: `scripts/benchmark_planning.py` — `demo_plan_right_arm.py`의 장면·목표 샘플링 재사용, `wall_budget_s` 가드로 2분 예산 보장. 도구를 바로 실제로 돌려 MP-0004도 같은 사이클에서 닫음: 50 seed×2 시나리오(장애물 유/무) 모두 성공률 100%, 계획 시간 중앙값 ~13ms. **작업 중 사고**: 동시에 도는 curator 프로세스와 워킹 디렉토리를 공유하다 브랜치 전환이 꼬여 main에 코드를 두 번 잘못 커밋 — 둘 다 push 전에 발견해 안전 브랜치+cherry-pick으로 완전히 복구, 원격엔 영향 없음. curator의 정당한 상태 커밋(`research/cron_activity.md`)은 별도 보존했으나 raw `git push origin main`이 auto-mode 분류기에 막혀 로컬에 남아 있음(사람 처리 필요)
