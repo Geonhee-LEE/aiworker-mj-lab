@@ -33,4 +33,28 @@ def load_collision_settings():
     )
 
 
-__all__ = ["CollisionSettings", "load_collision_settings"]
+@dataclass(frozen=True)
+class TrajectorySettings:
+    """``time_parameterize`` 사다리꼴 프로파일에 필요한 값."""
+
+    max_joint_speed_rad_s: float
+    max_joint_accel_rad_s2: float
+
+
+def load_trajectory_settings():
+    return TrajectorySettings(
+        max_joint_speed_rad_s=SETTINGS.number(
+            "planning.trajectory.max_joint_speed_rad_s", positive=True
+        ),
+        max_joint_accel_rad_s2=SETTINGS.number(
+            "planning.trajectory.max_joint_accel_rad_s2", positive=True
+        ),
+    )
+
+
+__all__ = [
+    "CollisionSettings",
+    "TrajectorySettings",
+    "load_collision_settings",
+    "load_trajectory_settings",
+]
