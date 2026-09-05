@@ -410,10 +410,120 @@ MUJOCO_GL=osmesa .venv/bin/python -m pytest -q tests/test_planning_base_pose.py
 라이브러리 레이어(reachability map + 베이스 자세 선택 + 주행 실행)만
 완성됐고, 이를 엮는 통합 데모 스크립트는 다음 단계다.
 
+## P7 Tier 2 타당성 평가 (설계 문서 — 미착수)
+
+**이 절은 결합형(coupled) whole-body 플래닝이 기술적으로 가능한지 코드
+근거로 판단한 타당성 평가 + 청사진이다. 아래 어떤 코드도 아직 구현되지
+않았다** — Tier 1(위 절)이 실전에서 검증된 뒤, 정적 베이스 배치로 안
+풀리는 시나리오가 실측으로 확인되면 착수한다는 원칙은 그대로 유효하다.
+
+### 결론: 가능하다 — 가장 어려운 부분이 이미 검증돼 있다
+
+Tier 2가 필요로 하는 건 base_x·base_y·base_yaw·lift_joint·오른팔
+7관절을 하나로 묶은 11-DOF 공간에 대한 FK/Jacobian, 충돌 검사, 그리고
+그 공간에서 동작하는 샘플링 플래너다. 조사 결과 **이 중 FK/Jacobian은
+이미 프로덕션에서 쓰이고 있었다** — `control.whole_body.WholeBodyIK`가
+지금도 `self.kinematic_tree = KinematicTree(model)`
+(`control/whole_body.py:194`) 하나로 `base_x, base_y, base_yaw, lift_joint`
++ 양팔(`control/whole_body.py:163-176`의 `self.joint_names`/`self.joint_ids`
+조립)을 묶은 Jacobian을 매 제어 프레임 `self.kinematic_tree.forward_site(
+qpos, site_id, self.joint_ids)`(`control/whole_body.py:777-789`)로 계산한다.
+`kinematics.tree.KinematicTree`는 스칼라 hinge/slide 관절만 지원한다는
+제약이 있지만(자유/볼 관절은 `NotImplementedError`), `base_x`/`base_y`
+(slide)·`base_yaw`(hinge)는 `models/full_scene.xml:312-315`에서 보듯
+`base_link` 위에 순서대로 쌓인 평범한 스칼라 관절 3개일 뿐이다 — "가상
+평면 관절이라 특별 취급이 필요하다"는 우려는 사실이 아니었다.
+
+`planning/`의 알고리즘도 다시 확인했다 — `rrt_connect.py`, `shortcut.py`,
+`trajectory.py`, `local_path.py`의 `EdgeChecker`는 전부 `space`/`checker`/
+`edge_checker` 추상 인터페이스에만 의존하고 팔 전용 하드코딩이 없다
+(docstring의 "7-DOF" 언급은 설명용 주석일 뿐 동작에 영향 없음). **이
+네 파일은 한 줄도 안 고치고 재사용 가능**하다 — Tier 1 설계 때 이미
+확인한 "좋은 추상화는 미래 확장을 값싸게 만든다"는 통찰이 다시 한번
+맞아떨어졌다.
+
+### 그래도 필요한 세 가지 수정/설계 결정
+
+1. **`ArmCollisionChecker`의 자기충돌 판정이 팔 전용 접두어로 하드코딩돼
+   있다.** `_collect_planned_geoms`(`planning/collision_state.py:84-94`)가
+   `prefixes = ("arm_r_link",) + _FROZEN_HAND_BODY_PREFIXES`
+   (`_FROZEN_HAND_BODY_PREFIXES = ("hx5_r_base", "finger_r_link")`, 26번째
+   줄)로 "계획 대상 geom" 목록을 만든다 — 베이스·리프트 body는 이 목록에
+   없으므로, `WholeBodySpace`를 그냥 주입해도 **베이스·리프트의 충돌이
+   조용히 무시된다**(`is_valid()`가 위험한 자세도 항상 통과시킬 수 있음).
+   생성자에 `planned_body_prefixes` 파라미터를 추가해(기본값 = 현재
+   오른팔 전용 튜플, 하위호환 100% 유지) `_collect_planned_geoms`가 이를
+   받아 필터링하도록 고쳐야 한다 — 새 클래스(`WholeBodyCollisionChecker`)는
+   필요 없다. `space` 자체가 이미 생성자 주입식이라
+   (`self.space = space if space is not None else RightArmSpace.from_model(...)`,
+   `planning/collision_state.py:61`) `ArmCollisionChecker(model,
+   whole_body_space, planned_body_prefixes=("base_link", "lift_link",
+   "arm_base_link", "arm_r_link", "hx5_r_base", "finger_r_link"))`처럼
+   호출하면 스냅샷·`is_valid`/`report`/`clearance` 패턴은 전부 그대로
+   재사용된다. 왼팔·헤드·손가락은 여전히 스냅샷에 고정된 장애물로
+   남는다(설계 범위는 베이스+리프트+오른팔, 왼팔 협조는 범위 밖).
+2. **`trajectory.time_parameterize`는 모든 차원에 같은 스칼라 속도·
+   가속도 상한을 쓴다**(모듈 docstring이 명시: "이 저장소는 모든 관절에
+   같은 스칼라 속도·가속도 상한을 쓰므로") — base_x/base_y(m)와 관절(rad)이
+   섞인 11-DOF에 그대로 쓰면 어느 한쪽이 다른 쪽 속도를 억지로 지배하게
+   돼 물리적으로 말이 안 된다.
+3. **`base_x`/`base_y`/`base_yaw`는 XML에 `range`가 없다**(무제한 — 위
+   313-315번째 줄 참고). `floor` geom도 `size="0 0 0.05"`인 무한 평면이라
+   (`models/full_scene.xml:310`) 샘플링 경계가 XML 어디에도 없다.
+   `RightArmSpace.sample()`의 관례를 그대로 물려받으면 문제가 된다 —
+   그 함수는 "범위가 없는 자유도(현재 없음)는 uniform이 정의되지 않으므로
+   0으로 둔다"(`planning/arm_state.py:94`, 실제로 지금까지는 이 분기를
+   타는 관절이 하나도 없었다)고 명시돼 있다 — `WholeBodySpace`가 이
+   관례를 그대로 쓰면 **베이스가 항상 원점에 고정되는 조용한 버그**가
+   된다. base_x/base_y는 독자적인 bounded box(생성자 인자, 기본값은
+   현재 베이스 위치 주변 반경 N m), base_yaw는 `[-π, π)` 균등 샘플이
+   필요하다.
+
+### 결정적 사실: 지금 이 씬엔 결합 계획이 필요한 시나리오가 없다
+
+`models/full_scene.xml`의 정적 장애물(`table`: z∈[0.6316, 0.7316],
+`target_bin`/`target_bin_red`: z≈0.63~0.82)은 전부 베이스 충돌 박스의
+z-범위(`base_link` 자식의 `<geom type="box" size="0.2 0.2 0.12" pos="0 0
+0.24">`, world z∈[0.27, 0.51], `models/full_scene.xml:321`) 위에 떠 있다
+— 베이스 발자국과 절대 안 겹친다. 즉 **decoupled(Tier 1)가 못 푸는 진짜
+상황이 현재 씬엔 존재하지 않는다.** 이건 Tier 2를 막는 요인이 아니라
+"지금 당장 급하지 않다"는 근거다 — 착수 시점엔 `test_planning_base_pose.py`의
+`_WALL_MJCF`처럼 합성 MJCF로 "베이스만 옮기거나 팔만 움직여선 못 풀고
+둘을 같이 움직여야 풀리는" 최소 시나리오(예: 낮은 파티션 + 그 너머의
+목표)를 새로 만들어야 한다 — 실제 씬에 그런 장애물을 추가하기 전까진
+Tier 2를 검증할 방법이 없다.
+
+### 청사진 (착수 시 따를 설계, 지금은 작성만)
+
+- **`WholeBodySpace`**(신규, `planning/whole_body_space.py`) —
+  `RightArmSpace`와 같은 공개 인터페이스(`sample`, `distance`,
+  `max_component`, `interpolate`, `steer`, `contains`, `write`, `.n`,
+  `.joint_names`, `.joint_ids`, `.lower`, `.upper`, `.limited`)를 11-DOF로
+  구현한다. 위치(m)와 각도(rad)를 동차로 만드는 per-차원 스케일 벡터를
+  두고 `distance`(가중 L2)·`max_component`(가중 L∞ — `EdgeChecker.steps`/
+  `time_parameterize`가 실제로 쓰는 함수)·`steer`가 이 스케일을 일관되게
+  적용한다. `interpolate`는 스케일과 무관하게 선형(base_yaw만 최단각
+  wraparound).
+- **`ArmCollisionChecker`에 `planned_body_prefixes` 파라미터 추가** — 위
+  1번 항목대로, 기존 파일에 대한 작은 하위호환 확장.
+- **실행(계획 후 재생)은 이번 설계 범위 밖으로 명시적으로 보류한다.**
+  Tier 1과 달리 Tier 2의 경로는 베이스와 팔이 동시에 움직여야 하는데,
+  `mobile_execution.drive_base_to_pose`를 waypoint마다 반복 호출하는
+  방식은 매번 정지할 때까지 수렴한 뒤에야 다음 목표로 넘어가는
+  stop-start 방식이라 "결합된 이동"의 취지와 다르다. 진짜 동시 실행은
+  매 물리 스텝마다 베이스 트위스트와 팔 관절 명령을 함께 계산하는 새
+  루프가 필요하고, 이는 P3 실행 모듈(PR #8, 아직 미병합)에도 의존한다 —
+  Tier 2가 실제 착수될 때의 후속 과제로 남긴다.
+- **1차 목표 알고리즘은 `plan_rrt_connect`로 한정한다.** `rrt_star.py`/
+  `chomp.py`는 이 저장소 `main`에 없다(각각 PR #4/#5, 미병합·미리베이스
+  브랜치에만 존재 — `chomp` 브랜치는 `settings.py`/`config/default.yaml`의
+  최근 변경 이전 시점에서 갈라져 그대로 병합하면 회귀가 남는다). RRT*/
+  CHOMP whole-body 지원은 그 PR들이 병합·리베이스된 뒤의 별도 후속 과제다.
+
 ## 다음 단계
 
 P2(shortcut 평활화 + 시간 파라미터화)부터는 자동 연구 루프(`docs/agents.md`)가
-`TODO.md`를 보고 진행한다. P7 Tier 2(결합형 `WholeBodySpace`)는 Tier 1이
-실전에서 검증된 뒤(예: 좁은 통로처럼 정적 베이스 배치로 안 풀리는 경우가
-실측으로 확인되면) 후속 사이클로 설계한다. 로드맵 전체는
-[`docs/prd.md`](../prd.md) §2를 참고.
+`TODO.md`를 보고 진행한다. P7 Tier 2(결합형 `WholeBodySpace`)는 위 타당성
+평가에서 "가능하다"고 결론 났지만, 검증할 실제 시나리오(합성 MJCF 포함)가
+먼저 준비돼야 착수 의미가 있다 — 사용자의 우선순위 결정을 기다린다.
+로드맵 전체는 [`docs/prd.md`](../prd.md) §2를 참고.
