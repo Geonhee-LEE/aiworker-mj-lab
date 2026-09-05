@@ -14,7 +14,7 @@ sampling-based 모션 플래너다. 베이스·리프트·헤드·손가락·왼
 - **기존 자산을 재사용한다.** FK는 `KinematicTree`, 관절 범위 클리핑 개념은
   `kinematics.constraints`와 같은 패턴을 따른다.
 
-## 현재 구현 (P0 + P1)
+## 현재 구현 (P0 + P1 + P2 일부)
 
 | 모듈 | 책임 |
 |---|---|
@@ -22,10 +22,69 @@ sampling-based 모션 플래너다. 베이스·리프트·헤드·손가락·왼
 | `obstacles.right_arm_collision_pairs` | `clearance()`의 정확한 거리 보고에 쓰는 충돌 쌍 목록 |
 | `collision_state.ArmCollisionChecker` | boolean `is_valid(q)` + exact `clearance(q)` |
 | `local_path.EdgeChecker` | 두 configuration 사이 선분의 충돌 검사(이분 순서) |
-| `settings.load_collision_settings` | `config/default.yaml`의 `planning.collision.*` 로더 |
+| `settings.load_collision_settings` / `load_trajectory_settings` | `config/default.yaml`의 `planning.collision.*`/`planning.trajectory.*` 로더 |
 | `rrt_connect.plan_rrt_connect` | 두 트리 EXTEND/CONNECT 표준 RRT-Connect. 결정론적 seed. 반환값에 `TreeSnapshot`(탐색한 전체 트리)도 포함 |
+| `shortcut.shortcut_path` | raw 경로의 지그재그 waypoint 중 직선으로 이어도 무충돌인 구간을 무작위로 잘라내는 후처리 |
+| `trajectory.time_parameterize` | 세그먼트별 독립 사다리꼴 속도 프로파일로 물리 timestep 간격의 `Trajectory(times, positions)`를 만드는 후처리 |
 
-평활화·시간 파라미터화(P2)와 정식 실행 모듈(P3)은 아직 없다.
+### RRT-Connect 알고리즘 요약
+
+두 트리(시작 쪽, 목표 쪽)를 번갈아 확장한다. 매 반복:
+
+1. `goal_bias` 확률로 목표를, 아니면 `RightArmSpace.sample()`로 관절 범위 안
+   균등 무작위 표본을 하나 뽑는다.
+2. 현재 트리(`tree_a`)를 그 표본 방향으로 `EXTEND`(최근접 노드에서
+   `step_size_rad`만큼 스티어 + `EdgeChecker`로 유효성 확인, 유효하면 노드 추가).
+3. `EXTEND`가 트인 방향으로 나아갔다면(`ADVANCED`), 반대 트리(`tree_b`)를
+   그 새 노드 쪽으로 `CONNECT`(닿거나 막힐 때까지 `EXTEND`를 반복)한다.
+4. `CONNECT`가 닿으면(`REACHED`) 두 트리의 root-to-node 경로를 이어 붙여
+   성공. 아니면 `tree_a`/`tree_b`를 swap하고 다음 반복.
+
+`time_budget_s`가 실제 종료 조건이고 `max_iterations`는 폭주 방지용 상한이다.
+`_Tree.nearest`는 KD-tree가 아니라 선형 탐색이다 — 7-D·수천 노드 규모에서는
+의존성 없이도 충분히 빠르다(§성능 참고). 이 알고리즘은 **첫 해를 찾으면
+즉시 반환**하므로 경로 품질(길이)이 운에 좌우된다 — `shortcut_path`가 이
+문제를 부분적으로 보완한다. 시간 예산 안에서 비용을 계속 개선하는 대안
+플래너(RRT*)는 `TODO.md`의 MP-0015/16/17(P5)로 별도 진행 중이다.
+
+### 경로 후처리: shortcut 평활화 + 시간 파라미터화
+
+`scripts/demo_plan_right_arm.py`는 `plan_rrt_connect`가 반환한 raw 경로를
+기본적으로 두 단계 후처리를 거친 뒤에만 재생한다(`_postprocess_path`):
+
+1. **`shortcut_path(space, edge_checker, path, rng=..., iterations=200)`** —
+   무작위로 두 waypoint를 골라, 그 사이를 직선으로 이어도 `EdgeChecker`를
+   통과하면 사이 waypoint를 전부 버린다. 200회 반복 후 경로 길이가 원래
+   이하로 남는다(끝점은 항상 보존). raw 경로는 트리 확장 과정에서 생긴
+   불필요한 굴곡을 담고 있어, 이 단계 없이 재생하면 팔이 부자연스럽게
+   지그재그로 움직인다.
+2. **`time_parameterize(space, path, max_speed_rad_s=..., max_accel_rad_s2=..., control_period_s=dt)`** —
+   각 세그먼트(연속 waypoint 쌍)를 독립적으로 사다리꼴(짧으면 삼각형)
+   속도 프로파일로 시간 파라미터화한다. 매 waypoint에서 속도가 정확히
+   0으로 돌아온 뒤 다음 세그먼트를 시작한다(moveit의
+   `IterativeParabolicTimeParameterization`과 같은 표준 접근). 세그먼트를
+   이어붙여 waypoint에서 안 멈추는 전역 프로파일도 시도했으나, 인접
+   세그먼트의 방향이 바뀌는 코너에서 속도 방향이 불연속으로 바뀌어
+   가속도가 사실상 무한대가 되는 문제가 실측으로 확인돼(상한 4.0 대비
+   173 rad/s² 위반) waypoint-정지 방식으로 재설계했다(`research/2026-08/001.md`).
+
+콘솔에 raw/평활화 후 경로 길이(`path_length_rad`)를 함께 출력해 효과를
+바로 확인할 수 있다. `--no-shortcut`/`--no-time-parameterize`로 각 단계를
+개별적으로 꺼서 raw 경로와 비교할 수 있다(`_execute_waypoints`가 이전의
+waypoint 수렴-게이팅 재생을 그대로 보존).
+
+**재생 속도는 하드웨어 한계를 그대로 쓰지 않는다.** `config`의
+`planning.trajectory.max_joint_speed_rad_s`(4.8 rad/s)는 FFW-SH5 실제
+하드웨어 관절 한계를 문서화한 값이지만, 이 데모가 재생에 쓰는
+`ArmTorqueController`는 오픈루프 PD + 중력보상 토크 제어기라서 그 속도의
+기준 궤적을 그대로 따라가지 못한다 — 실측으로 확인됨: 4.8 rad/s 기준
+궤적을 그대로 재생하면 중간 추종 오차가 최대 1.5 rad까지 벌어졌다가
+궤적이 멈춘 뒤에야 서서히 수렴한다. `--exec-max-speed-rad-s`(기본
+1.0 rad/s)/`--exec-max-accel-rad-s2`(기본 2.0 rad/s²)로 이 컨트롤러가 실제로
+추종 가능한 보수적인 속도를 따로 쓴다 — 하드웨어 한계 값 자체는 config에
+그대로 유효하게 남아 있고(실제 로봇이 자체 서보로 재생하는 경로라면
+하드웨어 한계를 써도 된다), 데모의 시뮬레이션 재생 컨트롤러 대역폭
+문제일 뿐이다.
 
 ## 직접 실행해 보기
 
@@ -173,10 +232,13 @@ nullspace 안에서만, 부목표(현재 관절값 `q_ref`에 가깝게 유지)�
 일회성으로 만든 결과물**이다 — 이런 뷰가 유용하다고 판단되면 `TreeSnapshot`
 JSON 익스포트를 `scripts/`에 정식으로 추가하는 게 다음 단계다.
 
-**실행(`--execute`) 재생의 한계**: waypoint마다 "수렴할 때까지 최대 3초 대기"
-하는 임시 방식이다. 정식 시간 파라미터화(P2, `planning.trajectory`)가 관절
-속도·가속도 상한을 지키는 매끄러운 궤적을 대신하게 된다 — 지금은 데모/디버그
-용도다.
+**실행(`--execute`) 재생**: 이제 기본적으로 `time_parameterize`가 만든
+`Trajectory` 표본을 물리 timestep 하나당 하나씩 재생한다(§경로 후처리
+참고) — waypoint마다 수렴을 기다리던 예전 방식은 `--no-time-parameterize`
+비교 모드에서만 쓰인다. 정식 실행 모듈(P3, `planning.execution`)은 아직
+없다 — 이 데모의 재생 로직이 `Trajectory`를 소비하는 첫 지점이고,
+`ArmTorqueController`와의 연결(MP-0008)이 아직 정식 모듈로 분리되지
+않았을 뿐이다.
 
 ## 충돌 검사 계약
 
@@ -240,5 +302,6 @@ raw 모델에서 `contype=2 conaffinity=0`으로 오른팔과 충돌하지 않�
 
 ## 다음 단계
 
-P2(shortcut 평활화 + 시간 파라미터화)부터는 자동 연구 루프(`docs/agents.md`)가
+P2(shortcut 평활화 + 시간 파라미터화)는 구현·데모 연결까지 끝났다. P3(정식
+실행 모듈, `planning.execution`)부터는 자동 연구 루프(`docs/agents.md`)가
 `TODO.md`를 보고 진행한다. 로드맵 전체는 [`docs/prd.md`](../prd.md) §2를 참고.
