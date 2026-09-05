@@ -29,6 +29,9 @@
                         재생 궤적의 속도·가속도 상한(기본 1.0 rad/s, 2.0 rad/s²).
                         config의 하드웨어 한계(4.8 rad/s)보다 훨씬 보수적이다 —
                         아래 참고.
+    --posture-smooth    CHOMP류 가속도 최소화로 경로 자세를 매끄럽게 한다(opt-in).
+                        콘솔에 매끄러움 비용 전/후 값을 함께 찍는다
+    --posture-trust-region-rad  --posture-smooth 전용 trust region (기본 --step-size-rad)
 
 계획한 경로는 기본적으로 shortcut 평활화(``planning.shortcut``) + 사다리꼴
 속도 프로파일 시간 파라미터화(``planning.trajectory``)를 거친 뒤 재생된다 —
@@ -71,9 +74,11 @@ from ffw_sh5_grasp.planning import (
     EdgeChecker,
     RightArmSpace,
     path_length_rad,
+    path_smoothness_cost,
     plan_rrt_connect,
     plan_rrt_star,
     shortcut_path,
+    smooth_posture,
     time_parameterize,
 )
 from ffw_sh5_grasp.planning.settings import TrajectorySettings, load_trajectory_settings
@@ -258,18 +263,22 @@ def _step_waypoint(model, data, controller, space, q_des, max_steps, converge_to
 
 
 def _postprocess_path(space, edge_checker, path, rng, args, dt, trajectory_settings):
-    """RRT-Connect의 raw 경로를 (선택적으로) shortcut 평활화 + 시간 파라미터화한다.
+    """RRT-Connect의 raw 경로를 (선택적으로) shortcut 평활화 + CHOMP 자세
+    평활화 + 시간 파라미터화한다.
 
     raw 경로는 트리 확장 과정에서 생긴 지그재그 waypoint를 그대로 담고 있어
     그대로 재생하면 팔이 부자연스럽게 움직인다. ``shortcut_path``로 불필요한
-    굴곡을 잘라내고, ``time_parameterize``로 매 waypoint에서 멈추지 않는
-    (세그먼트별로는 멈추는) 사다리꼴 속도 프로파일을 만든다. ``--no-shortcut``/
+    굴곡을 잘라내고, ``--posture-smooth``가 켜져 있으면 CHOMP류 가속도
+    최소화(``smooth_posture``)로 자세를 한 번 더 매끄럽게 다듬은 뒤,
+    ``time_parameterize``로 매 waypoint에서 멈추지 않는(세그먼트별로는
+    멈추는) 사다리꼴 속도 프로파일을 만든다. ``--no-shortcut``/
     ``--no-time-parameterize``는 이 효과를 raw 경로와 비교하기 위한 디버그
     플래그다.
     """
     smoothed = path
     if not args.no_shortcut:
         smoothed = shortcut_path(space, edge_checker, path, rng=rng, iterations=200)
+    smoothed = _maybe_smooth_posture(space, edge_checker, smoothed, args)
     if args.no_time_parameterize:
         # 시간 파라미터화를 끈 비교 모드 — trajectory는 없다. 호출자는
         # ``_execute_waypoints``로 예전(수렴 게이팅) 재생 방식을 써야 한다.
@@ -452,6 +461,23 @@ def _plan_path(space, edge_checker, start, goal, rng, args):
         rng=rng, step_size_rad=args.step_size_rad, goal_bias=args.goal_bias,
         max_iterations=args.max_iterations, time_budget_s=args.time_budget_s,
     )
+
+
+def _maybe_smooth_posture(space, edge_checker, path, args, *, prefix=""):
+    """``--posture-smooth``가 켜져 있으면 CHOMP류 후처리를 적용하고 비용을 출력한다.
+
+    실패(폴백)해도 원본 ``path``와 동일한 배열이 반환되므로 호출자는 항상
+    반환값을 그대로 재생·시각화에 쓰면 된다.
+    """
+    if not args.posture_smooth:
+        return path
+    before = path_smoothness_cost(path)
+    smoothed = smooth_posture(
+        space, edge_checker, path, trust_region_rad=args.posture_trust_region_rad
+    )
+    after = path_smoothness_cost(smoothed)
+    print(f"{prefix}자세 매끄러움 비용: {before:.4f} → {after:.4f}")
+    return smoothed
 
 
 def _run_interactive(model, data, space, checker, edge_checker, viewer, args, trajectory_settings):
@@ -679,6 +705,18 @@ def main(argv=None):
         ),
     )
     parser.add_argument("--exec-max-accel-rad-s2", type=float, default=2.0)
+    parser.add_argument(
+        "--posture-smooth", action="store_true",
+        help=(
+            "CHOMP류 가속도 최소화 후처리로 경로 자세를 매끄럽게 한다(opt-in — "
+            "아직 실제 로봇 장면에서 충분히 검증되지 않은 새 기법). 폴백 시 원본 "
+            "경로를 그대로 쓴다"
+        ),
+    )
+    parser.add_argument(
+        "--posture-trust-region-rad", type=float, default=None,
+        help="--posture-smooth 전용. 기본 --step-size-rad와 같음",
+    )
     args = parser.parse_args(argv)
     if args.rewire_radius_rad is None:
         args.rewire_radius_rad = 2.0 * args.step_size_rad
@@ -688,6 +726,8 @@ def main(argv=None):
         args.goal_bias = 0.3 if args.planner == "rrt_star" else 0.1
     if args.goal_tolerance_rad is None:
         args.goal_tolerance_rad = 0.5
+    if args.posture_trust_region_rad is None:
+        args.posture_trust_region_rad = args.step_size_rad
     use_viewer = args.viewer or args.show_tree or args.interactive
     with_obstacle = not args.no_obstacle
 
