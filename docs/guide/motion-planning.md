@@ -4,6 +4,10 @@
 sampling-based 모션 플래너다. 베이스·리프트·헤드·손가락·왼팔은 계획 대상이
 아니라 질의 시점의 상태로 고정한 장애물로 취급한다.
 
+**P7(모바일 매니퓰레이터)부터는 베이스도 계획 대상에 들어온다** — 아래
+[모바일 매니퓰레이터 P7 (베이스 + 오른팔)](#모바일-매니퓰레이터-p7-베이스--오른팔)
+절 참고. 왼팔은 여전히 이 문서의 범위 밖이다.
+
 ## 설계 원칙
 
 - **전역 플래너와 지역 반응층을 분리한다.** 이 모듈은 "충돌 없는 관절
@@ -238,7 +242,178 @@ raw 모델에서 `contype=2 conaffinity=0`으로 오른팔과 충돌하지 않�
 `can_geom`을 뺐다 — exact clearance 보고에서만 캔이 빠지고, boolean `is_valid`는
 `mj_collision`의 broad-phase로 캔과의 충돌을 여전히 정확히 잡는다.
 
+## 모바일 매니퓰레이터 P7 (베이스 + 오른팔)
+
+로봇은 실제로 모바일이다 — `base_x`/`base_y`(slide)·`base_yaw`(hinge)
+가상 관절이 있지만 직접 액추에이터는 없고, 3-모듈 스워브 드라이브(조향
+6개 + 구동 6개)의 바퀴-지면 마찰로만 움직인다(`control.base.SwerveDrive`).
+각 바퀴가 독립적으로 조향+구동하므로 **사실상 홀로노믹**이라 계획
+관점에서 비홀로노믹(Reeds-Shepp류) 제약이 필요 없다.
+
+반응형 whole-body IK(`control.whole_body.WholeBodyIK`)는 이미 베이스·리프트·
+양팔을 하나의 weighted bounded differential IK로 묶어 풀지만, 손 목표
+Cartesian pose에 매 제어 프레임 반응하는 로컬 솔버라 "베이스를 (x, y, yaw)로
+보내라"는 지점-대-지점 주행이나 장애물을 우회하는 전역 경로는 만들지 못한다.
+P7은 이 둘을 새로 만들지 않고, 그 사이에 빠진 **전역 베이스 배치 + 주행**만
+채운다.
+
+### 설계: decoupled 우선(Tier 1), 결합형(Tier 2)은 후속
+
+실전에 배치된 모바일 매니퓰레이터(Fetch/TIAGo/HSR, PickNik/MoveIt Pro 등)의
+기본 패턴은 **"베이스를 좋은 위치로 옮긴 뒤, 그 자리에서 고정-베이스 팔
+계획기를 그대로 쓴다"**(decoupled)다 — 완전 결합 SE(2)×Rⁿ 샘플링 계획은
+정적 베이스 자세로 안 풀리는 좁은 공간에서만 보조로 쓰는 게 일반적이다.
+이 저장소도 이 패턴을 Tier 1로 먼저 구현했다 — 기존 팔 계획 파이프라인
+(`RightArmSpace`/`ArmCollisionChecker`/`EdgeChecker`/`plan_rrt_connect`)을
+**한 줄도 안 고치고** 재사용할 수 있기 때문이다. 결합형(Tier 2, 베이스+리프트+
+팔을 하나의 11-DOF 공간으로 묶는 `WholeBodySpace`)은 P1의 플래너들이
+이미 `space`/`checker` 추상 인터페이스에만 의존하도록 짜여 있어 인터페이스만
+맞추면 나중에 언제든 얹을 수 있다 — 다만 검증할 실제 시나리오(좁은 통로 등)가
+아직 없어 지금은 착수하지 않는다.
+
+| Phase | 모듈 | 책임 |
+|---|---|---|
+| P7.0 | `reachability.build_reachability_map` | 베이스 프레임 기준 역-도달가능성 지도(IRM) 오프라인 구축 |
+| P7.1 | `base_pose.select_base_pose` | 월드 목표에서 최선의 베이스 (x, y, yaw) 선택 |
+| P7.1 | `base_pose.BaseFootprintChecker` | 베이스 발자국(2D) 충돌 검사 |
+| P7.1 | `mobile_execution.drive_base_to_pose` | 선택된 베이스 자세까지 실제 주행(스워브 실행) |
+
+### P7.0 — 역-도달가능성 지도(`reachability.py`)
+
+베이스가 원점(`home` 키프레임)인 채로, 베이스 프레임 기준 (dx, dy, dz)
+격자마다 "고정-베이스 오른팔 IK로 이 지점에 닿을 수 있는가"를 오프라인
+한 번만 표로 만든다. 회전·이동에 불변이라 **로봇 1대당 한 번만 만들면
+어떤 베이스 자세에서도 재사용**할 수 있다(월드→베이스 프레임 변환은
+P7.1 쪽 책임).
+
+```python
+@dataclass(frozen=True)
+class ReachabilityMap:
+    grid_points: np.ndarray   # (N, 3) 베이스 프레임 상대 위치
+    success_rate: np.ndarray  # (N,) 0.0/1.0 — 격자점별 단일 IK 시도 성공 여부
+
+    def query(self, relative_xyz, *, k=8) -> float:
+        ...  # 정확히 일치하면 그 점 값, 아니면 최근접 k점 역거리 가중 평균
+```
+
+IK는 새로 만들지 않는다 — `scripts/demo_plan_right_arm.py`의
+`_ik_attempt`/`_solve_valid_ik`와 정확히 같은 계약(position-only DLS +
+nullspace 정칙화, 여러 무작위 시드 중 수렴+무충돌인 첫 해 채택)을
+`reachability._ik_attempt`/`reachability._probe`가 재사용한다.
+
+`default_grid()`는 실측(3000개 무작위 유효 표본의 FK 손끝 위치 1~99
+백분위: x∈[-0.70, 0.72], y∈[-1.02, 0.08], z∈[0.54, 1.89])에 여유를 둔
+기본 경계상자를 `step=0.2`m 간격으로 채운다(504개 격자점). **`success_rate`는
+이름과 달리 이산 0.0/1.0이다** — 여러 시드를 `_probe`가 이미 소진하므로
+한 번의 빌드는 사실상 "그 seed에서 도달했는가"만 기록한다. 더 정밀한
+연속값 통계(진짜 확률)가 필요하면 호출자가 여러 rng로 반복 호출해 평균을
+내야 한다.
+
+**실측**: 기본 격자(504점) 빌드에 81초 — 오프라인 1회성 비용으로 허용
+범위. 오프라인 빌드이므로 온라인 계획 예산(P4 2분)엔 포함되지 않는다.
+
+**테스트**(`tests/test_planning_reachability.py`, 4개): `query()`의 정확
+일치·보간 로직은 순수 계산(MuJoCo 불필요, 빠름) + 작은 2점 격자로 실제
+장면에서 "도달 가능 offset과 불가능 offset이 다르게 채점되는가"를 실제
+IK로 검증하는 통합 테스트 1개.
+
+### P7.1 — 베이스 자세 선택(`base_pose.py`)
+
+```python
+def select_base_pose(reachability_map, target_world_xyz, *, footprint_checker,
+                      current_base_pose, candidate_radii, candidate_angles,
+                      min_reachability=0.5) -> BasePoseResult:
+    ...
+```
+
+목표 주위 (반경, 각도) 원 위에 후보 베이스 (x, y, yaw)를 만들고
+① `reachability_map.query()` 점수 ② `footprint_checker` 무충돌 ③
+`current_base_pose`와의 근접도 순으로 정렬해 최선을 고른다. 점수가 같으면
+더 가까운 후보를 우선한다(불필요한 이동 회피). 후보가 하나도 기준을
+만족 못 하면 `BasePoseResult(success=False, ...)`와 이유 문자열을 반환한다.
+
+**yaw 후보도 `candidate_angles`를 그대로 재사용한다.** 로봇이 목표를 어느
+축으로 "정면"으로 보는지 가정하지 않기 위해서다 — P7.0 실측 도달 영역이
++x보다 -y 쪽으로 훨씬 넓게 퍼져 있어(기본 격자 y∈[-1.1, 0.2]), 특정 축을
+전제하면 틀리기 쉽다. 위치·방향 후보 조합 전체를 그냥 다 훑는다.
+
+`world_to_base_frame(target_world_xyz, base_pose)`는 월드→베이스 SE(2)
+변환이다 — `base_link`가 z로는 절대 움직이지 않으므로(높이는 `lift_joint`
+담당) z는 그대로 통과시키고, xy는 `-yaw`만큼 회전한다:
+
+```
+relative_xy = R(-base_yaw) @ (target_world_xy - base_xy)
+```
+
+`BaseFootprintChecker`는 `ArmCollisionChecker`와 **같은 아키텍처를 그대로
+따른다** — 생성자에서 `copy.deepcopy`한 scratch 모델, `set_snapshot(data)`가
+호출될 때만 live qpos를 한 번 복사, `mj_kinematics`+`mj_collision`만 사용
+(새 충돌 알고리즘을 만들지 않는다). `base_link`에 속한 `contype != 0`
+geom만 감시 대상으로 잡아두므로 바퀴 geom(별도 body)과의 지면 접촉은
+자동으로 제외된다. `padding_m`(기본 0.05m)만큼 그 geom들의 `geom_margin`을
+부풀려 여유를 둔다.
+
+**핵심 회귀 테스트**: `test_target_unreachable_from_far_base_becomes_reachable_after_repositioning`가
+P7.0의 `build_reachability_map`을 **그대로 재사용**해(새 IK 검증 코드
+없이) 먼 베이스 위치에서는 실제 IK로 도달 불가능(success_rate=0.0)했던
+목표가 `select_base_pose`가 고른 위치에서는 도달 가능(success_rate=1.0)해짐을
+실증한다. 이게 가능한 이유는 `build_reachability_map`이 실제로는 "베이스
+원점 전용"이 아니라 grid point를 그냥 절대 world IK 타겟으로 쓰기
+때문이다("베이스 원점" 요구사항은 결과 해석 쪽 약속일 뿐).
+
+**테스트**(`tests/test_planning_base_pose.py`, 13개): SE(2) 변환의 독립
+SO(2) 교차검증, stub 기반 `select_base_pose` 로직(최고점 선택·충돌
+후보 배제·동점 시 거리로 tie-break·실패 사유), `BaseFootprintChecker`를
+합성 벽 MJCF로 검증한 실제 충돌 판정 + padding 효과, 실제 장면에서
+"home 자세는 유효"하다는 sanity check, 그리고 위 핵심 회귀 테스트.
+
+**알려진 한계**: 실제 장면(`full_scene.xml` can-sort)엔 베이스 발자국
+높이대([0.27, 0.51]m)에 겹치는 정적 장애물이 없다(테이블은 z∈[0.63,
+0.73]로 그 위) — 그래서 진짜 충돌 판정은 합성 MJCF로만 검증했다. 낮은
+장애물이 실제 장면에 추가되기 전까진 이 한계가 유효하다.
+
+### 베이스 주행 실행(`mobile_execution.py`)
+
+`select_base_pose`가 고른 목표 자세로 실제 이동하는 건 새 저수준 제어가
+아니다 — `WholeBodyIK`는 손 목표 반응형이라 지점-대-지점 베이스 주행에
+안 맞아서(설계 문서의 명시적 이탈), 기존 `control.base.SwerveDrive`를
+목표-오차 루프로 얇게 감싼다:
+
+```python
+def drive_base_to_pose(model, data, target_pose, swerve_drive, *,
+                        tolerance_m=0.03, tolerance_rad=0.02,
+                        kp_linear=1.5, kp_angular=1.5,
+                        max_speed=0.6, max_steps=20000) -> BaseTransitReport:
+    ...
+```
+
+매 스텝: 월드 프레임 위치 오차 → 비례 게인 → 현재 yaw로 `R(-yaw)` 회전해
+차체(body) 프레임 twist `(vx, vy, wz)` → `swerve_drive.update_twist(twist, dt)`
+→ 반환된 바퀴별 (조향각, 구동속도)를 `data.ctrl`에 직접 써서 `mj_step`.
+새 액추에이터·새 기구학 없음 — 오케스트레이션 코드만 새로 추가됐다.
+
+**테스트 커버리지의 한계(정직한 고지)**: 실 장면·실 `SwerveDrive`로 0.15m
+변위 하나에 대한 smoke test만 있다 — P7.1에서 가장 검증이 얕은 부분이다.
+
+### 베이스 배치가 필요한 상황 확인해 보기
+
+```bash
+# reachability map: 순수 로직(격자 보간)만 — MuJoCo 없이 빠르게
+MUJOCO_GL=osmesa .venv/bin/python -m pytest -q tests/test_planning_reachability.py
+
+# base_pose 전체(로직 + 실제 장면 충돌·회귀 테스트)
+MUJOCO_GL=osmesa .venv/bin/python -m pytest -q tests/test_planning_base_pose.py
+```
+
+엔드투엔드 데모(`scripts/demo_plan_mobile_manipulator.py`, "베이스를
+옮긴 뒤 기존 팔 파이프라인으로 계획·실행")는 아직 없다 — P7.1까지는
+라이브러리 레이어(reachability map + 베이스 자세 선택 + 주행 실행)만
+완성됐고, 이를 엮는 통합 데모 스크립트는 다음 단계다.
+
 ## 다음 단계
 
 P2(shortcut 평활화 + 시간 파라미터화)부터는 자동 연구 루프(`docs/agents.md`)가
-`TODO.md`를 보고 진행한다. 로드맵 전체는 [`docs/prd.md`](../prd.md) §2를 참고.
+`TODO.md`를 보고 진행한다. P7 Tier 2(결합형 `WholeBodySpace`)는 Tier 1이
+실전에서 검증된 뒤(예: 좁은 통로처럼 정적 베이스 배치로 안 풀리는 경우가
+실측으로 확인되면) 후속 사이클로 설계한다. 로드맵 전체는
+[`docs/prd.md`](../prd.md) §2를 참고.
