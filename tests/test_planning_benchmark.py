@@ -42,6 +42,31 @@ def test_format_metric_failure_has_na_path_len():
     assert "path_len=NA" in metric
 
 
+def test_format_metric_omits_planner_and_path_len_after_by_default():
+    metric = format_metric(3, True, 12.5, 7, 42, 8.213)
+    assert metric == "bench:seed=3,success=1,plan_ms=12.50,iterations=7,checks=42,path_len=8.213"
+
+
+def test_format_metric_includes_planner_right_after_seed():
+    metric = format_metric(3, True, 12.5, 7, 42, 8.213, planner="rrt_star")
+    assert metric == (
+        "bench:seed=3,planner=rrt_star,success=1,plan_ms=12.50,"
+        "iterations=7,checks=42,path_len=8.213"
+    )
+
+
+def test_format_metric_includes_path_len_after_at_the_end():
+    metric = format_metric(3, True, 12.5, 7, 42, 8.213, path_len_after=6.5)
+    assert metric.endswith(",path_len_after=6.500")
+
+
+def test_format_metric_path_len_after_none_becomes_na_when_postprocess_enabled():
+    # postprocess가 켜졌지만(path_len_after 인자를 넘김) 이 seed는 계획
+    # 자체가 실패해 후처리할 경로가 없었던 경우 — 필드 생략이 아니라 NA.
+    metric = format_metric(9, False, 5000.0, 4000, 12345, None, path_len_after=None)
+    assert metric.endswith(",path_len_after=NA")
+
+
 def main():
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
