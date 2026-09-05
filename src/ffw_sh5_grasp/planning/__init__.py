@@ -2,9 +2,9 @@
 
 ``kinematics/__init__.py``와 같은 스타일로, 각 하위 모듈의 공개 이름을 여기
 한 곳에 모아 재수출한다. P0(관절공간 추상화 + 충돌 검사기), P1(RRT-Connect
-코어), shortcut 평활화와 시간 파라미터화(P2), P7.0(reachability map)과
-P7.1(베이스 자세 선택 + 발자국 충돌 검사 + 얇은 주행 실행)이 구현되어
-있다. 고정-베이스 팔 실행 연결(P3)은 아직 없다.
+코어), shortcut 평활화와 시간 파라미터화(P2), 정식 실행 연결(P3),
+P7.0(reachability map)과 P7.1(베이스 자세 선택 + 발자국 충돌 검사 + 얇은
+주행 실행)이 구현되어 있다.
 """
 
 from .arm_state import RIGHT_ARM_JOINTS, RightArmSpace
@@ -15,6 +15,7 @@ from .base_pose import (
     world_to_base_frame,
 )
 from .collision_state import ArmCollisionChecker, CollisionReport
+from .execution import ExecutionReport, follow_trajectory
 from .local_path import EdgeChecker
 from .mobile_execution import BaseTransitReport, drive_base_to_pose
 from .obstacles import RIGHT_ARM_BODIES, right_arm_collision_pairs
@@ -37,6 +38,7 @@ __all__ = [
     "BaseTransitReport",
     "CollisionReport",
     "EdgeChecker",
+    "ExecutionReport",
     "PlannerResult",
     "ReachabilityMap",
     "RightArmSpace",
@@ -45,6 +47,7 @@ __all__ = [
     "build_reachability_map",
     "default_grid",
     "drive_base_to_pose",
+    "follow_trajectory",
     "path_length_rad",
     "plan_rrt_connect",
     "right_arm_collision_pairs",
