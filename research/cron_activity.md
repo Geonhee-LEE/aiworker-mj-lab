@@ -49,3 +49,4 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
   untracked라 보존됐고 `TODO.md`/`research/feed.md`는 그 파일 내용으로부터
   복원함)*
 - 2026-09-05 11:01 KST EXECUTOR_SKIP reason=pr-queue-full count=5 (open planning/* PRs: #3 #4 #5 #7 #8)
+- 2026-09-05 21:01 KST `executor` · Cadence gate #1(PR 큐 포화) 재확인: `--head "planning/"` exact-match는 0건이지만 `gh pr list --state all`로 실측하니 open planning/* PR 5건(#3 MP-0023, #4 MP-0016, #5 MP-0024, #7 MP-0013/0004, #8 MP-0008/0009) 그대로 유지 중(2026-09-04 이후 하나도 안 줄어듦). 게이트 취지에 따라 조용히 스킵, Telegram 미발송. 병목 불변: 사람 리뷰/머지가 없으면 다음 cycle도 계속 스킵됨
