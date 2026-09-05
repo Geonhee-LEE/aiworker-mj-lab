@@ -48,3 +48,4 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
   `git reset --hard`로 워킹트리에서 유실됐으나 `research/2026-09/005.md`는
   untracked라 보존됐고 `TODO.md`/`research/feed.md`는 그 파일 내용으로부터
   복원함)*
+- 2026-09-05 11:01 KST EXECUTOR_SKIP reason=pr-queue-full count=5 (open planning/* PRs: #3 #4 #5 #7 #8)
