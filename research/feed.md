@@ -2,6 +2,14 @@
 
 _cap 30, 최신이 위. REVIEW 단계는 상위 5개만 읽는다._
 
+- [2026-09-06] [006](2026-09/006.md) PR 큐 완전 소진 후 다음 착수 후보인
+  MP-0017(RRT-Connect vs RRT* 50-seed 비교표)을 위해 통계 검정 방법을 미리
+  확정 — 동일 seed로 두 플래너를 돌리는 대응 표본 구조이므로 독립 표본
+  검정(Mann-Whitney) 대신 **Wilcoxon signed-rank test**(대응 t-test의
+  비모수 버전) + 중앙값 effect size를 함께 보고할 것, 한쪽만 실패한 seed는
+  성공 교집합에서 제외하고 교집합이 너무 작으면 검정 자체를 생략. MP-0022
+  (Wilson CI)는 성공률 축이라 이것과 별개. 신규 TODO 0건(MP-0017이 이미
+  커버).
 - [2026-09-05] [005](2026-09/005.md) 충돌 검사 가속 후보로 safety-certificate
   스타일 캐싱(Bialkowski et al., IJRR 2016) 조사 — 한 번 정밀 검사한 점의
   `clearance()` 반경 안에서는 이후 `is_valid`를 생략할 수 있다는 아이디어.
