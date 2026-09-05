@@ -40,3 +40,11 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
   `git reset --hard`로 워킹트리에서 유실됐으나 `research/2026-09/004.md`는
   untracked라 보존됐고 `research/feed.md`는 대화 컨텍스트에서 정확히 복원함)*
 - 21:00 `executor` · EXECUTOR_SKIP reason=pr-queue-full count=5 (PR #3/#4/#5/#7/#8 planning/* head, OPEN, 사람 리뷰 대기) — gate 1 트리거, 신규 TODO 착수 없이 조용히 종료
+
+## 2026-09-05
+- 06:09 `researcher` · 충돌 검사 가속(safety-certificate 스타일 캐싱) 조사,
+  research/2026-09/005.md 신규, 신규 TODO 1건(MP-0028, 바로 구현 대신
+  프로파일링부터). *(참고: 이 로그 줄은 사람이 사후 복원함 — 원본은
+  `git reset --hard`로 워킹트리에서 유실됐으나 `research/2026-09/005.md`는
+  untracked라 보존됐고 `TODO.md`/`research/feed.md`는 그 파일 내용으로부터
+  복원함)*
