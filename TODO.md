@@ -3,9 +3,9 @@
 _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트가 함께 수정한다._
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
-- Last update: `2026-09-06 08:28 KST`
-- Open (Doing + Today + Blocked + Backlog): **13**
-- Next ID: `MP-0031`
+- Last update: `2026-09-06 08:44 KST`
+- Open (Doing + Today + Blocked + Backlog): **14**
+- Next ID: `MP-0032`
 
 ## Doing
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -18,8 +18,8 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 ## Blocked
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
-| MP-0007 | P1 | P2 | claude | [bench] shortcut 전/후 경로 길이 비교 속성 시험 | planning/p5-planner-comparison | ☐ |
-| MP-0017 | P3 | P5 | claude | [bench] RRT-Connect vs RRT* 50 seed 비교표 → `RESULTS.md` | planning/p5-planner-comparison | ☐ |
+| MP-0007 | P1 | P2 | claude | [bench] shortcut 전/후 경로 길이 비교 — 실측 완료(50 seed, 중앙값 6.82% 감소, 증가 0건), PR #13 사람 리뷰 대기 | planning/p5-planner-comparison | ☐ |
+| MP-0017 | P3 | P5 | claude | [bench] RRT-Connect vs RRT* 50 seed 비교표 — 실측 완료: 통계적으로 유의한 경로 품질 차이 없음(Wilcoxon p≈0.86), RRT*가 ~1... | planning/p5-planner-comparison | ☐ |
 
 ## Backlog
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -35,6 +35,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0022 | P2 | P4 | claude | [research] aggregate_results.py에 성공률 Wilson 신뢰구간 계산 추가 (MP-0013/0018 완료 후) |  | ☐ |
 | MP-0025 | P2 | P5 | user | [research] VAMP-MR(SIMD 가속 multi-arm 샘플링 플래너) 통합 검토 — 10-100x 계획/후처리/실행 가속. PRD Non-Goal(외부 플래닝 라... |  | ☐ |
 | MP-0030 | P2 | P7 | user | [design] P7 Tier 2(결합형 whole-body 플래너) 착수 여부 결정 — 타당성 평가 완료(PR #12), 검증 시나리오(합성 MJCF) 준비 필요 |  | ☐ |
+| MP-0031 | P2 | P5 | user | [research] RRT*가 장애물 없는 시나리오·15초 예산에서 RRT-Connect 대비 경로 품질 이득이 없음을 실측(PR #13, Wilcoxon p≈0.86) — ... |  | ☐ |
 
 ## Done
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
