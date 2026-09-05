@@ -3,7 +3,7 @@
 _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트가 함께 수정한다._
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
-- Last update: `2026-09-05 22:41 KST`
+- Last update: `2026-09-06 08:28 KST`
 - Open (Doing + Today + Blocked + Backlog): **13**
 - Next ID: `MP-0031`
 
@@ -18,16 +18,16 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 ## Blocked
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
+| MP-0007 | P1 | P2 | claude | [bench] shortcut 전/후 경로 길이 비교 속성 시험 | planning/p5-planner-comparison | ☐ |
+| MP-0017 | P3 | P5 | claude | [bench] RRT-Connect vs RRT* 50 seed 비교표 → `RESULTS.md` | planning/p5-planner-comparison | ☐ |
 
 ## Backlog
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
 | MP-0028 | P2 | P1 | claude | [research] EdgeChecker/ArmCollisionChecker에 safety-certificate 스타일 캐싱 도입 여부 판단 — 바로 구현하지 않고 `stat... |  | ☐ |
-| MP-0007 | P1 | P2 | claude | [bench] shortcut 전/후 경로 길이 비교 속성 시험 |  | ☐ |
 | MP-0011 | P1 | P4 | claude | [planner] `planning/goals.py` Cartesian pose goal → IK 시드 다중 재시도 |  | ☐ |
 | MP-0012 | P1 | P4 | claude | [planner] `tests/offline_pose_ik.py`를 `planning.goals`로 위임(중복 제거) |  | ☐ |
 | MP-0014 | P2 | P4 | claude | [bench] pose goal 20 seed 성공률 측정 |  | ☑ |
-| MP-0017 | P3 | P5 | claude | [bench] RRT-Connect vs RRT* 50 seed 비교표 → `RESULTS.md` |  | ☐ |
 | MP-0018 | P2 | P0 | claude | [infra] `scripts/aggregate_results.py` — TSV→RESULTS.md 집계기 |  | ☐ |
 | MP-0019 | P2 | P0 | claude | [infra] `scripts/todo_tool.py` 단위 테스트(파싱·왕복) |  | ☐ |
 | MP-0020 | P3 | P0 | user | (user) Telegram 봇 생성 후 `scripts/telegram_setup.sh` 실행 확인 |  | ☑ |
