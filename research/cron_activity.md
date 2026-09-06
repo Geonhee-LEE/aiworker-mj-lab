@@ -51,7 +51,6 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
 - 2026-09-05 11:01 KST EXECUTOR_SKIP reason=pr-queue-full count=5 (open planning/* PRs: #3 #4 #5 #7 #8)
 - 2026-09-05 21:01 KST `executor` · Cadence gate #1(PR 큐 포화) 재확인: `--head "planning/"` exact-match는 0건이지만 `gh pr list --state all`로 실측하니 open planning/* PR 5건(#3 MP-0023, #4 MP-0016, #5 MP-0024, #7 MP-0013/0004, #8 MP-0008/0009) 그대로 유지 중(2026-09-04 이후 하나도 안 줄어듦). 게이트 취지에 따라 조용히 스킵, Telegram 미발송. 병목 불변: 사람 리뷰/머지가 없으면 다음 cycle도 계속 스킵됨
 - 2026-09-05 22:31 KST `wrap` · Daily Wrap: 커밋 15개 · PR 0개(planning/* 오늘 신규 없음, docs/p7-mobile-manipulator-guide #12는 스코프 외) · TODO 완료 2건(MP-0026, MP-0027 — P7.0/P7.1 PR #10/#11 병합) · 신규 3건(MP-0028, MP-0029, MP-0030). Telegram 미발송: telegram.env 없음(MP-0020 미완료, 사용자가 telegram_setup.sh 실행 필요)
-<<<<<<< Updated upstream
 - 2026-09-05 23:00 KST `curator` · open planning/* PR 0건(#3/#4/#5/#7/#8 모두 그새 병합됨) → rebase/라벨 대상 없음. `gh pr list --state merged`로 planning/* 8개 브랜치(chomp-posture-smoothing, p2-demo-natural-motion, p2-shortcut-smoothing, p2-time-parameterize, p3-execution-module, p4-benchmark-harness, p5-rrt-star-planner, p7-1-base-pose) 확인 후 origin에서 삭제(p7-reachability-map은 이미 삭제되어 있었음), 로컬 planning/* 브랜치 없음. Telegram 발송 실패(telegram.env 없음, MP-0020 미완료) — CURATOR_DONE rebased=0 attention=0 stale_branches_deleted=8
 - 2026-09-06 00:00 KST `researcher` · PR 큐 소진 후 다음 착수 후보 MP-0017(RRT-Connect vs RRT* 50-seed 비교표)을 위해 통계 검정 방법 사전 확정(대응 표본 Wilcoxon signed-rank + effect size, 실패 seed는 성공 교집합에서 제외) — `research/2026-09/006.md`. IK 시딩(MP-0011)·safety-certificate 캐싱(MP-0028) 후보 주제는 각각 004/005에서 이미 다뤄 중복 회피. 신규 TODO 0건 — RESEARCHER_DONE found=1 todos_created=0
 
@@ -60,8 +59,5 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
 - 2026-09-06 11:07 KST `executor` · MP-0011(P4 Cartesian pose goal IK 다중 재시도) 구현 — `planning/goals.py` 신규(solve_pose_goal/solve_pose_goal_multistart), RightArmSpace+JointSpaceKinematics 재사용. 실제 can-sort 장면 신규 테스트 3개 포함 83개 통과. PR #14 생성, MP-0011 Blocked(PR 리뷰 대기)로 전환 — EXECUTOR_DONE picked=1 status=blocked bottleneck="PR #13/#14 사람 리뷰 대기" journal=journal/2026-09/10-p4-cartesian-pose-goal-ik-seed.md
 - 2026-09-06 21:03 KST `executor` · MP-0012(1순위)는 필요한 `planning/goals.py`가 미병합 PR #14에만 있어 실행가능성 필터로 건너뛰고 MP-0028(safety-certificate 캐싱 순이득 프로파일링) 착수. `scripts/profile_certificate_caching.py` 신규 — clearance()가 is_valid()보다 7.6~7.7배 비쌈, 기대 절감(4.1~4.2회)이 비용비 미달 → 캐싱 도입 보류 판정, 코드는 구현 안 함. 신규 4개 포함 84개 테스트 통과, PR #15 생성. 겸사겸사 MP-0018(aggregate_results.py)이 이미 구현·동작 확인(실행해 RESULTS.md 재생성 성공)돼 Done으로 정정 — EXECUTOR_DONE picked=1 status=done bottleneck="PR #13/#14/#15 사람 리뷰 대기" journal=journal/2026-09/06-21-p1-safety-certificate-profiling.md
 - 2026-09-06 21:15 KST `executor` · Telegram 발송 실패(telegram.env 없음, MP-0020 미완료) — 결과는 cron_activity.md/journal에만 기록
-=======
-
-## 2026-09-06
-- 22:30 KST `wrap` · Daily Wrap: 커밋 2개(MP-0031 obstacle-layout, MP-0007/0017 --planner/--postprocess) · PR 2개(#14 MP-0011 Cartesian pose IK 재시도, #15 MP-0028 safety-certificate 캐싱 프로파일링 — 도입 보류) · TODO 완료 0건 · 신규 0건(TODO.md 오늘 변경 없음). Telegram 발송 실패: telegram.env 없음(MP-0020 미완료, 사용자가 telegram_setup.sh 실행 필요)
->>>>>>> Stashed changes
+- 2026-09-06 22:30 KST `wrap` · Daily Wrap: 커밋 2개(MP-0031 obstacle-layout, MP-0007/0017 --planner/--postprocess) · PR 2개(#14 MP-0011 Cartesian pose IK 재시도, #15 MP-0028 safety-certificate 캐싱 프로파일링 — 도입 보류) · TODO 완료 0건 · 신규 0건(TODO.md 오늘 변경 없음). Telegram 발송 실패: telegram.env 없음(MP-0020 미완료, 사용자가 telegram_setup.sh 실행 필요)
+- *(참고: 위 2026-09-06 섹션은 사람이 사후 정리함 — `git stash pop`이 main에 이미 반영된 커밋과 충돌했는데, 이를 실수로 그대로 커밋(main `f22721a`)해 conflict marker가 잠깐 남아 있었다. 두 쪽 로그 줄을 시간순으로 합치고 marker를 제거했다 — 내용 손실은 없다.)*
