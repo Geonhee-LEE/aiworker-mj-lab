@@ -1,0 +1,201 @@
+timestamp	commit	metric	status	description
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=0,planner=rrt_connect,success=1,plan_ms=14.97,iterations=1,checks=92,path_len=5.116	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=1,planner=rrt_connect,success=1,plan_ms=14.21,iterations=2,checks=182,path_len=3.475	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=2,planner=rrt_connect,success=1,plan_ms=25.31,iterations=22,checks=346,path_len=4.288	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=3,planner=rrt_connect,success=1,plan_ms=116.95,iterations=168,checks=1120,path_len=6.190	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=4,planner=rrt_connect,success=1,plan_ms=19.12,iterations=6,checks=1241,path_len=5.207	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=5,planner=rrt_connect,success=1,plan_ms=12.74,iterations=1,checks=1320,path_len=3.782	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=6,planner=rrt_connect,success=1,plan_ms=34.49,iterations=29,checks=1549,path_len=6.164	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=7,planner=rrt_connect,success=1,plan_ms=10.01,iterations=1,checks=1612,path_len=3.397	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=8,planner=rrt_connect,success=1,plan_ms=64.98,iterations=63,checks=2041,path_len=5.547	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=9,planner=rrt_connect,success=1,plan_ms=35.69,iterations=34,checks=2278,path_len=4.554	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=10,planner=rrt_connect,success=1,plan_ms=13.62,iterations=1,checks=2364,path_len=4.161	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=11,planner=rrt_connect,success=1,plan_ms=11.57,iterations=1,checks=2438,path_len=3.439	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=12,planner=rrt_connect,success=1,plan_ms=38.65,iterations=52,checks=2701,path_len=4.927	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=13,planner=rrt_connect,success=1,plan_ms=81.65,iterations=79,checks=3244,path_len=10.445	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=14,planner=rrt_connect,success=1,plan_ms=22.36,iterations=22,checks=3393,path_len=3.773	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=15,planner=rrt_connect,success=1,plan_ms=14.28,iterations=1,checks=3483,path_len=4.215	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=16,planner=rrt_connect,success=1,plan_ms=93.98,iterations=172,checks=4116,path_len=5.620	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=17,planner=rrt_connect,success=1,plan_ms=29.07,iterations=20,checks=4304,path_len=5.016	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=18,planner=rrt_connect,success=1,plan_ms=58.44,iterations=63,checks=4692,path_len=6.656	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=19,planner=rrt_connect,success=1,plan_ms=13.89,iterations=4,checks=4782,path_len=3.566	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=20,planner=rrt_connect,success=1,plan_ms=89.06,iterations=162,checks=5385,path_len=6.303	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=21,planner=rrt_connect,success=1,plan_ms=13.26,iterations=2,checks=5471,path_len=4.518	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=22,planner=rrt_connect,success=1,plan_ms=80.26,iterations=96,checks=6003,path_len=5.571	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=23,planner=rrt_connect,success=1,plan_ms=99.34,iterations=115,checks=6652,path_len=8.353	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=24,planner=rrt_connect,success=1,plan_ms=178.93,iterations=318,checks=7828,path_len=7.603	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=25,planner=rrt_connect,success=1,plan_ms=52.18,iterations=49,checks=8170,path_len=7.200	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=26,planner=rrt_connect,success=1,plan_ms=22.04,iterations=15,checks=8314,path_len=4.312	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=27,planner=rrt_connect,success=1,plan_ms=56.26,iterations=46,checks=8676,path_len=7.757	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=28,planner=rrt_connect,success=1,plan_ms=43.16,iterations=29,checks=8955,path_len=6.955	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=29,planner=rrt_connect,success=1,plan_ms=15.41,iterations=1,checks=9055,path_len=4.017	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=30,planner=rrt_connect,success=1,plan_ms=33.03,iterations=35,checks=9275,path_len=4.939	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=31,planner=rrt_connect,success=1,plan_ms=14.02,iterations=1,checks=9365,path_len=4.296	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=32,planner=rrt_connect,success=1,plan_ms=7.33,iterations=1,checks=9412,path_len=2.546	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=33,planner=rrt_connect,success=1,plan_ms=12.28,iterations=1,checks=9488,path_len=3.614	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=34,planner=rrt_connect,success=1,plan_ms=14.51,iterations=1,checks=9578,path_len=4.320	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=35,planner=rrt_connect,success=1,plan_ms=166.08,iterations=188,checks=10647,path_len=8.685	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=36,planner=rrt_connect,success=1,plan_ms=17.42,iterations=13,checks=10764,path_len=4.243	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=37,planner=rrt_connect,success=1,plan_ms=102.37,iterations=104,checks=11425,path_len=5.249	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=38,planner=rrt_connect,success=1,plan_ms=75.02,iterations=75,checks=11917,path_len=8.364	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=39,planner=rrt_connect,success=1,plan_ms=9.28,iterations=1,checks=11977,path_len=3.281	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=40,planner=rrt_connect,success=1,plan_ms=139.60,iterations=208,checks=12849,path_len=6.139	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=41,planner=rrt_connect,success=1,plan_ms=15.40,iterations=4,checks=12947,path_len=4.725	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=42,planner=rrt_connect,success=1,plan_ms=165.62,iterations=201,checks=14008,path_len=11.552	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=43,planner=rrt_connect,success=1,plan_ms=153.86,iterations=170,checks=14984,path_len=7.461	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=44,planner=rrt_connect,success=1,plan_ms=22.77,iterations=18,checks=15131,path_len=4.530	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=45,planner=rrt_connect,success=1,plan_ms=8.34,iterations=1,checks=15183,path_len=2.419	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=46,planner=rrt_connect,success=1,plan_ms=12.52,iterations=4,checks=15263,path_len=3.207	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=47,planner=rrt_connect,success=1,plan_ms=22.44,iterations=8,checks=15403,path_len=4.647	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=48,planner=rrt_connect,success=1,plan_ms=5.86,iterations=1,checks=15440,path_len=2.048	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:27+09:00	942fb12	bench:seed=49,planner=rrt_connect,success=1,plan_ms=106.10,iterations=115,checks=16126,path_len=10.441	keep	MP-0031: RRT-Connect, narrow_passage 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=0,planner=rrt_connect,success=1,plan_ms=45.17,iterations=41,checks=288,path_len=5.522	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=1,planner=rrt_connect,success=1,plan_ms=42.32,iterations=35,checks=563,path_len=6.388	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=2,planner=rrt_connect,success=1,plan_ms=11.56,iterations=2,checks=634,path_len=3.623	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=3,planner=rrt_connect,success=1,plan_ms=78.50,iterations=87,checks=1137,path_len=9.197	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=4,planner=rrt_connect,success=1,plan_ms=50.99,iterations=40,checks=1454,path_len=7.205	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=5,planner=rrt_connect,success=1,plan_ms=51.62,iterations=55,checks=1788,path_len=5.892	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=6,planner=rrt_connect,success=1,plan_ms=53.05,iterations=46,checks=2126,path_len=6.240	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=7,planner=rrt_connect,success=1,plan_ms=27.58,iterations=22,checks=2303,path_len=3.970	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=8,planner=rrt_connect,success=1,plan_ms=24.01,iterations=14,checks=2460,path_len=3.929	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=9,planner=rrt_connect,success=1,plan_ms=56.15,iterations=76,checks=2833,path_len=5.832	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=10,planner=rrt_connect,success=1,plan_ms=130.74,iterations=204,checks=3669,path_len=7.563	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=11,planner=rrt_connect,success=1,plan_ms=12.99,iterations=2,checks=3750,path_len=3.432	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=12,planner=rrt_connect,success=1,plan_ms=9.41,iterations=1,checks=3806,path_len=3.852	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=13,planner=rrt_connect,success=1,plan_ms=27.26,iterations=13,checks=3979,path_len=5.322	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=14,planner=rrt_connect,success=1,plan_ms=48.82,iterations=63,checks=4299,path_len=6.091	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=15,planner=rrt_connect,success=1,plan_ms=18.45,iterations=5,checks=4420,path_len=4.369	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=16,planner=rrt_connect,success=1,plan_ms=34.48,iterations=33,checks=4644,path_len=6.450	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=17,planner=rrt_connect,success=1,plan_ms=10.06,iterations=1,checks=4705,path_len=3.431	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=18,planner=rrt_connect,success=1,plan_ms=15.77,iterations=3,checks=4802,path_len=4.475	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=19,planner=rrt_connect,success=1,plan_ms=76.27,iterations=95,checks=5301,path_len=6.004	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=20,planner=rrt_connect,success=1,plan_ms=20.86,iterations=17,checks=5442,path_len=3.809	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=21,planner=rrt_connect,success=1,plan_ms=14.08,iterations=6,checks=5532,path_len=4.756	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=22,planner=rrt_connect,success=1,plan_ms=28.52,iterations=11,checks=5709,path_len=4.908	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=23,planner=rrt_connect,success=1,plan_ms=20.32,iterations=9,checks=5838,path_len=5.195	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=24,planner=rrt_connect,success=1,plan_ms=12.72,iterations=10,checks=5921,path_len=2.282	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=25,planner=rrt_connect,success=1,plan_ms=39.80,iterations=59,checks=6190,path_len=3.968	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=26,planner=rrt_connect,success=1,plan_ms=33.42,iterations=31,checks=6408,path_len=5.067	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=27,planner=rrt_connect,success=1,plan_ms=23.54,iterations=9,checks=6557,path_len=5.555	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=28,planner=rrt_connect,success=1,plan_ms=21.61,iterations=10,checks=6693,path_len=6.125	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=29,planner=rrt_connect,success=1,plan_ms=12.20,iterations=1,checks=6776,path_len=3.684	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=30,planner=rrt_connect,success=1,plan_ms=77.64,iterations=118,checks=7277,path_len=5.992	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=31,planner=rrt_connect,success=1,plan_ms=28.90,iterations=18,checks=7465,path_len=4.895	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=32,planner=rrt_connect,success=1,plan_ms=17.61,iterations=14,checks=7580,path_len=3.124	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=33,planner=rrt_connect,success=1,plan_ms=12.26,iterations=1,checks=7656,path_len=3.614	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=34,planner=rrt_connect,success=1,plan_ms=35.46,iterations=21,checks=7879,path_len=5.053	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=35,planner=rrt_connect,success=1,plan_ms=17.80,iterations=9,checks=7991,path_len=4.387	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=36,planner=rrt_connect,success=1,plan_ms=54.62,iterations=60,checks=8342,path_len=5.113	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=37,planner=rrt_connect,success=1,plan_ms=54.88,iterations=52,checks=8694,path_len=7.244	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=38,planner=rrt_connect,success=1,plan_ms=14.49,iterations=4,checks=8789,path_len=3.564	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=39,planner=rrt_connect,success=1,plan_ms=86.02,iterations=113,checks=9335,path_len=7.038	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=40,planner=rrt_connect,success=1,plan_ms=127.47,iterations=208,checks=10131,path_len=6.139	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=41,planner=rrt_connect,success=1,plan_ms=74.36,iterations=84,checks=10620,path_len=6.999	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=42,planner=rrt_connect,success=1,plan_ms=42.45,iterations=32,checks=10897,path_len=4.167	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=43,planner=rrt_connect,success=1,plan_ms=45.13,iterations=38,checks=11190,path_len=6.631	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=44,planner=rrt_connect,success=1,plan_ms=75.38,iterations=92,checks=11687,path_len=6.572	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=45,planner=rrt_connect,success=1,plan_ms=67.03,iterations=115,checks=12156,path_len=5.192	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=46,planner=rrt_connect,success=1,plan_ms=94.95,iterations=141,checks=12790,path_len=6.735	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=47,planner=rrt_connect,success=1,plan_ms=27.16,iterations=26,checks=12966,path_len=5.831	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=48,planner=rrt_connect,success=1,plan_ms=14.66,iterations=3,checks=13058,path_len=4.329	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:21:35+09:00	942fb12	bench:seed=49,planner=rrt_connect,success=1,plan_ms=93.12,iterations=150,checks=13671,path_len=8.191	keep	MP-0031: RRT-Connect, cluttered 배치 (seed 0-49, RRT*와 비교용)
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=0,planner=rrt_star,success=1,plan_ms=15005.59,iterations=3394,checks=24978,path_len=4.977	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=1,planner=rrt_star,success=1,plan_ms=15001.31,iterations=3398,checks=49576,path_len=3.428	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=2,planner=rrt_star,success=1,plan_ms=15008.20,iterations=3456,checks=74121,path_len=4.218	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=3,planner=rrt_star,success=1,plan_ms=15004.59,iterations=3529,checks=99332,path_len=5.023	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=4,planner=rrt_star,success=1,plan_ms=15001.62,iterations=3415,checks=125240,path_len=5.670	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=5,planner=rrt_star,success=1,plan_ms=15005.61,iterations=3421,checks=149890,path_len=3.975	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=6,planner=rrt_star,success=1,plan_ms=11735.67,iterations=4000,checks=176673,path_len=7.072	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=7,planner=rrt_star,success=1,plan_ms=15008.64,iterations=3425,checks=201569,path_len=3.194	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=8,planner=rrt_star,success=0,plan_ms=11236.70,iterations=4000,checks=229034,path_len=NA	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=9,planner=rrt_star,success=1,plan_ms=15001.55,iterations=3438,checks=253784,path_len=3.982	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=10,planner=rrt_star,success=1,plan_ms=15009.15,iterations=3429,checks=278700,path_len=4.358	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=11,planner=rrt_star,success=1,plan_ms=15008.22,iterations=3525,checks=303054,path_len=2.983	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=12,planner=rrt_star,success=1,plan_ms=15003.01,iterations=3678,checks=331146,path_len=7.265	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=13,planner=rrt_star,success=1,plan_ms=15001.12,iterations=3857,checks=358408,path_len=6.200	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=14,planner=rrt_star,success=1,plan_ms=15004.10,iterations=3458,checks=383136,path_len=4.313	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=15,planner=rrt_star,success=1,plan_ms=15005.73,iterations=3387,checks=407952,path_len=4.426	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=16,planner=rrt_star,success=0,plan_ms=11713.75,iterations=4000,checks=436300,path_len=NA	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=17,planner=rrt_star,success=1,plan_ms=15004.38,iterations=3426,checks=460217,path_len=3.857	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=18,planner=rrt_star,success=1,plan_ms=15006.90,iterations=3650,checks=486154,path_len=5.258	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=19,planner=rrt_star,success=1,plan_ms=15001.39,iterations=3566,checks=511401,path_len=4.103	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=20,planner=rrt_star,success=0,plan_ms=11093.77,iterations=4000,checks=537705,path_len=NA	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=21,planner=rrt_star,success=1,plan_ms=15002.95,iterations=3450,checks=561954,path_len=4.551	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=22,planner=rrt_star,success=1,plan_ms=15007.07,iterations=3445,checks=587210,path_len=4.666	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=23,planner=rrt_star,success=1,plan_ms=13109.65,iterations=4000,checks=614369,path_len=7.475	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=24,planner=rrt_star,success=0,plan_ms=11049.62,iterations=4000,checks=640712,path_len=NA	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=25,planner=rrt_star,success=1,plan_ms=15004.21,iterations=3636,checks=667247,path_len=6.045	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=26,planner=rrt_star,success=1,plan_ms=15005.33,iterations=3400,checks=691551,path_len=3.901	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=27,planner=rrt_star,success=1,plan_ms=15003.73,iterations=3452,checks=716356,path_len=5.566	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=28,planner=rrt_star,success=0,plan_ms=11628.68,iterations=4000,checks=745111,path_len=NA	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=29,planner=rrt_star,success=1,plan_ms=15004.24,iterations=3389,checks=769976,path_len=3.756	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=30,planner=rrt_star,success=1,plan_ms=15001.43,iterations=3494,checks=795115,path_len=4.004	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=31,planner=rrt_star,success=1,plan_ms=15008.72,iterations=3453,checks=819792,path_len=4.413	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=32,planner=rrt_star,success=1,plan_ms=15004.80,iterations=3516,checks=844166,path_len=2.537	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=33,planner=rrt_star,success=1,plan_ms=15002.05,iterations=3431,checks=868985,path_len=3.511	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=34,planner=rrt_star,success=1,plan_ms=15007.60,iterations=3539,checks=894056,path_len=4.189	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=35,planner=rrt_star,success=1,plan_ms=14246.37,iterations=4000,checks=921204,path_len=6.137	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=36,planner=rrt_star,success=1,plan_ms=15003.09,iterations=3392,checks=945913,path_len=3.822	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=37,planner=rrt_star,success=1,plan_ms=15004.85,iterations=3443,checks=971402,path_len=5.944	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=38,planner=rrt_star,success=1,plan_ms=15004.84,iterations=3750,checks=997533,path_len=5.037	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=39,planner=rrt_star,success=1,plan_ms=15002.41,iterations=3528,checks=1021901,path_len=3.320	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=40,planner=rrt_star,success=1,plan_ms=11380.19,iterations=4000,checks=1048567,path_len=4.596	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=41,planner=rrt_star,success=0,plan_ms=11419.72,iterations=4000,checks=1075716,path_len=NA	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=42,planner=rrt_star,success=1,plan_ms=14876.99,iterations=4000,checks=1103647,path_len=9.535	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=43,planner=rrt_star,success=1,plan_ms=13132.79,iterations=4000,checks=1130857,path_len=5.934	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=44,planner=rrt_star,success=1,plan_ms=15002.04,iterations=3551,checks=1155879,path_len=4.605	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=45,planner=rrt_star,success=1,plan_ms=15005.33,iterations=3429,checks=1180630,path_len=2.428	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=46,planner=rrt_star,success=1,plan_ms=15003.77,iterations=3636,checks=1209649,path_len=3.312	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=47,planner=rrt_star,success=1,plan_ms=15002.43,iterations=3513,checks=1234457,path_len=4.355	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=48,planner=rrt_star,success=1,plan_ms=15004.34,iterations=3472,checks=1259311,path_len=1.599	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:33:40+09:00	942fb12	bench:seed=49,planner=rrt_star,success=1,plan_ms=15003.39,iterations=3490,checks=1284594,path_len=5.413	keep	MP-0031: RRT*, narrow_passage 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=0,planner=rrt_star,success=1,plan_ms=15004.31,iterations=3669,checks=24488,path_len=4.647	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=1,planner=rrt_star,success=1,plan_ms=15006.05,iterations=3586,checks=49895,path_len=5.978	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=2,planner=rrt_star,success=1,plan_ms=15006.99,iterations=3673,checks=74590,path_len=4.205	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=3,planner=rrt_star,success=0,plan_ms=10436.31,iterations=4000,checks=99822,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=4,planner=rrt_star,success=1,plan_ms=12633.91,iterations=4000,checks=125423,path_len=7.908	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=5,planner=rrt_star,success=1,plan_ms=14448.37,iterations=4000,checks=153166,path_len=5.818	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=6,planner=rrt_star,success=1,plan_ms=15002.69,iterations=3703,checks=177787,path_len=4.073	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=7,planner=rrt_star,success=1,plan_ms=15003.84,iterations=3707,checks=202461,path_len=3.823	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=8,planner=rrt_star,success=1,plan_ms=15005.37,iterations=3583,checks=226849,path_len=3.736	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=9,planner=rrt_star,success=1,plan_ms=11591.29,iterations=4000,checks=252128,path_len=6.074	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=10,planner=rrt_star,success=1,plan_ms=15003.93,iterations=3765,checks=277959,path_len=5.205	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=11,planner=rrt_star,success=1,plan_ms=15005.68,iterations=3560,checks=302422,path_len=3.080	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=12,planner=rrt_star,success=1,plan_ms=15005.54,iterations=3554,checks=326344,path_len=3.723	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=13,planner=rrt_star,success=1,plan_ms=15004.79,iterations=3746,checks=351555,path_len=5.598	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=14,planner=rrt_star,success=0,plan_ms=10697.85,iterations=4000,checks=380188,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=15,planner=rrt_star,success=1,plan_ms=15001.68,iterations=3637,checks=404259,path_len=3.729	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=16,planner=rrt_star,success=1,plan_ms=15002.79,iterations=3675,checks=429284,path_len=5.172	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=17,planner=rrt_star,success=1,plan_ms=15003.21,iterations=3540,checks=454002,path_len=3.418	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=18,planner=rrt_star,success=1,plan_ms=15003.82,iterations=3575,checks=478205,path_len=4.425	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=19,planner=rrt_star,success=0,plan_ms=10208.10,iterations=4000,checks=503213,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=20,planner=rrt_star,success=1,plan_ms=13043.14,iterations=4000,checks=528775,path_len=4.265	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=21,planner=rrt_star,success=1,plan_ms=15001.09,iterations=3655,checks=552432,path_len=4.706	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=22,planner=rrt_star,success=1,plan_ms=15007.22,iterations=3589,checks=576911,path_len=4.363	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=23,planner=rrt_star,success=1,plan_ms=15003.87,iterations=3535,checks=600850,path_len=3.922	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=24,planner=rrt_star,success=1,plan_ms=12776.04,iterations=4000,checks=627502,path_len=2.289	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=25,planner=rrt_star,success=0,plan_ms=9770.82,iterations=4000,checks=652268,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=26,planner=rrt_star,success=0,plan_ms=9325.72,iterations=4000,checks=676213,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=27,planner=rrt_star,success=1,plan_ms=15001.14,iterations=3579,checks=701014,path_len=5.909	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=28,planner=rrt_star,success=1,plan_ms=15008.43,iterations=3602,checks=725193,path_len=4.658	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=29,planner=rrt_star,success=1,plan_ms=15002.32,iterations=3517,checks=749711,path_len=3.802	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=30,planner=rrt_star,success=1,plan_ms=15001.13,iterations=3951,checks=776509,path_len=8.213	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=31,planner=rrt_star,success=0,plan_ms=10271.34,iterations=4000,checks=803339,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=32,planner=rrt_star,success=1,plan_ms=15001.93,iterations=3608,checks=827523,path_len=3.186	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=33,planner=rrt_star,success=1,plan_ms=15004.05,iterations=3465,checks=851642,path_len=3.692	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=34,planner=rrt_star,success=1,plan_ms=15008.69,iterations=3800,checks=876794,path_len=4.852	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=35,planner=rrt_star,success=1,plan_ms=15005.46,iterations=3495,checks=901351,path_len=4.125	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=36,planner=rrt_star,success=1,plan_ms=15002.10,iterations=3567,checks=926167,path_len=4.512	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=37,planner=rrt_star,success=1,plan_ms=15007.63,iterations=3643,checks=950810,path_len=6.682	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=38,planner=rrt_star,success=1,plan_ms=15005.53,iterations=3554,checks=975089,path_len=3.878	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=39,planner=rrt_star,success=1,plan_ms=15007.83,iterations=3943,checks=1002240,path_len=5.982	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=40,planner=rrt_star,success=0,plan_ms=10643.64,iterations=4000,checks=1027213,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=41,planner=rrt_star,success=0,plan_ms=10263.29,iterations=4000,checks=1053518,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=42,planner=rrt_star,success=1,plan_ms=15000.85,iterations=3629,checks=1078536,path_len=3.612	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=43,planner=rrt_star,success=1,plan_ms=15003.37,iterations=3623,checks=1103229,path_len=5.670	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=44,planner=rrt_star,success=1,plan_ms=14120.74,iterations=4000,checks=1129946,path_len=6.825	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=45,planner=rrt_star,success=1,plan_ms=11272.19,iterations=4000,checks=1154863,path_len=4.727	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=46,planner=rrt_star,success=0,plan_ms=10575.36,iterations=4000,checks=1180394,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=47,planner=rrt_star,success=0,plan_ms=9870.30,iterations=4000,checks=1204786,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=48,planner=rrt_star,success=1,plan_ms=15000.79,iterations=3619,checks=1228851,path_len=4.248	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
+2026-09-06T22:45:18+09:00	942fb12	bench:seed=49,planner=rrt_star,success=0,plan_ms=10838.49,iterations=4000,checks=1258859,path_len=NA	keep	MP-0031: RRT*, cluttered 배치 (seed 0-49) — RRT-Connect와 비교
