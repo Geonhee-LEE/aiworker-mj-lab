@@ -56,3 +56,4 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
 
 ## 2026-09-06
 - 2026-09-06 09:00 KST `brief` · Daily Brief 생성(병목: PR #13 사람 리뷰 대기, 오늘 후보: PR #13 리뷰/병합·MP-0011·MP-0012). Telegram 발송 실패: telegram.env 없음(MP-0020 미완료, 사용자가 telegram_setup.sh 실행 필요) — BRIEF_DONE date=2026-09-06 phase=P5 todos=0
+- 2026-09-06 11:07 KST `executor` · MP-0011(P4 Cartesian pose goal IK 다중 재시도) 구현 — `planning/goals.py` 신규(solve_pose_goal/solve_pose_goal_multistart), RightArmSpace+JointSpaceKinematics 재사용. 실제 can-sort 장면 신규 테스트 3개 포함 83개 통과. PR #14 생성, MP-0011 Blocked(PR 리뷰 대기)로 전환 — EXECUTOR_DONE picked=1 status=blocked bottleneck="PR #13/#14 사람 리뷰 대기" journal=journal/2026-09/10-p4-cartesian-pose-goal-ik-seed.md

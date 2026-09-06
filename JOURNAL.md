@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-06 — p4-cartesian-pose-goal-ik-seed
+- **Pick**: PR 큐 0건, Today 없음 상태에서 STATE.md "Next claude-actionable" 1순위(MP-0007/MP-0017 벤치마크)는 이미 실측 완료·PR #13 리뷰 대기(Blocked)라 2순위 **MP-0011**(P4 Cartesian goal 착수의 첫 조각) 선택
+- **Outcome**: `planning/goals.py` 신규 — `solve_pose_goal`(단일 시드 position-우선 DLS)/`solve_pose_goal_multistart`(순차 다중 재시도)로 site pose 목표를 관절공간 `q_goal`로 변환. 로직은 `tests/offline_pose_ik.py`(test-only로 명시된 헬퍼)를 골자로 하되 클리핑/샘플링을 `RightArmSpace`로 위임해 나머지 플래닝 모듈과 관례를 맞췄고, FK는 기존 `JointSpaceKinematics`(이미 프로덕션 어댑터)를 그대로 재사용해 새 FK 코드 없음. 실제 can-sort 장면에서 근접 시드 수렴/원거리 시드 multistart 수렴/도달불가 목표 best-effort 3개 신규 테스트, 전체 83개 통과. PR #14 생성
+- **Next**: `MP-0012`(offline_pose_ik.py를 이 모듈로 위임, 중복 제거), `MP-0014`(pose goal 20-seed 성공률 측정, 사람 확인 필요), PR #13/#14 사람 리뷰/병합
+- **Full**: [journal/2026-09/10-p4-cartesian-pose-goal-ik-seed.md](journal/2026-09/10-p4-cartesian-pose-goal-ik-seed.md)
+
+
 ## 2026-09-05 — p7-1-base-pose
 - **Pick**: PR #9(PRD)·#10(P7.0 reachability map)이 병합된 뒤 계획대로 **MP-0027** P7.1 `planning/base_pose.py` 착수 — "decoupled" 패턴의 두 번째 조각(베이스를 어디에 둘지 고르기)
 - **Outcome**: `world_to_base_frame`(월드→베이스 SE(2) 변환, base_link이 z로는 절대 안 움직인다는 실측에 근거해 z는 통과시킴), `BaseFootprintChecker`(`ArmCollisionChecker`와 같은 scratch-model 아키텍처 재현), `select_base_pose`(reachability 점수·발자국 충돌·현재 위치 근접도로 후보 순위 — yaw는 로봇의 "정면" 축을 가정하지 않고 후보 각도 집합을 위치·방향 양쪽에 재사용). 베이스 주행은 `WholeBodyIK`(손 목표 반응형이라 지점-대-지점엔 안 맞음) 대신 기존 `SwerveDrive`를 목표-오차 비례 루프로 얇게 감싼 `planning/mobile_execution.py`로 처리. **핵심 발견**: `build_reachability_map`이 실은 "베이스 원점 전용"이 아니라 grid point를 그냥 절대 world IK 타겟으로 쓴다는 걸 확인해, 이 함수를 그대로 재사용(새 IK 검증 코드 없이)해 임의 베이스 위치에서의 진짜 IK 도달성을 검증하는 핵심 회귀 테스트를 만들 수 있었다 — 먼 베이스 위치(3,3,0)에서는 도달 불가능하던 타겟이 `select_base_pose`가 고른 위치에서는 도달 가능해짐을 실제 IK로 증명. 실제 장면엔 베이스 발자국 높이대에 겹치는 정적 장애물이 없어(table이 그 위에 있음) 참-충돌 테스트는 합성 MJCF로 대신함. 13개 신규 테스트 + 기존 47개 모두 통과, PR #11 생성
