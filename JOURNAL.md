@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-06 21:03 — p1-safety-certificate-profiling
+- **Pick**: STATE.md "Next claude-actionable" 1순위 `MP-0012`는 필요한 `planning/goals.py`가 미병합 PR #14 브랜치에만 있어 실행가능성 필터에 걸려 건너뜀. 2순위 **MP-0028**(safety-certificate 캐싱 도입 여부 프로파일링) 선택 — main에서 바로 착수 가능
+- **Outcome**: `scripts/profile_certificate_caching.py` 신규 — 실제 can-sort 장면에서 RRT-Connect가 방문한 configuration 표본에 대해 `is_valid()`/`clearance()` 비용비와 clearance 분포를 실측. 장애물 포함/미포함 두 시나리오 모두 일관된 결론: `clearance()`가 `is_valid()`보다 7.6~7.7배 비싸고, 낙관적 기대 절감(4.1~4.2회)이 비용비를 못 넘음 → **캐싱 도입 보류**. 캐싱 코드 자체는 구현하지 않음(스코프를 프로파일링으로 좁힌 결정 유지). 신규 4개 단위 테스트 포함 84개 통과, PR #15 생성
+- **Next**: PR #13/#14/#15 사람 리뷰/병합, `MP-0018`(aggregate_results.py — 이미 구현된 것처럼 보이는데 TODO가 Backlog인 불일치 확인 필요), PR #14 병합되면 `MP-0012` 착수 가능
+- **Full**: [journal/2026-09/06-21-p1-safety-certificate-profiling.md](journal/2026-09/06-21-p1-safety-certificate-profiling.md)
+
+
 ## 2026-09-06 — p4-cartesian-pose-goal-ik-seed
 - **Pick**: PR 큐 0건, Today 없음 상태에서 STATE.md "Next claude-actionable" 1순위(MP-0007/MP-0017 벤치마크)는 이미 실측 완료·PR #13 리뷰 대기(Blocked)라 2순위 **MP-0011**(P4 Cartesian goal 착수의 첫 조각) 선택
 - **Outcome**: `planning/goals.py` 신규 — `solve_pose_goal`(단일 시드 position-우선 DLS)/`solve_pose_goal_multistart`(순차 다중 재시도)로 site pose 목표를 관절공간 `q_goal`로 변환. 로직은 `tests/offline_pose_ik.py`(test-only로 명시된 헬퍼)를 골자로 하되 클리핑/샘플링을 `RightArmSpace`로 위임해 나머지 플래닝 모듈과 관례를 맞췄고, FK는 기존 `JointSpaceKinematics`(이미 프로덕션 어댑터)를 그대로 재사용해 새 FK 코드 없음. 실제 can-sort 장면에서 근접 시드 수렴/원거리 시드 multistart 수렴/도달불가 목표 best-effort 3개 신규 테스트, 전체 83개 통과. PR #14 생성
@@ -133,11 +140,3 @@ _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고�
 - **Outcome**: CONNECT 로직 버그(속성 시험이 발견) + 실행 재생 시작상태 동기화 버그(사용자 데모로 발견) 둘 다 수정. 25개 planning 테스트 통과
 - **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
 - **Full**: [journal/2026-08/30-15-p1-rrt-connect-plus-demo.md](journal/2026-08/30-15-p1-rrt-connect-plus-demo.md)
-
-
-## 2026-08-30 14:00 — bootstrap-planning-module-and-automation
-- **Pick**: PRD/TODO/자동화 스캐폴딩 + `planning/` P0 기반 구현 (사람 주도, 최초 커밋)
-- **Outcome**: `RightArmSpace`, `ArmCollisionChecker`, `EdgeChecker` 골격 및 cron 자동화
-  8종 wrapper 배선 완료
-- **Next**: RRT-Connect 코어(MP-0002)부터 자동 루프가 이어받는다
-- **Full**: [`journal/2026-08/30-14-bootstrap-planning-module-and-automation.md`](journal/2026-08/30-14-bootstrap-planning-module-and-automation.md)
