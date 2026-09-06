@@ -18,6 +18,7 @@ from .base_pose import (
 from .chomp import path_smoothness_cost, smooth_posture
 from .collision_state import ArmCollisionChecker, CollisionReport
 from .execution import ExecutionReport, follow_trajectory
+from .goals import PoseGoalResult, solve_pose_goal, solve_pose_goal_multistart
 from .local_path import EdgeChecker
 from .mobile_execution import BaseTransitReport, drive_base_to_pose
 from .obstacles import RIGHT_ARM_BODIES, right_arm_collision_pairs
@@ -43,6 +44,7 @@ __all__ = [
     "EdgeChecker",
     "ExecutionReport",
     "PlannerResult",
+    "PoseGoalResult",
     "ReachabilityMap",
     "RightArmSpace",
     "Trajectory",
@@ -59,6 +61,8 @@ __all__ = [
     "select_base_pose",
     "shortcut_path",
     "smooth_posture",
+    "solve_pose_goal",
+    "solve_pose_goal_multistart",
     "straight_line_path",
     "time_parameterize",
     "world_to_base_frame",
