@@ -23,6 +23,20 @@ description)를 그대로 따른다 — seed별 raw 관측치를 `metric` 필드
     PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/benchmark_planning.py \
         --seeds 0-49 --postprocess shortcut --out results/p5-planner-comparison.tsv
 
+    # MP-0031: 장애물 "배치"를 바꿔가며 RRT-Connect vs RRT* 결론이 얼마나
+    # 견고한지 재검증 (같은 50 seed, --obstacle-layout만 바꿈)
+    PYTHONPATH=src MUJOCO_GL=osmesa python3 scripts/benchmark_planning.py \
+        --seeds 0-49 --with-obstacle --obstacle-layout narrow_passage \
+        --planner rrt_star --out results/p5-planner-comparison.tsv
+
+`--obstacle-layout`(``--with-obstacle`` 켰을 때만 의미 있음)은
+`OBSTACLE_LAYOUTS`에 정의된 프리셋 중 하나를 고른다 — `"default"`는
+기존 3-구체 배치(하위호환), `"narrow_passage"`/`"cluttered"`는 이
+스크립트로 직접 실측 검증한 더 어려운 배치다(반복 횟수 분포가 뚜렷이
+넓게 퍼짐 — 각 프리셋 정의부 주석 참고). `--with-obstacle`은 여전히
+장애물 on/off 스위치이고, `--obstacle-layout`은 그와 별개로 "켰을 때
+어떤 배치를 쓸지"를 고르는 축이다.
+
 `--planner rrt_star`는 `--goal-bias`/`--time-budget-s`의 기본값이
 `--planner rrt_connect`와 다르다(각각 0.3/15.0 vs 0.1/5.0) —
 `demo_plan_right_arm.py`가 이미 쓰는 것과 같은 이유(단일 트리 RRT*는
@@ -51,9 +65,10 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from demo_plan_right_arm import (  # noqa: E402
+    BASE_REQUIRE_CONTACT_GEOMS,
     DEFAULT_START,
-    OBSTACLE_NAMES,
-    REQUIRE_CONTACT_GEOMS,
+    OBSTACLE_PREFIX,
+    OBSTACLE_SPHERES,
     _build_scene,
     _sample_valid_goal,
 )
@@ -68,6 +83,34 @@ from ffw_sh5_grasp.planning import (  # noqa: E402
 )
 
 RESULTS_HEADER = "timestamp\tcommit\tmetric\tstatus\tdescription"
+# 장애물 "배치"를 다양화하기 위한 프리셋. ``None``은 demo의 기본
+# ``OBSTACLE_SPHERES``를 그대로 쓴다는 뜻(하위호환 — 기존 --with-obstacle
+# 동작과 완전히 동일). 각 (x, y, z, radius) 좌표는 이 스크립트로 직접
+# 실측 검증했다 — ``DEFAULT_START``가 유효하고, RRT-Connect가 여전히
+# 대부분 성공하되(우연한 실패로 벤치마크가 무의미해지지 않도록) 반복
+# 횟수 분포가 "default"보다 뚜렷이 넓게 퍼지는(=실제로 더 어려운) 조합만
+# 채택했다.
+OBSTACLE_LAYOUTS = {
+    "default": OBSTACLE_SPHERES,
+    # 손끝이 자주 지나는 좁은 구간(중앙값 근방)에 지름 14cm 틈만 남긴
+    # 관문 2개 — 20-seed 실측: 100% 성공하지만 반복 횟수 1~172회로
+    # "default"(대개 1~20회)보다 훨씬 넓게 퍼진다.
+    "narrow_passage": (
+        (0.15, -0.65, 1.3, 0.07),
+        (-0.15, -0.65, 1.3, 0.07),
+    ),
+    # 기존 3개 구체에 3개를 더 흩뿌린 6개 배치 — 20-seed 실측: 100% 성공,
+    # 반복 횟수 1~204회(중앙값이 눈에 띄게 높아짐, 1회 즉시 성공 사례가
+    # "default"보다 드물다).
+    "cluttered": (
+        (-0.05, -0.91, 1.61, 0.06),
+        (0.55, -0.81, 1.19, 0.06),
+        (-0.01, -0.80, 1.17, 0.06),
+        (0.25, -0.95, 1.35, 0.06),
+        (-0.30, -0.85, 1.05, 0.06),
+        (0.10, -0.70, 0.90, 0.06),
+    ),
+}
 # ``format_metric``의 ``path_len_after``가 "레거시 호출이라 필드 자체를
 # 생략"과 "postprocess는 켰지만 이 seed는 실패해서 NA"를 구분하기 위한
 # 표식. ``None``은 이미 "실패해서 NA"라는 뜻으로 쓰이고 있어 재사용할 수
@@ -151,6 +194,7 @@ def run_benchmark(
     postprocess="none",
     goal_tolerance_rad=None,
     rewire_radius_rad=None,
+    obstacle_layout="default",
 ):
     """장면을 한 번 만들고, seed마다 목표를 샘플링해 ``planner``로 1회 계획한다.
 
@@ -160,13 +204,20 @@ def run_benchmark(
     ``postprocess="shortcut"``이면 성공한 경로에 ``shortcut_path``를 적용해
     raw 길이(``path_len``)와 후처리 길이(``path_len_after``)를 둘 다
     기록한다(MP-0007: 실제 장면에서 shortcut이 경로를 얼마나 줄이는지).
+
+    ``obstacle_layout``(``OBSTACLE_LAYOUTS`` 키, ``with_obstacle=True``일
+    때만 의미 있음)으로 장애물 "배치"를 바꿀 수 있다 — 같은 on/off
+    스위치(``with_obstacle``)와 별개 축이라, 배치에 따라 RRT-Connect
+    vs RRT* 결론이 달라지는지(MP-0031) 확인하는 데 쓴다.
     """
-    model, data = _build_scene(with_obstacle=with_obstacle, with_marker=False)
+    spheres = OBSTACLE_LAYOUTS[obstacle_layout]
+    model, data = _build_scene(with_obstacle=with_obstacle, with_marker=False, spheres=spheres)
     space = RightArmSpace.from_model(model)
-    require_contact_geoms = (
-        REQUIRE_CONTACT_GEOMS if with_obstacle
-        else tuple(name for name in REQUIRE_CONTACT_GEOMS if name not in OBSTACLE_NAMES)
-    )
+    if with_obstacle:
+        obstacle_names = tuple(f"{OBSTACLE_PREFIX}{i}" for i in range(len(spheres)))
+        require_contact_geoms = BASE_REQUIRE_CONTACT_GEOMS + obstacle_names
+    else:
+        require_contact_geoms = BASE_REQUIRE_CONTACT_GEOMS
     checker = ArmCollisionChecker(
         model, space, padding_m=padding_m, require_contact_geoms=require_contact_geoms
     )
@@ -248,6 +299,10 @@ def main(argv=None):
     parser.add_argument("--seeds", required=True, help='예: "0-49" 또는 "0,3,7"')
     parser.add_argument("--out", required=True, help="results/<phase>-<slug>.tsv")
     parser.add_argument("--with-obstacle", action="store_true", help="데모용 빨간 구체 장애물도 포함(더 어려운 구성)")
+    parser.add_argument(
+        "--obstacle-layout", choices=list(OBSTACLE_LAYOUTS), default="default",
+        help="--with-obstacle일 때만 의미 있음. 장애물 '배치' 자체를 바꿔 RRT-Connect vs RRT* 결론이 배치에 따라 달라지는지 확인(MP-0031)",
+    )
     parser.add_argument("--padding-m", type=float, default=0.012)
     parser.add_argument("--step-size-rad", type=float, default=0.3)
     parser.add_argument(
@@ -292,7 +347,8 @@ def main(argv=None):
     seeds = parse_seed_spec(args.seeds)
     print(
         f"seed {len(seeds)}개, planner={args.planner}, postprocess={args.postprocess}, "
-        f"with_obstacle={args.with_obstacle}, wall_budget_s={args.wall_budget_s}"
+        f"with_obstacle={args.with_obstacle}, obstacle_layout={args.obstacle_layout}, "
+        f"wall_budget_s={args.wall_budget_s}"
     )
 
     wall_start = time.perf_counter()
@@ -309,6 +365,7 @@ def main(argv=None):
         postprocess=args.postprocess,
         goal_tolerance_rad=args.goal_tolerance_rad,
         rewire_radius_rad=args.rewire_radius_rad,
+        obstacle_layout=args.obstacle_layout,
     )
     elapsed = time.perf_counter() - wall_start
 
