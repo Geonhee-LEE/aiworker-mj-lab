@@ -1,0 +1,2 @@
+timestamp	commit	metric	status	description
+2026-09-07T11:30:00+09:00	1b1b41a	qual:tests-17pass	keep	todo_tool.py 파싱/렌더링 왕복 + CLI(add/set/check/next) 단위 테스트 17개 신규. 부수 발견: parse()가 split("|")로 셀을 나눠 render()가 붙이는 이스케이프(`\|`)를 이해하지 못해 제목에 리터럴 `|`가 있으면 행 전체가 조용히 버려지는 기존 버그를 characterization test로 문서화(수정은 이번 스코프 밖, 후속 TODO로 등록).
