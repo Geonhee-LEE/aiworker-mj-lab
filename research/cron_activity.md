@@ -61,3 +61,8 @@ _모든 cron 실행이 1줄씩 남긴다(C1 계약). 날짜별로 새 섹션을 
 - 2026-09-06 21:15 KST `executor` · Telegram 발송 실패(telegram.env 없음, MP-0020 미완료) — 결과는 cron_activity.md/journal에만 기록
 - 2026-09-06 22:30 KST `wrap` · Daily Wrap: 커밋 2개(MP-0031 obstacle-layout, MP-0007/0017 --planner/--postprocess) · PR 2개(#14 MP-0011 Cartesian pose IK 재시도, #15 MP-0028 safety-certificate 캐싱 프로파일링 — 도입 보류) · TODO 완료 0건 · 신규 0건(TODO.md 오늘 변경 없음). Telegram 발송 실패: telegram.env 없음(MP-0020 미완료, 사용자가 telegram_setup.sh 실행 필요)
 - *(참고: 위 2026-09-06 섹션은 사람이 사후 정리함 — `git stash pop`이 main에 이미 반영된 커밋과 충돌했는데, 이를 실수로 그대로 커밋(main `f22721a`)해 conflict marker가 잠깐 남아 있었다. 두 쪽 로그 줄을 시간순으로 합치고 marker를 제거했다 — 내용 손실은 없다.)*
+- 2026-09-06 23:00 KST `weekly` · Weekly Summary 2026-W36: 커밋 72개, journal 16건(cycle), planning/* 머지 PR 9개(#1~#5,#7,#8,#10,#11), RESULTS.md keep=105/105(discard/crash/in_progress 0). 병목: PR #13/#14/#15 사람 리뷰 대기. Telegram 발송 실패(telegram.env 없음, MP-0020 미완료) — WEEKLY_DONE week=2026-W36 cycles=16 merged=9
+
+## 2026-09-07
+- 2026-09-07 `researcher` · MP-0031 실측(narrow_passage/cluttered에서 RRT* 성공률 78-88%)의 문헌 근거 조사 — bridge test(Hsu et al. 2003) 편향 샘플링으로 성공률 개선 여지 확인, GVP-RRT(2024) 유사 환경 11.5~69.5%p 개선 사례. Bidirectional 결합형(FRRT*-Connect)은 저장소의 단일 트리 설계와 충돌해 제외. research/2026-09/007.md 신규, 신규 TODO 1건(MP-0032) · RESEARCHER_DONE found=1 todos_created=1
+- 2026-09-07 09:00 KST `brief` · Daily Brief 생성(병목: PR #13/#14/#15 사람 리뷰 대기, 오늘 후보: MP-0019·MP-0018·MP-0022 — Today/Doing 둘 다 빈 상태라 STATE.md의 Next claude-actionable에서 후보 산출). Telegram 발송 실패: telegram.env 없음(MP-0020 미완료, 사용자가 telegram_setup.sh 실행 필요) — BRIEF_DONE date=2026-09-07 phase=P5 todos=0
