@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-07 11:00 — p0-todo-tool-unit-tests
+- **Pick**: STATE.md "Next claude-actionable" 1순위 MP-0018/MP-0019 중 MP-0018(aggregate_results.py)은 TODO.md `## Done`에 이미 반영돼 있음을 확인만 하고, 미착수였던 **MP-0019**(`todo_tool.py` 단위 테스트) 선택 — main에서 바로 착수 가능
+- **Outcome**: `tests/test_todo_tool.py` 신규 17개(파싱/렌더링 왕복, `_next_id`, `_escape`/`_unescape`, CLI `add`/`set`/`check`/`next`를 격리된 임시 `TODO_PATH`로 검증). **부수 발견**: `parse()`의 naive `str.split("|")`가 `render()`의 백슬래시 이스케이프(`\|`)를 이해하지 못해 제목에 리터럴 `|`가 있으면 행 전체가 조용히 버려지는 기존 버그 확인 — 이번 스코프(테스트만)에서는 수정 대신 characterization test로 문서화하고 후속 TODO 등록. 신규 17개 + 기존 planning 80개 모두 통과, PR #16 생성
+- **Next**: `todo_tool.py` parse()를 이스케이프-aware로 교체(신규 TODO), PR #13/#14/#15/#16 사람 리뷰/병합(큐 4건, 게이트 임계값 임박)
+- **Full**: [journal/2026-09/07-11-p0-todo-tool-unit-tests.md](journal/2026-09/07-11-p0-todo-tool-unit-tests.md)
+
+
 ## 2026-09-06 21:03 — p1-safety-certificate-profiling
 - **Pick**: STATE.md "Next claude-actionable" 1순위 `MP-0012`는 필요한 `planning/goals.py`가 미병합 PR #14 브랜치에만 있어 실행가능성 필터에 걸려 건너뜀. 2순위 **MP-0028**(safety-certificate 캐싱 도입 여부 프로파일링) 선택 — main에서 바로 착수 가능
 - **Outcome**: `scripts/profile_certificate_caching.py` 신규 — 실제 can-sort 장면에서 RRT-Connect가 방문한 configuration 표본에 대해 `is_valid()`/`clearance()` 비용비와 clearance 분포를 실측. 장애물 포함/미포함 두 시나리오 모두 일관된 결론: `clearance()`가 `is_valid()`보다 7.6~7.7배 비싸고, 낙관적 기대 절감(4.1~4.2회)이 비용비를 못 넘음 → **캐싱 도입 보류**. 캐싱 코드 자체는 구현하지 않음(스코프를 프로파일링으로 좁힌 결정 유지). 신규 4개 단위 테스트 포함 84개 통과, PR #15 생성
@@ -133,10 +140,3 @@ _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고�
 - **Outcome**: `PlannerResult`에 `TreeSnapshot`(start_tree/goal_tree) 추가, mjv_initGeom/mjv_connector로 트리를 뷰어에 렌더. 실제 디스플레이에서 반복 실행 세그폴트 없이 확인
 - **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
 - **Full**: [journal/2026-08/30-17-repeat-loop-and-tree-viz-demo.md](journal/2026-08/30-17-repeat-loop-and-tree-viz-demo.md)
-
-
-## 2026-08-30 15:35 — p1-rrt-connect-plus-demo
-- **Pick**: MP-0002/0003 RRT-Connect core + property tests, 사용자 요청으로 실행 데모까지
-- **Outcome**: CONNECT 로직 버그(속성 시험이 발견) + 실행 재생 시작상태 동기화 버그(사용자 데모로 발견) 둘 다 수정. 25개 planning 테스트 통과
-- **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
-- **Full**: [journal/2026-08/30-15-p1-rrt-connect-plus-demo.md](journal/2026-08/30-15-p1-rrt-connect-plus-demo.md)
