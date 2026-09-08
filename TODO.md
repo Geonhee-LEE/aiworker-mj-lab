@@ -3,9 +3,9 @@
 _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트가 함께 수정한다._
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
-- Last update: `2026-09-07 11:08 KST`
-- Open (Doing + Today + Blocked + Backlog): **13**
-- Next ID: `MP-0034`
+- Last update: `2026-09-08 08:03 KST`
+- Open (Doing + Today + Blocked + Backlog): **14**
+- Next ID: `MP-0035`
 
 ## Doing
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -34,7 +34,8 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0025 | P2 | P5 | user | [research] VAMP-MR(SIMD 가속 multi-arm 샘플링 플래너) 통합 검토 — 10-100x 계획/후처리/실행 가속. PRD Non-Goal(외부 플래닝 라... |  | ☐ |
 | MP-0030 | P2 | P7 | user | [design] P7 Tier 2(결합형 whole-body 플래너) 착수 여부 결정 — 타당성 평가 완료(PR #12), 검증 시나리오(합성 MJCF) 준비 필요 |  | ☐ |
 | MP-0032 | P2 | P5 | claude | [research] narrow_passage/cluttered에서 RRT* 초기 해 탐색용 bridge-test 편향 샘플링 검토 — MP-0031 실측(성공률 78-88%... |  | ☐ |
-| MP-0033 | P2 | P0 | claude | [infra] todo_tool.py parse()가 render()의 `\\|` 이스케이프를 이해 못해 제목에 `\|` 있으면 행이 조용히 버려지는 버그 수정 |  | ☐ |
+| MP-0033 | P2 | P2 | claude | [research] R-F-010: time_parameterize에 LSPB via-point 블렌딩 opt-in 추가 검토 — 세그먼트 경계 완전정지 없애기(researc... |  | ☐ |
+| MP-0034 | P2 | P0 | claude | [infra] todo_tool.py parse()가 render()의 백슬래시 이스케이프를 이해 못해 제목에 파이프 문자가 있으면 행이 조용히 버려지는 버그 수정 (실사고 ... |  | ☐ |
 
 ## Done
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
