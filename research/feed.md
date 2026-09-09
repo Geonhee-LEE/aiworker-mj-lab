@@ -2,6 +2,13 @@
 
 _cap 30, 최신이 위. REVIEW 단계는 상위 5개만 읽는다._
 
+- [2026-09-09] [009](2026-09/009.md) `ArmCollisionChecker.clearance()`가
+  호출하는 `collision_distance_gradient`(3개 모드 전부)가 호출부가 쓰지도
+  않는 Jacobian을 쌍마다 2회씩 계산하는 낭비를 코드 실독으로 확인 —
+  `is_valid()`는 이미 gradient-free라 문제없음. `need_gradient=False` 조기
+  반환 분기 하나로 고칠 수 있고, MP-0028의 safety-certificate 순이득
+  판단(현재 리뷰 대기 PR #15)이 이 낭비 포함 기준선 위에서 나온 결론일
+  가능성도 제기(재프로파일링 필요, 가설). 신규 TODO 1건(MP-0035).
 - [2026-09-08] [008](2026-09/008.md) R-F-010(연속 동작 매끄러움) 미착수
   문제의 근본 원인을 `planning/trajectory.py` 모듈 docstring에서 확인 —
   현재 사다리꼴 프로파일은 세그먼트 경계에서 항상 완전 정지한다(방향 전환 시
