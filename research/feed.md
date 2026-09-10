@@ -2,6 +2,14 @@
 
 _cap 30, 최신이 위. REVIEW 단계는 상위 5개만 읽는다._
 
+- [2026-09-10] [010](2026-09/010.md) PR 큐 포화로 executor가 못 움직이는
+  동안 기존 방향 두 가지를 문헌으로 재확인 — (1) `toppra`는 numpy/scipy+LP
+  solver 의존이라 "무의존 순수 파이썬"이 아님을 확인, MP-0033(LSPB via-point
+  blending)을 R-F-010 1차 후보로 둔 feed 008 판단이 맞았음을 재확인.
+  (2) Lazy edge collision checking 문헌(Hauser ICRA 2015) 확인 결과
+  `EdgeChecker`의 기존 bisection 조기기각은 이미 그 아이디어의 일부이고,
+  RRT* rewiring 단계의 진짜 lazy evaluation은 실측 병목이 확인되기 전이라
+  TODO화하지 않음. 신규 TODO 0건(기존 MP-0033이 이미 커버).
 - [2026-09-09] [009](2026-09/009.md) `ArmCollisionChecker.clearance()`가
   호출하는 `collision_distance_gradient`(3개 모드 전부)가 호출부가 쓰지도
   않는 Jacobian을 쌍마다 2회씩 계산하는 낭비를 코드 실독으로 확인 —
