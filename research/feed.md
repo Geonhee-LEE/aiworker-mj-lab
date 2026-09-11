@@ -2,6 +2,15 @@
 
 _cap 30, 최신이 위. REVIEW 단계는 상위 5개만 읽는다._
 
+- [2026-09-11] [011](2026-09/011.md) BIT*(Batch Informed Trees) 문헌 확인 —
+  고차원 매니퓰레이터에서 RRT 계열보다 빨리 수렴한다고 보고되나, P5 실측
+  (MP-0007/MP-0017)이 이미 "RRT*조차 RRT-Connect 대비 경로 품질 이득
+  통계적으로 없음"으로 나온 이 저장소 규모에서는 즉시 도입 근거가 약함 —
+  hydrax/VAMP-MR과 같은 취급으로 owner=user TODO만 등록(MP-0036), 구현은
+  로드맵 확장 결정 대기. MuJoCo `contype`/`conaffinity` broad-phase
+  필터링 재확인 결과 `ArmCollisionChecker`의 기존 설계(모델의 `<exclude>`
+  상속)가 이미 문헌 권장 패턴과 일치 — feed 002의 "프로파일링 먼저"
+  결론 재확인, 신규 조치 없음. 신규 TODO 1건.
 - [2026-09-10] [010](2026-09/010.md) PR 큐 포화로 executor가 못 움직이는
   동안 기존 방향 두 가지를 문헌으로 재확인 — (1) `toppra`는 numpy/scipy+LP
   solver 의존이라 "무의존 순수 파이썬"이 아님을 확인, MP-0033(LSPB via-point

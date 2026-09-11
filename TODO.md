@@ -3,9 +3,9 @@
 _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트가 함께 수정한다._
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
-- Last update: `2026-09-09 08:02 KST`
-- Open (Doing + Today + Blocked + Backlog): **15**
-- Next ID: `MP-0036`
+- Last update: `2026-09-11 08:02 KST`
+- Open (Doing + Today + Blocked + Backlog): **16**
+- Next ID: `MP-0037`
 
 ## Doing
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -37,6 +37,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0033 | P2 | P2 | claude | [research] R-F-010: time_parameterize에 LSPB via-point 블렌딩 opt-in 추가 검토 — 세그먼트 경계 완전정지 없애기(researc... |  | ☐ |
 | MP-0034 | P2 | P0 | claude | [infra] todo_tool.py parse()가 render()의 백슬래시 이스케이프를 이해 못해 제목에 파이프 문자가 있으면 행이 조용히 버려지는 버그 수정 (실사고 ... |  | ☐ |
 | MP-0035 | P2 | P1 | claude | [research] collision_distance_gradient에 need_gradient=False 경로 추가 — clearance()가 안 쓰는 Jacobian 계산... |  | ☐ |
+| MP-0036 | P2 | P5 | user | [research] BIT*(Batch Informed Trees) 도입 검토 — 고차원 매니퓰레이터 수렴 우위 보고되나 P5 실측(RRT* vs RRT-Connect 품질 ... |  | ☐ |
 
 ## Done
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
