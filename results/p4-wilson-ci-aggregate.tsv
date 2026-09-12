@@ -1,0 +1,2 @@
+timestamp	commit	metric	status	description
+2026-09-12T21:15:00+09:00	1070f44	qual:tests-8pass	keep	MP-0022: aggregate_results.py에 성공률 Wilson 95% CI 계산 추가(_wilson_ci/_parse_bench_metric/_success_rate_lines). bench: 메트릭을 planner(있으면)별로 그룹핑해 성공/실패 카운트로 Wilson score interval 산출, RESULTS.md 각 섹션에 표시. 실제 재생성 결과 p5-planner-comparison의 rrt_star narrow_passage/cluttered 혼합 성공률 0.830 [0.745, 0.891] (n=100)로 기존 실측(78-88%) 대역과 일치 확인. 신규 8개 단위 테스트 + planning 93개 통과.
