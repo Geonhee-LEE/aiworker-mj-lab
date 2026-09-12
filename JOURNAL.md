@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-12 11:00 — p4-offline-pose-ik-delegate
+- **Pick**: STATE.md(2026-09-07 스냅샷)가 낡아 있었지만 오늘 오전 사이클(PR #17/#18)이 PR #13~#16 병합을 이미 TODO.md에 동기화해 둔 걸 확인 — `MP-0012`를 막던 "PR #14 병합 후 착수 가능" 조건이 해소돼 Backlog 중 P1 최우선인 이 항목을 Today로 승격해 선택
+- **Outcome**: `tests/offline_pose_ik.py`의 `solve_offline_pose`/`solve_offline_pose_multistart`가 `planning/goals.py`의 `solve_pose_goal`/`solve_pose_goal_multistart`와 DLS/backtracking 로직이 사실상 복붙 상태였음을 확인 — solver의 관절 범위로 임시 `RightArmSpace`를 만들어 `planning.goals`에 위임하는 얇은 어댑터로 교체(108→28줄). 호출부(`test_phase_3.py`/`test_phase_4.py`/`record_demo.py`)의 4-튜플 반환/키워드 시그니처는 그대로 유지. `tests/test_planning_*.py` 93개 + `test_phase_3.py` 물리 게이트(IK 100/100, pick 10/10) 재검증 통과, PR #19 생성
+- **Next**: PR #17/#18/#19 사람 리뷰/병합, `MP-0022`(Wilson CI, 의존성 없음), `MP-0037`(q_init 반경 확장 샘플링)
+- **Full**: [journal/2026-09/12-11-p4-offline-pose-ik-delegate.md](journal/2026-09/12-11-p4-offline-pose-ik-delegate.md)
+
+
 ## 2026-09-07 11:00 — p0-todo-tool-unit-tests
 - **Pick**: STATE.md "Next claude-actionable" 1순위 MP-0018/MP-0019 중 MP-0018(aggregate_results.py)은 TODO.md `## Done`에 이미 반영돼 있음을 확인만 하고, 미착수였던 **MP-0019**(`todo_tool.py` 단위 테스트) 선택 — main에서 바로 착수 가능
 - **Outcome**: `tests/test_todo_tool.py` 신규 17개(파싱/렌더링 왕복, `_next_id`, `_escape`/`_unescape`, CLI `add`/`set`/`check`/`next`를 격리된 임시 `TODO_PATH`로 검증). **부수 발견**: `parse()`의 naive `str.split("|")`가 `render()`의 백슬래시 이스케이프(`\|`)를 이해하지 못해 제목에 리터럴 `|`가 있으면 행 전체가 조용히 버려지는 기존 버그 확인 — 이번 스코프(테스트만)에서는 수정 대신 characterization test로 문서화하고 후속 TODO 등록. 신규 17개 + 기존 planning 80개 모두 통과, PR #16 생성
@@ -133,10 +140,3 @@ _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고�
 - **Outcome**: MjSpec으로 모델 파일을 안 건드리고 빨간 기둥(planning_obstacle) 추가, 실제 충돌 판정에 관여함을 검증. 실행 중 주황색 경로 시각화가 지워지지 않고 유지되도록 수정
 - **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
 - **Full**: [journal/2026-08/30-17-30-add-obstacle-and-persistent-path-viz.md](journal/2026-08/30-17-30-add-obstacle-and-persistent-path-viz.md)
-
-
-## 2026-08-30 17:00 — repeat-loop-and-tree-viz-demo
-- **Pick**: 사용자 요청 — 데모에 반복 목표 방문(`--loop`)과 RRT 트리 시각화(`--show-tree`) 추가
-- **Outcome**: `PlannerResult`에 `TreeSnapshot`(start_tree/goal_tree) 추가, mjv_initGeom/mjv_connector로 트리를 뷰어에 렌더. 실제 디스플레이에서 반복 실행 세그폴트 없이 확인
-- **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
-- **Full**: [journal/2026-08/30-17-repeat-loop-and-tree-viz-demo.md](journal/2026-08/30-17-repeat-loop-and-tree-viz-demo.md)
