@@ -3,7 +3,7 @@
 _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트가 함께 수정한다._
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
-- Last update: `2026-09-12 10:36 KST`
+- Last update: `2026-09-12 10:43 KST`
 - Open (Doing + Today + Blocked + Backlog): **14**
 - Next ID: `MP-0039`
 
@@ -18,6 +18,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 ## Blocked
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
+| MP-0034 | P2 | P0 | claude | [infra] todo_tool.py parse()가 render()의 백슬래시 이스케이프를 이해 못해 제목에 파이프 문자가 있으면 행이 조용히 버려지는 버그 수정 (실사고 ... | planning/p0-todo-tool-pipe-escape-fix | ☐ |
 
 ## Backlog
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -31,7 +32,6 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0030 | P2 | P7 | user | [design] P7 Tier 2(결합형 whole-body 플래너) 착수 여부 결정 — 타당성 평가 완료(PR #12), 검증 시나리오(합성 MJCF) 준비 필요 |  | ☐ |
 | MP-0032 | P2 | P5 | claude | [research] narrow_passage/cluttered에서 RRT* 초기 해 탐색용 bridge-test 편향 샘플링 검토 — MP-0031 실측(성공률 78-88%... |  | ☐ |
 | MP-0033 | P2 | P2 | claude | [research] R-F-010: time_parameterize에 LSPB via-point 블렌딩 opt-in 추가 검토 — 세그먼트 경계 완전정지 없애기(researc... |  | ☐ |
-| MP-0034 | P2 | P0 | claude | [infra] todo_tool.py parse()가 render()의 백슬래시 이스케이프를 이해 못해 제목에 파이프 문자가 있으면 행이 조용히 버려지는 버그 수정 (실사고 ... |  | ☐ |
 | MP-0035 | P2 | P1 | claude | [research] collision_distance_gradient에 need_gradient=False 경로 추가 — clearance()가 안 쓰는 Jacobian 계산... |  | ☐ |
 | MP-0036 | P2 | P5 | user | [research] BIT*(Batch Informed Trees) 도입 검토 — 고차원 매니퓰레이터 수렴 우위 보고되나 P5 실측(RRT* vs RRT-Connect 품질 ... |  | ☐ |
 | MP-0037 | P2 | P1 | claude | [research] R-F-009: _solve_valid_ik 무작위 재시도를 q_init 반경 확장 샘플링으로 개선 검토 — 관절범위 10%→30%→100% 단계적 확장,... |  | ☐ |
@@ -40,7 +40,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 ## Done
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
 |---|---|---|---|---|---|---|
-| MP-0031 | P2 | P5 | user | [research] 장애물 배치별 RRT-Connect vs RRT* 재검증 완료(PR #13 병합, main에 실제로 있음) — 장애물 없음: 차이 없음(p=0.86). narrow_passage/clu... | planning/p5-planner-comparison | ☐ |
+| MP-0031 | P2 | P5 | user | [research] 장애물 배치별 RRT-Connect vs RRT* 재검증 완료(PR #13 병합, main에 실제로 있음) — 장애물 없음: 차이 없음(p=0.86). n... | planning/p5-planner-comparison | ☐ |
 | MP-0029 | P2 | P7 | claude | [docs] P7.0/P7.1 가이드 문서화 + P7 Tier 2 타당성 평가 — PR #12 병합 완료(main에 실제로 있음) | docs/p7-mobile-manipulator-guide | ☐ |
 | MP-0028 | P2 | P1 | claude | [research] EdgeChecker/ArmCollisionChecker에 safety-certificate 스타일 캐싱 도입 여부 판단 — 바로 구현하지 않고 `stat... | planning/p1-safety-certificate-profiling | ☐ |
 | MP-0027 | P1 | P7 | claude | [planner] P7.1 `planning/base_pose.py` — PR #11 병합 완료(main에 실제로 있음) | planning/p7-1-base-pose | ☐ |
@@ -49,11 +49,11 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0023 | P1 | P2 | claude | [planner] shortcut+시간 파라미터화를 데모 실행 경로에 연결 — PR #3 병합 완료(main에 실제로 있음) | planning/p2-demo-natural-motion | ☐ |
 | MP-0019 | P2 | P0 | claude | [infra] `scripts/todo_tool.py` 단위 테스트(파싱·왕복) | planning/p0-todo-tool-unit-tests | ☐ |
 | MP-0018 | P2 | P0 | claude | [infra] `scripts/aggregate_results.py` — TSV→RESULTS.md 집계기 |  | ☐ |
-| MP-0017 | P3 | P5 | claude | [bench] RRT-Connect vs RRT* 50 seed 비교표 — 실측 완료(Wilcoxon p≈0.86, 장애물 없을 때 차이 없음), PR #13 병합 완료(main에 실제로 있음) | planning/p5-planner-comparison | ☐ |
+| MP-0017 | P3 | P5 | claude | [bench] RRT-Connect vs RRT* 50 seed 비교표 — 실측 완료(Wilcoxon p≈0.86, 장애물 없을 때 차이 없음), PR #13 병합 완료(ma... | planning/p5-planner-comparison | ☐ |
 | MP-0016 | P2 | P5 | claude | [planner] `planning/rrt_star.py` 초안 — PR #4 병합 완료(main에 실제로 있음) | planning/p5-rrt-star-planner | ☐ |
 | MP-0015 | P2 | P5 | claude | [research] RRT* rewiring + informed sampling 문헌조사 (rrt_star.py 설계 과정으로 충족, journal/2026-09/03-rrt... |  | ☐ |
 | MP-0013 | P0 | P4 | claude | [bench] `scripts/benchmark_planning.py` — PR #7 병합 완료(main에 실제로 있음) | planning/p4-benchmark-harness | ☐ |
-| MP-0011 | P1 | P4 | claude | [planner] `planning/goals.py` Cartesian pose goal → IK 시드 다중 재시도 — 구현·테스트 완료(83개 통과), PR #14 병합 완료(main에 실제로 있음) | planning/p4-cartesian-pose-goal-ik-seed | ☐ |
+| MP-0011 | P1 | P4 | claude | [planner] `planning/goals.py` Cartesian pose goal → IK 시드 다중 재시도 — 구현·테스트 완료(83개 통과), PR #14 병합 완... | planning/p4-cartesian-pose-goal-ik-seed | ☐ |
 | MP-0010 | P2 | P3 | claude | [docs] `docs/guide/motion-planning.md` 작성 + mkdocs nav 등록 |  | ☐ |
 | MP-0009 | P1 | P3 | claude | [planner] `test_planning_execution.py` 침투·오차 검증 — PR #8에 포함, 병합 완료 | planning/p3-execution-module | ☑ |
 | MP-0008 | P1 | P3 | claude | [planner] `planning/execution.py` — PR #8 병합 완료(main에 실제로 있음), 실측 site 오차 0.07~0.09mm | planning/p3-execution-module | ☐ |
