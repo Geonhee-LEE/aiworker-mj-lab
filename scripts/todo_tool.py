@@ -45,6 +45,16 @@ def _unescape(cell):
     return cell.replace("\\|", "|")
 
 
+_CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")
+
+
+def _split_row(line):
+    """표 한 행을 셀로 나눈다. ``\\|``(``_escape``가 붙인 이스케이프)는 셀 구분자로
+    보지 않는다 — naive ``str.split("|")``는 이걸 몰라 제목에 리터럴 ``|``가 있으면
+    셀 개수가 어긋나 행 전체가 조용히 버려진다."""
+    return [c.strip() for c in _CELL_SPLIT_RE.split(line.strip().strip("|"))]
+
+
 def parse(text):
     """TODO.md 본문에서 status → [Row] 매핑을 반환한다."""
     sections = {status: [] for status in STATUSES}
@@ -56,7 +66,7 @@ def parse(text):
             continue
         if current is None or not line.strip().startswith("|"):
             continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        cells = _split_row(line)
         if len(cells) != len(COLUMNS) or cells[0] in ("ID", "---"):
             continue
         if not ID_RE.match(cells[0]):
