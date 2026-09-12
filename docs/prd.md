@@ -5,14 +5,21 @@
 > **AIWORKER 오른팔이 캔 분류 작업대 위에서 정적 장애물(상자, 테이블, 왼팔)을
 > 피해 충돌 없는 관절 경로를 계획하고 그대로 실행한다.**
 
-### "완벽"의 운영적 정의 (P4 벤치마크 이후 확정)
+### "완벽"의 운영적 정의 (P4 벤치마크 완료, 실측값 반영)
 
-| 차원 | 1차 임계 (가설) | 측정 방법 |
-|---|---|---|
-| 성공률 | 캔 분류 장면 시드 50개 중 ≥ 90% | `scripts/benchmark_planning.py` |
-| 계획 시간 | 중앙값 ≤ 500 ms | 같은 벤치마크의 `planning_time_s` |
-| 경로 품질 | shortcut 후 원경로 대비 길이 30%↓ | `path_length_rad` vs `smoothed_length_rad` |
-| 실행 안전성 | 재생 중 최소 clearance ≥ `whole_body_ik.collision_safe_distance_m` | `tests/test_planning_execution.py` |
+| 차원 | 1차 임계 (가설) | 실측(MP-0004/0007/0017) | 측정 방법 |
+|---|---|---|---|
+| 성공률 | 캔 분류 장면 시드 50개 중 ≥ 90% | ✅ 100%(2 시나리오 모두, MP-0004) | `scripts/benchmark_planning.py` |
+| 계획 시간 | 중앙값 ≤ 500 ms | ✅ 12.50 ms(RRT-Connect, MP-0017) | 같은 벤치마크의 `planning_time_s` |
+| 경로 품질 | shortcut 후 원경로 대비 길이 30%↓ | ⚠️ 중앙값 6.82%(MP-0007) — 가설 임계 미달 | `path_length_rad` vs `smoothed_length_rad` |
+| 실행 안전성 | 재생 중 최소 clearance ≥ `whole_body_ik.collision_safe_distance_m` | 미측정 — `test_planning_execution.py`는 site 오차(0.07~0.09mm)만 확인, clearance 하한은 아직 별도 검증 없음 | `tests/test_planning_execution.py` |
+
+**경로 품질 임계가 실측과 크게 벌어진 이유**: "30%↓"는 P4 착수 전 합성
+경로 기준 가설이었다. 실제 can-sort 장면의 RRT-Connect 경로는 장애물이
+적어(구체 3개) 처음부터 비교적 덜 꼬여 있어, shortcut이 줄일 여지 자체가
+작다(이미 최적이라 변화 없는 seed가 5/50). 임계를 실측 기준으로 재설정할지,
+아니면 "더 꼬인 경로가 나오는 조건(장애물 많음)에서만 30%가 의미 있다"로
+범위를 좁힐지는 사람 판단이 필요하다 — 이 PRD에서는 결정하지 않는다.
 
 ### 비-목표 (Non-Goals)
 
@@ -27,13 +34,13 @@
 | Phase | 결과물 | Exit criterion | 상태 |
 |---|---|---|---|
 | P0 | `RightArmSpace` + `ArmCollisionChecker` + `EdgeChecker` | validity 테스트 통과, live `MjData` 무오염 확인 | ✅ 완료·병합 |
-| P1 | RRT-Connect 코어 | can-sort 50 seed 성공률 ≥ 90%, 충돌 경로 미반환 속성 시험 통과 | ✅ 코어 완료·병합. 정식 50-seed TSV 측정(MP-0004)은 벤치마크 하네스 대기 |
-| P2 | shortcut 평활화 + 시간 파라미터화 + 자세 매끄러움 후처리 | 경로 길이 중앙값 30%+ 단축, 속도/가속도 상한 위반 0 | 🟡 구현·테스트 완료, 리뷰 대기(PR #1 shortcut, #2 time_parameterize, #3 데모 연결, #5 CHOMP 자세 후처리) |
-| P3 | MuJoCo 실행 연결 | headless 재생 시 침투 없음, 최종 site 오차 ≤ 5 mm | ⬜ 미착수 — `planning.execution` 모듈 없음. 데모 스크립트가 데모/디버그용 재생만 제공 |
-| P4 | Cartesian goal + 벤치마크 하네스 | pose 목표 성공률 ≥ 85%, 벤치마크 2분 이내 완주 | ⬜ 미착수 |
-| P5 | RRT* / informed sampling 비교 연구 | 동일 seed에서 baseline 대비 경로 길이·시간 trade-off 표 산출 | 🟡 `planning.rrt_star` 구현·테스트 완료, 리뷰 대기(PR #4). 정식 50-seed 비교표(MP-0017)는 벤치마크 하네스 대기 |
+| P1 | RRT-Connect 코어 | can-sort 50 seed 성공률 ≥ 90%, 충돌 경로 미반환 속성 시험 통과 | ✅ 완료·병합(PR #7). 50-seed 실측(MP-0004): 2 시나리오 모두 100% 성공 |
+| P2 | shortcut 평활화 + 시간 파라미터화 + 자세 매끄러움 후처리 | 경로 길이 중앙값 30%+ 단축, 속도/가속도 상한 위반 0 | ✅ 완료·병합(PR #1 shortcut, #2 time_parameterize, #3 데모 연결, #5 CHOMP 자세 후처리). 실측 shortcut 감소율(MP-0007): 중앙값 6.82%(목표 30%에는 못 미침 — 실제 can-sort 장면은 합성 벤치마크보다 덜 꼬인 경로가 나온다는 뜻, 재논의 필요) |
+| P3 | MuJoCo 실행 연결 | headless 재생 시 침투 없음, 최종 site 오차 ≤ 5 mm | ✅ 완료·병합(PR #8). 실측 site 오차 0.07~0.09mm(목표 5mm 대비 여유 큼) |
+| P4 | Cartesian goal + 벤치마크 하네스 | pose 목표 성공률 ≥ 85%, 벤치마크 2분 이내 완주 | ✅ 완료·병합 — 벤치마크 하네스(PR #7), Cartesian pose goal IK 다중 재시도(PR #14, MP-0011) |
+| P5 | RRT* / informed sampling 비교 연구 | 동일 seed에서 baseline 대비 경로 길이·시간 trade-off 표 산출 | ✅ 완료·병합(PR #4 구현, PR #13 비교표+장애물 배치 다양화). 결론: 장애물 없음에서는 차이 없음(p=0.86), narrow_passage/cluttered에서는 RRT*가 유의하게 더 짧은 경로(p<0.05)이지만 성공률이 100%→78-88%로 하락(MP-0031) — 안정성-품질 트레이드오프, 일반적 우위 없음 |
 | P6 | (비-목표 재검토) 왼팔·양팔 협조 계획 후보 | 사람 결정 대기 | ⬜ 미착수 |
-| P7 | 모바일 매니퓰레이터(베이스+팔) IK·모션 플래닝 | P7.0: reachability map 빌드·쿼리 테스트 통과. P7.1: "베이스 이동 없이 못 닿는" 목표에서 베이스 재배치 후 기존 팔 계획기로 end-to-end 성공 | ⬜ 착수 중 |
+| P7 | 모바일 매니퓰레이터(베이스+팔) IK·모션 플래닝 | P7.0: reachability map 빌드·쿼리 테스트 통과. P7.1: "베이스 이동 없이 못 닿는" 목표에서 베이스 재배치 후 기존 팔 계획기로 end-to-end 성공 | 🟡 P7.0/P7.1 완료·병합(PR #10/#11), Tier 2 타당성 평가 완료(PR #12). Tier 2(결합형 whole-body) 착수 여부는 사람 판단 대기(MP-0030) |
 
 **자세 매끄러움 후처리를 P2로 편입한 이유**: 원래 로드맵에 없던 항목이다.
 사용자가 실제 데모(`--interactive`)로 확인한 세 가지 남은 한계 — IK 계산
@@ -107,12 +114,15 @@ Telegram으로 보고한다. `docs/agents.md`에 상세 정의.
 Notion 등 외부 서비스 없이 `TODO.md` 파일이 작업 상태의 유일한 권위다.
 `scripts/todo_tool.py`로 기계적으로만 수정한다.
 
-### R-F-009 IK 목표 탐색 개선 (계획, 미착수)
+### R-F-009 IK 목표 탐색 개선 (부분 완료)
 
-사용자가 관찰: `--interactive` 데모에서 IK 계산이 자주 실패한다. 현재
-`_solve_valid_ik`는 순수 무작위 재시도(`n_restarts=25`)에 의존해 성공률이
-운에 좌우된다. `planning.goals`(기존 `MP-0011` 백로그)에서 목표 근처의
-구조화된 시드(이전 성공 해, 거친 reachability 격자 등)로 개선한다.
+사용자가 관찰: `--interactive` 데모에서 IK 계산이 자주 실패한다.
+`planning.goals.solve_pose_goal_multistart`(PR #14, MP-0011 병합 완료)로
+Cartesian pose 목표 → 관절공간 목표 변환에 구조화된 다중 재시도(시드
+실패 시 `space.sample()` 무작위 폴백)를 추가했다. 다만 `_solve_valid_ik`
+자체(대화형 데모의 마우스 목표 탐색 경로)는 아직 순수 무작위
+재시도(`n_restarts=25`)에 의존 — 이 개선은 MP-0037(반경 확장 샘플링)/
+MP-0038(ReachabilityMap representative_q 재사용)로 후속 검토 중(미착수).
 
 ### R-F-010 연속 동작 매끄러움 (계획, 미착수)
 
@@ -174,19 +184,27 @@ executor는 사람 개입 없이 조사→구현→테스트→PR까지 완결�
   100/100 seed + 실제 장면 seeded 질의로 확인(`tests/test_planning_rrt_scene.py`).
   정식 TSV 벤치마크(seed 50개, MP-0004/MP-0013)는 아직 대기
 - [ ] 자동화 cron 8종이 모두 최소 1회 수동 스모크 통과 — researcher/brief/
-  executor/wrap은 `research/cron_activity.md` 로그로 반복 확인됨. curator·
-  weekly_rollup·telegram_poll·urgent_agent는 미확인
+  executor/wrap/curator/weekly_rollup은 `research/cron_activity.md` 로그로
+  반복 확인됨(curator는 매일, weekly_rollup은 2026-09-06 1회). telegram_poll·
+  urgent_agent는 여전히 미확인(MP-0020 telegram.env 미설정으로 발송 자체가
+  안 돼 관측 불가)
 
 ### 중기 (P3-P4 마무리)
 
-- [ ] 계획 궤적을 MuJoCo에서 실행해 최종 오차 5 mm 이내
-- [ ] Cartesian goal 성공률 85% 이상
-- [ ] 벤치마크가 자동화 루프에서 정기적으로 `results/`에 행을 남김
+- [x] 계획 궤적을 MuJoCo에서 실행해 최종 오차 5 mm 이내 — 실측 0.07~0.09mm
+  (PR #8, `tests/test_planning_execution.py`)
+- [ ] Cartesian goal 성공률 85% 이상 — `planning.goals`(PR #14)는 병합됐지만
+  정식 20-seed 측정(MP-0014)은 아직 미착수
+- [x] 벤치마크가 자동화 루프에서 정기적으로 `results/`에 행을 남김 —
+  `results/*.tsv` 8개 파일, 자율 루프가 MP-0028 등에서 직접 append
 
 ### 장기 (P5 마무리)
 
-- [ ] RRT* 등 대안 플래너와의 정량 비교표를 `RESULTS.md`에 게시
-- [ ] PR throughput ≥ 2/week, 사용자 평균 리뷰 시간 ≤ 20분/week
+- [x] RRT* 등 대안 플래너와의 정량 비교표를 `RESULTS.md`에 게시 — PR #13
+  병합(MP-0017/0031, 장애물 배치 3종 × 50 seed 비교 + Wilcoxon 검정)
+- [ ] PR throughput ≥ 2/week, 사용자 평균 리뷰 시간 ≤ 20분/week — 미달:
+  2026-09-05~12 한 주 동안 PR 4건이 5~7일씩 쌓여 있다가 한꺼번에 병합됨
+  (일괄 병합이지 "평균 20분" 꾸준한 리듬은 아니다)
 
 ### Project (P6 검토)
 
