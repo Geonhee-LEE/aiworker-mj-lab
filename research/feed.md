@@ -2,6 +2,58 @@
 
 _cap 30, 최신이 위. REVIEW 단계는 상위 5개만 읽는다._
 
+- [2026-09-11] [011](2026-09/011.md) BIT*(Batch Informed Trees) 문헌 확인 —
+  고차원 매니퓰레이터에서 RRT 계열보다 빨리 수렴한다고 보고되나, P5 실측
+  (MP-0007/MP-0017)이 이미 "RRT*조차 RRT-Connect 대비 경로 품질 이득
+  통계적으로 없음"으로 나온 이 저장소 규모에서는 즉시 도입 근거가 약함 —
+  hydrax/VAMP-MR과 같은 취급으로 owner=user TODO만 등록(MP-0036), 구현은
+  로드맵 확장 결정 대기. MuJoCo `contype`/`conaffinity` broad-phase
+  필터링 재확인 결과 `ArmCollisionChecker`의 기존 설계(모델의 `<exclude>`
+  상속)가 이미 문헌 권장 패턴과 일치 — feed 002의 "프로파일링 먼저"
+  결론 재확인, 신규 조치 없음. 신규 TODO 1건.
+- [2026-09-10] [010](2026-09/010.md) PR 큐 포화로 executor가 못 움직이는
+  동안 기존 방향 두 가지를 문헌으로 재확인 — (1) `toppra`는 numpy/scipy+LP
+  solver 의존이라 "무의존 순수 파이썬"이 아님을 확인, MP-0033(LSPB via-point
+  blending)을 R-F-010 1차 후보로 둔 feed 008 판단이 맞았음을 재확인.
+  (2) Lazy edge collision checking 문헌(Hauser ICRA 2015) 확인 결과
+  `EdgeChecker`의 기존 bisection 조기기각은 이미 그 아이디어의 일부이고,
+  RRT* rewiring 단계의 진짜 lazy evaluation은 실측 병목이 확인되기 전이라
+  TODO화하지 않음. 신규 TODO 0건(기존 MP-0033이 이미 커버).
+- [2026-09-09] [009](2026-09/009.md) `ArmCollisionChecker.clearance()`가
+  호출하는 `collision_distance_gradient`(3개 모드 전부)가 호출부가 쓰지도
+  않는 Jacobian을 쌍마다 2회씩 계산하는 낭비를 코드 실독으로 확인 —
+  `is_valid()`는 이미 gradient-free라 문제없음. `need_gradient=False` 조기
+  반환 분기 하나로 고칠 수 있고, MP-0028의 safety-certificate 순이득
+  판단(현재 리뷰 대기 PR #15)이 이 낭비 포함 기준선 위에서 나온 결론일
+  가능성도 제기(재프로파일링 필요, 가설). 신규 TODO 1건(MP-0035).
+- [2026-09-08] [008](2026-09/008.md) R-F-010(연속 동작 매끄러움) 미착수
+  문제의 근본 원인을 `planning/trajectory.py` 모듈 docstring에서 확인 —
+  현재 사다리꼴 프로파일은 세그먼트 경계에서 항상 완전 정지한다(방향 전환 시
+  가속도 발산 버그를 피하려 의도적으로 그렇게 설계됨, MP-0006 범위 밖으로
+  명시). **LSPB via-point blending**(코너 근처에서 이전/다음 세그먼트 속도를
+  선형 결합, 완전 정지 없이 통과)을 hydrax(MP-0021, GPU 의존성 승인 대기)
+  없이 순수 파이썬으로 `time_parameterize`에 opt-in 추가 가능한 1차 후보로
+  제안. TOPP-RA/SAAC는 이론적으로 더 우수하지만 spline+LP 구현 비용이 커
+  2차 후보로 보류. 신규 TODO 1건(MP-0033) — 이 항목을 추가하다가
+  `todo_tool.py`의 기존 버그(제목에 파이프 문자가 있으면 행이 조용히
+  버려짐, MP-0033으로 이미 등록돼 있었음)가 그 버그를 설명하는 항목 자체를
+  실제로 삼켜버리는 걸 실측으로 재현 — 유실된 항목을 MP-0034로 복구.
+- [2026-09-07] [007](2026-09/007.md) MP-0031 실측(narrow_passage/cluttered에서
+  RRT* 성공률 78-88%, RRT-Connect는 100%)의 원인을 좁은 통로 균등 샘플링의
+  고전적 실패 모드로 확인 — **bridge test**(Hsu et al. 2003, 무효점 2개의
+  중점을 후보로) 샘플링을 `rrt_star._sample`에 일정 확률로 섞으면 새
+  라이브러리 없이 성공률을 개선할 여지가 있음. GVP-RRT(2024)는 유사 환경에서
+  11.5~69.5%p 개선 보고. Bidirectional 결합형(FRRT*-Connect)은 이 저장소의
+  "RRT*는 의도적으로 단일 트리" 설계 결정과 충돌해 스코프 밖으로 제외. 신규
+  TODO 1건(MP-0032, 먼저 프로파일링 후 `--obstacle-layout`으로 성공률 실측).
+- [2026-09-06] [006](2026-09/006.md) PR 큐 완전 소진 후 다음 착수 후보인
+  MP-0017(RRT-Connect vs RRT* 50-seed 비교표)을 위해 통계 검정 방법을 미리
+  확정 — 동일 seed로 두 플래너를 돌리는 대응 표본 구조이므로 독립 표본
+  검정(Mann-Whitney) 대신 **Wilcoxon signed-rank test**(대응 t-test의
+  비모수 버전) + 중앙값 effect size를 함께 보고할 것, 한쪽만 실패한 seed는
+  성공 교집합에서 제외하고 교집합이 너무 작으면 검정 자체를 생략. MP-0022
+  (Wilson CI)는 성공률 축이라 이것과 별개. 신규 TODO 0건(MP-0017이 이미
+  커버).
 - [2026-09-05] [005](2026-09/005.md) 충돌 검사 가속 후보로 safety-certificate
   스타일 캐싱(Bialkowski et al., IJRR 2016) 조사 — 한 번 정밀 검사한 점의
   `clearance()` 반경 안에서는 이후 `is_valid`를 생략할 수 있다는 아이디어.

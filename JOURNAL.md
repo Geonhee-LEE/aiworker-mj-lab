@@ -2,6 +2,27 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-07 11:00 — p0-todo-tool-unit-tests
+- **Pick**: STATE.md "Next claude-actionable" 1순위 MP-0018/MP-0019 중 MP-0018(aggregate_results.py)은 TODO.md `## Done`에 이미 반영돼 있음을 확인만 하고, 미착수였던 **MP-0019**(`todo_tool.py` 단위 테스트) 선택 — main에서 바로 착수 가능
+- **Outcome**: `tests/test_todo_tool.py` 신규 17개(파싱/렌더링 왕복, `_next_id`, `_escape`/`_unescape`, CLI `add`/`set`/`check`/`next`를 격리된 임시 `TODO_PATH`로 검증). **부수 발견**: `parse()`의 naive `str.split("|")`가 `render()`의 백슬래시 이스케이프(`\|`)를 이해하지 못해 제목에 리터럴 `|`가 있으면 행 전체가 조용히 버려지는 기존 버그 확인 — 이번 스코프(테스트만)에서는 수정 대신 characterization test로 문서화하고 후속 TODO 등록. 신규 17개 + 기존 planning 80개 모두 통과, PR #16 생성
+- **Next**: `todo_tool.py` parse()를 이스케이프-aware로 교체(신규 TODO), PR #13/#14/#15/#16 사람 리뷰/병합(큐 4건, 게이트 임계값 임박)
+- **Full**: [journal/2026-09/07-11-p0-todo-tool-unit-tests.md](journal/2026-09/07-11-p0-todo-tool-unit-tests.md)
+
+
+## 2026-09-06 21:03 — p1-safety-certificate-profiling
+- **Pick**: STATE.md "Next claude-actionable" 1순위 `MP-0012`는 필요한 `planning/goals.py`가 미병합 PR #14 브랜치에만 있어 실행가능성 필터에 걸려 건너뜀. 2순위 **MP-0028**(safety-certificate 캐싱 도입 여부 프로파일링) 선택 — main에서 바로 착수 가능
+- **Outcome**: `scripts/profile_certificate_caching.py` 신규 — 실제 can-sort 장면에서 RRT-Connect가 방문한 configuration 표본에 대해 `is_valid()`/`clearance()` 비용비와 clearance 분포를 실측. 장애물 포함/미포함 두 시나리오 모두 일관된 결론: `clearance()`가 `is_valid()`보다 7.6~7.7배 비싸고, 낙관적 기대 절감(4.1~4.2회)이 비용비를 못 넘음 → **캐싱 도입 보류**. 캐싱 코드 자체는 구현하지 않음(스코프를 프로파일링으로 좁힌 결정 유지). 신규 4개 단위 테스트 포함 84개 통과, PR #15 생성
+- **Next**: PR #13/#14/#15 사람 리뷰/병합, `MP-0018`(aggregate_results.py — 이미 구현된 것처럼 보이는데 TODO가 Backlog인 불일치 확인 필요), PR #14 병합되면 `MP-0012` 착수 가능
+- **Full**: [journal/2026-09/06-21-p1-safety-certificate-profiling.md](journal/2026-09/06-21-p1-safety-certificate-profiling.md)
+
+
+## 2026-09-06 — p4-cartesian-pose-goal-ik-seed
+- **Pick**: PR 큐 0건, Today 없음 상태에서 STATE.md "Next claude-actionable" 1순위(MP-0007/MP-0017 벤치마크)는 이미 실측 완료·PR #13 리뷰 대기(Blocked)라 2순위 **MP-0011**(P4 Cartesian goal 착수의 첫 조각) 선택
+- **Outcome**: `planning/goals.py` 신규 — `solve_pose_goal`(단일 시드 position-우선 DLS)/`solve_pose_goal_multistart`(순차 다중 재시도)로 site pose 목표를 관절공간 `q_goal`로 변환. 로직은 `tests/offline_pose_ik.py`(test-only로 명시된 헬퍼)를 골자로 하되 클리핑/샘플링을 `RightArmSpace`로 위임해 나머지 플래닝 모듈과 관례를 맞췄고, FK는 기존 `JointSpaceKinematics`(이미 프로덕션 어댑터)를 그대로 재사용해 새 FK 코드 없음. 실제 can-sort 장면에서 근접 시드 수렴/원거리 시드 multistart 수렴/도달불가 목표 best-effort 3개 신규 테스트, 전체 83개 통과. PR #14 생성
+- **Next**: `MP-0012`(offline_pose_ik.py를 이 모듈로 위임, 중복 제거), `MP-0014`(pose goal 20-seed 성공률 측정, 사람 확인 필요), PR #13/#14 사람 리뷰/병합
+- **Full**: [journal/2026-09/10-p4-cartesian-pose-goal-ik-seed.md](journal/2026-09/10-p4-cartesian-pose-goal-ik-seed.md)
+
+
 ## 2026-09-05 — p7-1-base-pose
 - **Pick**: PR #9(PRD)·#10(P7.0 reachability map)이 병합된 뒤 계획대로 **MP-0027** P7.1 `planning/base_pose.py` 착수 — "decoupled" 패턴의 두 번째 조각(베이스를 어디에 둘지 고르기)
 - **Outcome**: `world_to_base_frame`(월드→베이스 SE(2) 변환, base_link이 z로는 절대 안 움직인다는 실측에 근거해 z는 통과시킴), `BaseFootprintChecker`(`ArmCollisionChecker`와 같은 scratch-model 아키텍처 재현), `select_base_pose`(reachability 점수·발자국 충돌·현재 위치 근접도로 후보 순위 — yaw는 로봇의 "정면" 축을 가정하지 않고 후보 각도 집합을 위치·방향 양쪽에 재사용). 베이스 주행은 `WholeBodyIK`(손 목표 반응형이라 지점-대-지점엔 안 맞음) 대신 기존 `SwerveDrive`를 목표-오차 비례 루프로 얇게 감싼 `planning/mobile_execution.py`로 처리. **핵심 발견**: `build_reachability_map`이 실은 "베이스 원점 전용"이 아니라 grid point를 그냥 절대 world IK 타겟으로 쓴다는 걸 확인해, 이 함수를 그대로 재사용(새 IK 검증 코드 없이)해 임의 베이스 위치에서의 진짜 IK 도달성을 검증하는 핵심 회귀 테스트를 만들 수 있었다 — 먼 베이스 위치(3,3,0)에서는 도달 불가능하던 타겟이 `select_base_pose`가 고른 위치에서는 도달 가능해짐을 실제 IK로 증명. 실제 장면엔 베이스 발자국 높이대에 겹치는 정적 장애물이 없어(table이 그 위에 있음) 참-충돌 테스트는 합성 MJCF로 대신함. 13개 신규 테스트 + 기존 47개 모두 통과, PR #11 생성
@@ -119,18 +140,3 @@ _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고�
 - **Outcome**: `PlannerResult`에 `TreeSnapshot`(start_tree/goal_tree) 추가, mjv_initGeom/mjv_connector로 트리를 뷰어에 렌더. 실제 디스플레이에서 반복 실행 세그폴트 없이 확인
 - **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
 - **Full**: [journal/2026-08/30-17-repeat-loop-and-tree-viz-demo.md](journal/2026-08/30-17-repeat-loop-and-tree-viz-demo.md)
-
-
-## 2026-08-30 15:35 — p1-rrt-connect-plus-demo
-- **Pick**: MP-0002/0003 RRT-Connect core + property tests, 사용자 요청으로 실행 데모까지
-- **Outcome**: CONNECT 로직 버그(속성 시험이 발견) + 실행 재생 시작상태 동기화 버그(사용자 데모로 발견) 둘 다 수정. 25개 planning 테스트 통과
-- **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
-- **Full**: [journal/2026-08/30-15-p1-rrt-connect-plus-demo.md](journal/2026-08/30-15-p1-rrt-connect-plus-demo.md)
-
-
-## 2026-08-30 14:00 — bootstrap-planning-module-and-automation
-- **Pick**: PRD/TODO/자동화 스캐폴딩 + `planning/` P0 기반 구현 (사람 주도, 최초 커밋)
-- **Outcome**: `RightArmSpace`, `ArmCollisionChecker`, `EdgeChecker` 골격 및 cron 자동화
-  8종 wrapper 배선 완료
-- **Next**: RRT-Connect 코어(MP-0002)부터 자동 루프가 이어받는다
-- **Full**: [`journal/2026-08/30-14-bootstrap-planning-module-and-automation.md`](journal/2026-08/30-14-bootstrap-planning-module-and-automation.md)
