@@ -184,19 +184,27 @@ executor는 사람 개입 없이 조사→구현→테스트→PR까지 완결�
   100/100 seed + 실제 장면 seeded 질의로 확인(`tests/test_planning_rrt_scene.py`).
   정식 TSV 벤치마크(seed 50개, MP-0004/MP-0013)는 아직 대기
 - [ ] 자동화 cron 8종이 모두 최소 1회 수동 스모크 통과 — researcher/brief/
-  executor/wrap은 `research/cron_activity.md` 로그로 반복 확인됨. curator·
-  weekly_rollup·telegram_poll·urgent_agent는 미확인
+  executor/wrap/curator/weekly_rollup은 `research/cron_activity.md` 로그로
+  반복 확인됨(curator는 매일, weekly_rollup은 2026-09-06 1회). telegram_poll·
+  urgent_agent는 여전히 미확인(MP-0020 telegram.env 미설정으로 발송 자체가
+  안 돼 관측 불가)
 
 ### 중기 (P3-P4 마무리)
 
-- [ ] 계획 궤적을 MuJoCo에서 실행해 최종 오차 5 mm 이내
-- [ ] Cartesian goal 성공률 85% 이상
-- [ ] 벤치마크가 자동화 루프에서 정기적으로 `results/`에 행을 남김
+- [x] 계획 궤적을 MuJoCo에서 실행해 최종 오차 5 mm 이내 — 실측 0.07~0.09mm
+  (PR #8, `tests/test_planning_execution.py`)
+- [ ] Cartesian goal 성공률 85% 이상 — `planning.goals`(PR #14)는 병합됐지만
+  정식 20-seed 측정(MP-0014)은 아직 미착수
+- [x] 벤치마크가 자동화 루프에서 정기적으로 `results/`에 행을 남김 —
+  `results/*.tsv` 8개 파일, 자율 루프가 MP-0028 등에서 직접 append
 
 ### 장기 (P5 마무리)
 
-- [ ] RRT* 등 대안 플래너와의 정량 비교표를 `RESULTS.md`에 게시
-- [ ] PR throughput ≥ 2/week, 사용자 평균 리뷰 시간 ≤ 20분/week
+- [x] RRT* 등 대안 플래너와의 정량 비교표를 `RESULTS.md`에 게시 — PR #13
+  병합(MP-0017/0031, 장애물 배치 3종 × 50 seed 비교 + Wilcoxon 검정)
+- [ ] PR throughput ≥ 2/week, 사용자 평균 리뷰 시간 ≤ 20분/week — 미달:
+  2026-09-05~12 한 주 동안 PR 4건이 5~7일씩 쌓여 있다가 한꺼번에 병합됨
+  (일괄 병합이지 "평균 20분" 꾸준한 리듬은 아니다)
 
 ### Project (P6 검토)
 
