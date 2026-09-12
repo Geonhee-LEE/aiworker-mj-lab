@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-12 21:00 — p4-wilson-ci-aggregate
+- **Pick**: PR 큐 3건(#17/#18/#19), Doing/Today 모두 비어 결정 트리 3번(백로그 승격) 진입 — STATE.md "Next claude-actionable" 1순위이자 의존성(MP-0013/MP-0018) 완료 확인된 **MP-0022**(Wilson CI) 선택
+- **Outcome**: `scripts/aggregate_results.py`에 `_wilson_ci`/`_parse_bench_metric`/`_success_rate_lines` 추가 — `bench:` 메트릭을 `planner`별로 그룹핑해 성공률+Wilson 95% CI를 `RESULTS.md` 각 섹션에 표시. 실제 재생성 결과 `p5-planner-comparison`의 rrt_star narrow_passage/cluttered 혼합 성공률 `0.830 [0.745, 0.891] (n=100)`이 기존 실측(78-88%)과 일치 확인. `RESULTS.md`/`TODO.md`는 별도 state-push 파이프라인 소관이라 PR 커밋에서 제외. 신규 8개 + planning 93개 통과, PR #20 생성
+- **Next**: PR #17/#18/#19/#20 사람 리뷰/병합(큐 4건, 다음 cycle gate 임계값 도달 가능성 높음), `MP-0037`(q_init 반경 확장 샘플링), `MP-0033`(LSPB via-point 블렌딩)
+- **Full**: [journal/2026-09/12-21-p4-wilson-ci-aggregate.md](journal/2026-09/12-21-p4-wilson-ci-aggregate.md)
+
+
 ## 2026-09-12 11:00 — p4-offline-pose-ik-delegate
 - **Pick**: STATE.md(2026-09-07 스냅샷)가 낡아 있었지만 오늘 오전 사이클(PR #17/#18)이 PR #13~#16 병합을 이미 TODO.md에 동기화해 둔 걸 확인 — `MP-0012`를 막던 "PR #14 병합 후 착수 가능" 조건이 해소돼 Backlog 중 P1 최우선인 이 항목을 Today로 승격해 선택
 - **Outcome**: `tests/offline_pose_ik.py`의 `solve_offline_pose`/`solve_offline_pose_multistart`가 `planning/goals.py`의 `solve_pose_goal`/`solve_pose_goal_multistart`와 DLS/backtracking 로직이 사실상 복붙 상태였음을 확인 — solver의 관절 범위로 임시 `RightArmSpace`를 만들어 `planning.goals`에 위임하는 얇은 어댑터로 교체(108→28줄). 호출부(`test_phase_3.py`/`test_phase_4.py`/`record_demo.py`)의 4-튜플 반환/키워드 시그니처는 그대로 유지. `tests/test_planning_*.py` 93개 + `test_phase_3.py` 물리 게이트(IK 100/100, pick 10/10) 재검증 통과, PR #19 생성
@@ -135,8 +142,3 @@ _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고�
 - **Full**: [journal/2026-08/30-18-obstacle-in-real-reach-region.md](journal/2026-08/30-18-obstacle-in-real-reach-region.md)
 
 
-## 2026-08-30 17:30 — add-obstacle-and-persistent-path-viz
-- **Pick**: 사용자 요청 — 오른팔 탐색 영역에 장애물 추가, 실행 중 경로 시각화 유지
-- **Outcome**: MjSpec으로 모델 파일을 안 건드리고 빨간 기둥(planning_obstacle) 추가, 실제 충돌 판정에 관여함을 검증. 실행 중 주황색 경로 시각화가 지워지지 않고 유지되도록 수정
-- **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
-- **Full**: [journal/2026-08/30-17-30-add-obstacle-and-persistent-path-viz.md](journal/2026-08/30-17-30-add-obstacle-and-persistent-path-viz.md)
