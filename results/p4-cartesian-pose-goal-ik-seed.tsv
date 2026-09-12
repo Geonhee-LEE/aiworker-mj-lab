@@ -1,0 +1,2 @@
+timestamp	commit	metric	status	description
+2026-09-06T11:04:40+09:00	a005713	qual:tests-pass	keep	planning/goals.py: Cartesian pose 목표 IK 다중 재시도(solve_pose_goal_multistart) 추가, 실제 can-sort 장면에서 근접/원거리 시드 수렴 + 도달불가 목표 best-effort 검증 3건 통과
