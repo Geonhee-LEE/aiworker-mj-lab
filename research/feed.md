@@ -2,6 +2,17 @@
 
 _cap 30, 최신이 위. REVIEW 단계는 상위 5개만 읽는다._
 
+- [2026-09-12] [012](2026-09/012.md) 후보 주제 목록(RRT류/충돌가속/MuJoCo
+  API)이 반복 조사로 소진돼, PRD에 "계획, 미착수"로 남은 R-F-009(IK 목표
+  탐색 개선)를 이번 cycle 주제로 확인. `demo_plan_right_arm.py`의
+  `_solve_valid_ik`가 PRD 지적 그대로 관절 전체 범위 균등 무작위 재시도만
+  쓰는 걸 코드로 재확인, `q_init` 우선 시도는 이미 warm-start 문헌 권장과
+  일치해 조치 불필요. 문헌은 "무작위 대신 reachability map/인접 격자
+  시드가 계산 낭비를 줄인다"고 일관되게 보고 — `ReachabilityMap`(R-F-011)이
+  성공률 스칼라만 저장하고 실제 `q`는 버리는 것도 확인. 1차(q_init 반경
+  확장 샘플링, 즉시 착수)/2차(representative_q 저장 확장, R-F-011 스키마
+  변경) 두 단계로 분리해 신규 TODO 2건(MP-0037 owner=claude, MP-0038
+  owner=user). PR 큐는 여전히 4건·6일째 그대로(`gh pr list` 재확인).
 - [2026-09-11] [011](2026-09/011.md) BIT*(Batch Informed Trees) 문헌 확인 —
   고차원 매니퓰레이터에서 RRT 계열보다 빨리 수렴한다고 보고되나, P5 실측
   (MP-0007/MP-0017)이 이미 "RRT*조차 RRT-Connect 대비 경로 품질 이득
