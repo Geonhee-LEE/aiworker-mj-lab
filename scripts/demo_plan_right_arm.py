@@ -99,13 +99,17 @@ OBSTACLE_SPHERES = (
     (-0.01, -0.80, 1.17, 0.06),
 )
 OBSTACLE_NAMES = tuple(f"{OBSTACLE_PREFIX}{i}" for i in range(len(OBSTACLE_SPHERES)))
-REQUIRE_CONTACT_GEOMS = (
+# 장애물과 무관한 필수 접촉 geom — 다른 개수의 장애물 배치를 쓸 때(예:
+# benchmark_planning.py의 --obstacle-layout)는 이 뒤에 그 배치의 이름
+# 튜플을 직접 붙인다(``BASE_REQUIRE_CONTACT_GEOMS + custom_names``).
+BASE_REQUIRE_CONTACT_GEOMS = (
     "target_bin_floor",
     "target_bin_red_floor",
     "can_geom",
     "table",
     "floor",
-) + OBSTACLE_NAMES
+)
+REQUIRE_CONTACT_GEOMS = BASE_REQUIRE_CONTACT_GEOMS + OBSTACLE_NAMES
 # 상자를 승격한 상태에서 실제로 유효함을 확인한 기본 자세다. 일반 teleop
 # ``home`` 키프레임은 상자 승격 후 겹치므로 기본값으로 쓰지 않는다.
 DEFAULT_START = np.array([0.0, -1.4, 0.0, -0.5, 0.0, 0.3, 0.0])
@@ -123,10 +127,18 @@ MARKER_NAME = "goal_marker"
 MARKER_RGBA = [1.0, 0.85, 0.1, 0.85]
 
 
-def _build_scene(*, with_obstacle=True, with_marker=False):
+def _build_scene(*, with_obstacle=True, with_marker=False, spheres=None):
+    """``spheres``를 넘기면 ``OBSTACLE_SPHERES`` 대신 그 배치를 쓴다(개수가
+    달라도 됨 — 이름은 ``OBSTACLE_PREFIX`` + 인덱스로 그때그때 생성).
+    호출자가 넘긴 개수만큼의 ``planning_obstacle_N`` 이름이 필요하다는 계약은
+    그대로 유지된다(``require_contact_geoms` 등에서 이 이름 규칙에 의존)."""
     spec = mujoco.MjSpec.from_file(str(MODEL_PATH))
     if with_obstacle:
-        for name, (x, y, z, radius) in zip(OBSTACLE_NAMES, OBSTACLE_SPHERES):
+        active_spheres = OBSTACLE_SPHERES if spheres is None else spheres
+        active_names = OBSTACLE_NAMES if spheres is None else tuple(
+            f"{OBSTACLE_PREFIX}{i}" for i in range(len(active_spheres))
+        )
+        for name, (x, y, z, radius) in zip(active_names, active_spheres):
             spec.worldbody.add_geom(
                 name=name,
                 type=mujoco.mjtGeom.mjGEOM_SPHERE,
