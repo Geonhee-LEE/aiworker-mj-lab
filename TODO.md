@@ -3,7 +3,7 @@
 _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트가 함께 수정한다._
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
-- Last update: `2026-09-12 21:05 KST`
+- Last update: `2026-09-13 11:09 KST`
 - Open (Doing + Today + Blocked + Backlog): **14**
 - Next ID: `MP-0039`
 
@@ -21,6 +21,7 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0034 | P2 | P0 | claude | [infra] todo_tool.py parse()가 render()의 백슬래시 이스케이프를 이해 못해 제목에 파이프 문자가 있으면 행이 조용히 버려지는 버그 수정 (실사고 ... | planning/p0-todo-tool-pipe-escape-fix | ☐ |
 | MP-0012 | P1 | P4 | claude | [planner] `tests/offline_pose_ik.py`를 `planning.goals`로 위임(중복 제거) | planning/p4-offline-pose-ik-delegate | ☐ |
 | MP-0022 | P2 | P4 | claude | [research] aggregate_results.py에 성공률 Wilson 신뢰구간 계산 추가 (MP-0013/0018 완료 후) | planning/p4-wilson-ci-aggregate | ☐ |
+| MP-0037 | P2 | P1 | claude | [research] R-F-009: _solve_valid_ik 무작위 재시도를 q_init 반경 확장 샘플링으로 개선 검토 — 관절범위 10%→30%→100% 단계적 확장,... | planning/p1-ik-retry-radius-seeding | ☐ |
 
 ## Backlog
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -34,7 +35,6 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0033 | P2 | P2 | claude | [research] R-F-010: time_parameterize에 LSPB via-point 블렌딩 opt-in 추가 검토 — 세그먼트 경계 완전정지 없애기(researc... |  | ☐ |
 | MP-0035 | P2 | P1 | claude | [research] collision_distance_gradient에 need_gradient=False 경로 추가 — clearance()가 안 쓰는 Jacobian 계산... |  | ☐ |
 | MP-0036 | P2 | P5 | user | [research] BIT*(Batch Informed Trees) 도입 검토 — 고차원 매니퓰레이터 수렴 우위 보고되나 P5 실측(RRT* vs RRT-Connect 품질 ... |  | ☐ |
-| MP-0037 | P2 | P1 | claude | [research] R-F-009: _solve_valid_ik 무작위 재시도를 q_init 반경 확장 샘플링으로 개선 검토 — 관절범위 10%→30%→100% 단계적 확장,... |  | ☐ |
 | MP-0038 | P2 | P7 | user | [research] R-F-009/R-F-011: ReachabilityMap에 격자별 representative_q 저장 확장 검토 — 성공 격자의 실제 IK 해를 _sol... |  | ☐ |
 
 ## Done

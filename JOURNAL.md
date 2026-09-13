@@ -2,6 +2,13 @@
 
 _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고서는 `journal/`에 있다._
 
+## 2026-09-13 11:00 — p1-ik-retry-radius-seeding
+- **Pick**: PR 큐 gate 재확인(`--head "planning/"` exact-match 함정, `--json headRefName`으로 실제 3건 확인해 임계값 미만) 후 Doing/Today 모두 비어 결정 트리 3번(백로그 승격) 진입 — STATE.md "Next claude-actionable" 1순위 **MP-0037**(`_solve_valid_ik` q_init 반경 확장 샘플링) 선택, main에서 바로 착수 가능
+- **Outcome**: `scripts/demo_plan_right_arm.py`의 `_solve_valid_ik` 재시도 시드를 전 구간 균등 무작위 대신 `q_init` 주변 반경 10%→30%→100% 단계적 확장(`_staged_retry_seeds`, 순수 함수로 분리)으로 교체. 신규 3개 포함 96개 planning 테스트 통과. 임시 A/B 벤치마크(장애물 포함 장면, "q_init 첫 시도 실패" 사례 50개)로 성공률 동일(100%)·평균 재시도 5.84→5.46(~6.5% 감소) 확인, 완전 무작위 타겟으로는 오히려 역전됨을 함께 기록해 개선 조건을 투명하게 남김. PR #21 생성
+- **Next**: PR #18/#19/#20/#21 사람 리뷰/병합(큐 4건, 다음 cycle gate 임계값 도달 가능성 높음), `MP-0033`(LSPB via-point 블렌딩), `MP-0035`(collision_distance_gradient need_gradient=False)
+- **Full**: [journal/2026-09/13-11-p1-ik-retry-radius-seeding.md](journal/2026-09/13-11-p1-ik-retry-radius-seeding.md)
+
+
 ## 2026-09-12 21:00 — p4-wilson-ci-aggregate
 - **Pick**: PR 큐 3건(#17/#18/#19), Doing/Today 모두 비어 결정 트리 3번(백로그 승격) 진입 — STATE.md "Next claude-actionable" 1순위이자 의존성(MP-0013/MP-0018) 완료 확인된 **MP-0022**(Wilson CI) 선택
 - **Outcome**: `scripts/aggregate_results.py`에 `_wilson_ci`/`_parse_bench_metric`/`_success_rate_lines` 추가 — `bench:` 메트릭을 `planner`별로 그룹핑해 성공률+Wilson 95% CI를 `RESULTS.md` 각 섹션에 표시. 실제 재생성 결과 `p5-planner-comparison`의 rrt_star narrow_passage/cluttered 혼합 성공률 `0.830 [0.745, 0.891] (n=100)`이 기존 실측(78-88%)과 일치 확인. `RESULTS.md`/`TODO.md`는 별도 state-push 파이프라인 소관이라 PR 커밋에서 제외. 신규 8개 + planning 93개 통과, PR #20 생성
@@ -133,12 +140,5 @@ _REVIEW 단계는 이 파일의 상위 5개 항목만 읽는다. 전체 보고�
 - **Outcome**: dataviz 스킬 팔레트 검증기(Node 없어 Python으로 포팅)가 기존 초록/주황 조합의 protanopia Delta E 2.8 하드 FAIL을 발견. 초록/파랑/마젠타로 교체해 검증 통과, 3D 뷰어 색도 함께 맞춤
 - **Next**: MP-0005 shortcut 평활화, MP-0006 시간 파라미터화
 - **Full**: [journal/2026-08/30-19-qspace-visualization-and-cvd-safe-palette.md](journal/2026-08/30-19-qspace-visualization-and-cvd-safe-palette.md)
-
-
-## 2026-08-30 18:00 — obstacle-in-real-reach-region
-- **Pick**: 사용자 지적 — 장애물이 오른팔 실제 동작 영역 밖(테이블 위)에 있었음. 구체 3개로 교체 + 위치 재배치 + 크기 확대
-- **Outcome**: RightArmSpace.sample() 분포 실측으로 실제 도달 영역 파악, 손끝만 보고 배치했다가 팔 body 충돌로 실패 → is_valid(START) 체계적 검증으로 재배치. 반지름 6cm에서 시작 자세 유효 유지, 차단율 54%
-- **Next**: MP-0005 shortcut 평활화, Q-space 시각화(사용자 요청)
-- **Full**: [journal/2026-08/30-18-obstacle-in-real-reach-region.md](journal/2026-08/30-18-obstacle-in-real-reach-region.md)
 
 
