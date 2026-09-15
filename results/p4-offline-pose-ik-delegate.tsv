@@ -1,0 +1,1 @@
+2026-09-12T11:04:15+09:00	559c15c	qual:tests-pass	keep	tests/offline_pose_ik.py의 solve_offline_pose(_multistart)를 planning.goals.solve_pose_goal(_multistart) 위임 어댑터로 교체 — DLS/backtracking 로직 중복 제거(-80 LOC). 호출부(test_phase_3.py/test_phase_4.py/record_demo.py) 시그니처 불변. tests/test_planning_*.py 93개 + Phase 3 물리 게이트(IK 100/100, pick 10/10) 재검증 통과
