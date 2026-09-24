@@ -1,12 +1,14 @@
 """results/*.tsv를 모아 RESULTS.md를 재생성한다. gh pr list로 PR 상태를 붙인다."""
 
 import datetime
+import math
 import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RESULTS_DIR = REPO_ROOT / "results"
 RESULTS_MD = REPO_ROOT / "RESULTS.md"
+Z_95 = 1.96
 
 
 def _read_rows(path):
@@ -21,6 +23,49 @@ def _read_rows(path):
         cells = line.split("\t")
         rows.append(dict(zip(header, cells)))
     return rows
+
+
+def _wilson_ci(successes, n, z=Z_95):
+    """Wilson score interval for a binomial success rate."""
+    phat = successes / n
+    denom = 1 + z**2 / n
+    center = (phat + z**2 / (2 * n)) / denom
+    margin = z * math.sqrt(phat * (1 - phat) / n + z**2 / (4 * n**2)) / denom
+    return phat, max(0.0, center - margin), min(1.0, center + margin)
+
+
+def _parse_bench_metric(metric):
+    """`bench:seed=0,planner=x,success=1,...` -> dict, or None if not a bench row."""
+    if not metric.startswith("bench:"):
+        return None
+    fields = {}
+    for kv in metric[len("bench:"):].split(","):
+        if "=" in kv:
+            key, value = kv.split("=", 1)
+            fields[key] = value
+    return fields
+
+
+def _success_rate_lines(rows):
+    groups = {}
+    for row in rows:
+        fields = _parse_bench_metric(row.get("metric", ""))
+        if fields is None or "success" not in fields:
+            continue
+        try:
+            success = int(fields["success"])
+        except ValueError:
+            continue
+        groups.setdefault(fields.get("planner", "all"), []).append(success)
+    if not groups:
+        return []
+    lines = ["**Success rate (Wilson 95% CI):**", ""]
+    for key in sorted(groups):
+        outcomes = groups[key]
+        phat, lo, hi = _wilson_ci(sum(outcomes), len(outcomes))
+        lines.append(f"- {key}: {phat:.3f} [{lo:.3f}, {hi:.3f}] (n={len(outcomes)})")
+    lines.append("")
+    return lines
 
 
 def _pr_info(slug):
@@ -62,6 +107,7 @@ def main():
             status_counts[status] = status_counts.get(status, 0) + 1
         pr_line = _pr_info(slug)
         lines = [f"## {slug}", "", f"- PR: {pr_line}", f"- Rows: {len(rows)}", ""]
+        lines.extend(_success_rate_lines(rows))
         if rows:
             lines.append("| timestamp | commit | metric | status | description |")
             lines.append("|---|---|---|---|---|")
