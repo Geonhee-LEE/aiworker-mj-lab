@@ -429,6 +429,29 @@ def _ik_attempt(solver, q_init, target_pos, context_qpos, q_reference, *, max_it
     return q, float(np.linalg.norm(target_pos - state.position)), False
 
 
+_RETRY_RADIUS_FRACTIONS = (0.1, 0.3, 1.0)
+
+
+def _staged_retry_seeds(q_init, joint_ranges, rng, n_restarts):
+    """``q_init`` 주변 반경을 10%→30%→100%(전체 범위)로 단계적으로 넓혀 재시도
+    시드 ``n_restarts``개를 뽑는다(R-F-009) — 관절범위 전체 균등 무작위보다
+    "현재 자세에서 크게 벗어나지 않는 해"를 먼저 찾을 확률이 높다. 마지막
+    단계가 전체 범위를 커버하므로 기존 순수 무작위 재시도와 도달 범위는
+    동일하다.
+    """
+    range_width = joint_ranges[:, 1] - joint_ranges[:, 0]
+    n_stages = len(_RETRY_RADIUS_FRACTIONS)
+    counts = [n_restarts // n_stages] * n_stages
+    counts[-1] += n_restarts - sum(counts)
+    seeds = []
+    for fraction, count in zip(_RETRY_RADIUS_FRACTIONS, counts):
+        radius = fraction * range_width
+        low = np.clip(q_init - radius, joint_ranges[:, 0], joint_ranges[:, 1])
+        high = np.clip(q_init + radius, joint_ranges[:, 0], joint_ranges[:, 1])
+        seeds.extend(rng.uniform(low, high) for _ in range(count))
+    return seeds
+
+
 def _solve_valid_ik(solver, checker, q_init, target_pos, context_qpos, rng, *, n_restarts=25):
     """여러 초기값에서 IK를 풀고, 수렴 + 충돌 없음을 모두 만족하는 첫 해를 쓴다.
 
@@ -436,12 +459,10 @@ def _solve_valid_ik(solver, checker, q_init, target_pos, context_qpos, rng, *, n
     "IK가 풀렸다"와 "그 자세가 실제로 유효하다"는 별개다. 현재 자세(``q_init``)를
     가장 먼저 시도하고, 모든 시도에서 그 자세를 nullspace 정칙화 기준
     (``q_reference``)으로 계속 넘긴다 — 그래야 무작위 재시도로 넘어가도
-    "현재 자세에서 최대한 안 벗어나기"라는 목표가 유지된다.
+    "현재 자세에서 최대한 안 벗어나기"라는 목표가 유지된다. 재시도 시드
+    자체도 ``_staged_retry_seeds``로 같은 원칙을 따른다.
     """
-    candidates = [q_init] + [
-        rng.uniform(solver.joint_ranges[:, 0], solver.joint_ranges[:, 1])
-        for _ in range(n_restarts)
-    ]
+    candidates = [q_init] + _staged_retry_seeds(q_init, solver.joint_ranges, rng, n_restarts)
     fallback = None
     for candidate in candidates:
         q, pos_err, converged = _ik_attempt(solver, candidate, target_pos, context_qpos, q_init)
