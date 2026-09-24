@@ -1,0 +1,2 @@
+timestamp	commit	metric	status	description
+2026-09-12T10:42:21+09:00	c304c61	qual:tests-18pass	keep	MP-0034: todo_tool.py parse()가 제목 속 이스케이프된 파이프(\|)를 셀 구분자로 오인하는 버그 수정(_split_row, 이스케이프 안 된 | 만 구분자로 split). 기존 characterization test를 회귀 검증으로 교체 + round-trip/_next_id 신규 테스트 추가, 18개 통과. 실제 TODO.md로 todo_tool.py check 재확인(PASS, 회귀 없음).

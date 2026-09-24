@@ -62,15 +62,18 @@ def test_parse_reads_usertest_and_branch():
     assert row.branch == "planning/x"
 
 
-def test_parse_drops_row_when_title_contains_literal_pipe():
-    """알려진 한계: split("|")은 `_escape`가 붙인 백슬래시를 이해하지 못해
-    제목에 `|`가 있으면 셀 개수가 어긋나 행 전체가 조용히 버려진다."""
+def test_parse_keeps_row_when_title_contains_escaped_pipe():
+    """MP-0034 회귀 시험: 제목에 ``_escape``가 붙인 ``\\|``가 있어도 행이
+    버려지지 않고, 파싱된 title에는 이스케이프 없는 리터럴 ``|``가 그대로
+    남는다(과거엔 naive ``split("|")``가 셀 개수를 어긋나게 해 행 전체가
+    조용히 버려졌다 — MP-0033 ID 충돌 사고의 근본 원인)."""
     text = SAMPLE.replace(
         "| MP-0002 | P1 | P1 | claude | in progress task | planning/x | ☑ |",
         "| MP-0002 | P1 | P1 | claude | in progress \\| with pipe | planning/x | ☑ |",
     )
     sections = todo_tool.parse(text)
-    assert sections["Doing"] == []
+    assert [r.id for r in sections["Doing"]] == ["MP-0002"]
+    assert sections["Doing"][0].title == "in progress | with pipe"
 
 
 def test_parse_ignores_header_and_separator_rows():
@@ -100,6 +103,18 @@ def test_render_parse_round_trip_preserves_rows():
     row = reparsed["Doing"][0]
     assert row.title == "in progress task"
     assert row.usertest is True
+
+
+def test_render_parse_round_trip_preserves_title_with_pipe():
+    """렌더→재파싱을 거쳐도 제목 속 리터럴 ``|``가 보존되고, 새 ID 발급
+    (``_next_id``)도 이 행을 정상적으로 봐 건너뛰지 않는다(MP-0033 사고
+    재발 방지)."""
+    sections = todo_tool.parse(SAMPLE)
+    sections["Doing"][0].title = "fix a | b bug"
+    rendered = todo_tool.render(sections, now="2026-01-02 00:00 KST")
+    reparsed = todo_tool.parse(rendered)
+    assert reparsed["Doing"][0].title == "fix a | b bug"
+    assert todo_tool._next_id(reparsed) == "MP-0003"
 
 
 def test_render_truncates_long_title():
