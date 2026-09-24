@@ -3,9 +3,9 @@
 _이 파일이 작업 상태의 유일한 권위다. 사람과 cron 에이전트가 함께 수정한다._
 _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·중복 검사 포함)._
 
-- Last update: `2026-09-13 11:09 KST`
-- Open (Doing + Today + Blocked + Backlog): **14**
-- Next ID: `MP-0039`
+- Last update: `2026-09-24 08:03 KST`
+- Open (Doing + Today + Blocked + Backlog): **24**
+- Next ID: `MP-0049`
 
 ## Doing
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
@@ -36,6 +36,16 @@ _기계적 수정은 `scripts/todo_tool.py`를 쓴다 (표 정렬·ID 발급·�
 | MP-0035 | P2 | P1 | claude | [research] collision_distance_gradient에 need_gradient=False 경로 추가 — clearance()가 안 쓰는 Jacobian 계산... |  | ☐ |
 | MP-0036 | P2 | P5 | user | [research] BIT*(Batch Informed Trees) 도입 검토 — 고차원 매니퓰레이터 수렴 우위 보고되나 P5 실측(RRT* vs RRT-Connect 품질 ... |  | ☐ |
 | MP-0038 | P2 | P7 | user | [research] R-F-009/R-F-011: ReachabilityMap에 격자별 representative_q 저장 확장 검토 — 성공 격자의 실제 IK 해를 _sol... |  | ☐ |
+| MP-0039 | P2 | P5 | claude | [research] RRT* use_informed 거부표집을 direct ellipsoid sampling(Gammell IROS14)으로 교체 검토 — 고차원(7-DOF)... |  | ☐ |
+| MP-0040 | P2 | P2 | claude | [research] R-F-004: shortcut_path에 partial shortcut(per-DOF interpolation, Geraerts & Overmars 20... |  | ☐ |
+| MP-0041 | P1 | P0 | claude | [research] EdgeChecker resolution_rad(0.05) 완결성 미검증 — padding_m(0.012m) 대비 원거리 링크 스텝 변위 초과 가능성, L... |  | ☐ |
+| MP-0042 | P2 | P5 | user | [research] MJX(MuJoCo XLA) 기반 배치 병렬 충돌검사/샘플링 도입 검토 — GMT*/VAMP/pRRTC/Kino-PAX류 GPU 배치 sampling 문헌... |  | ☐ |
+| MP-0043 | P2 | P4 | claude | [research] R-F-009/P4: solve_pose_goal_multistart가 첫 수렴 IK 해를 즉시 RRT-Connect goal로 반환 — q_seed 최근... |  | ☐ |
+| MP-0044 | P2 | P5 | claude | [research] RightArmSpace.sample을 scrambled Halton/Sobol 저불일치 시퀀스로 바꾸는 opt-in 검토 — narrow_passage/... |  | ☐ |
+| MP-0045 | P2 | P3 | claude | [research] PRD 실행 안전성(미측정 행): 계획+shortcut 경로를 0.005rad로 재표집해 ArmCollisionChecker.clearance() 최솟값을... |  | ☐ |
+| MP-0046 | P2 | P5 | claude | [research] RRT* _Tree.nearest/near(순수 파이썬 선형 탐색, ~1.35µs/노드)가 15s 고정 예산의 다수를 차지하는지 cProfile로 먼저 측... |  | ☐ |
+| MP-0047 | P2 | P2 | claude | [research] R-F-010: jerk-limited 7-segment S-curve 코너 블렌딩을 LSPB(MP-0033)의 승격 후보로 검토 — LSPB 선형 속도 ... |  | ☐ |
+| MP-0048 | P2 | P5 | claude | [research] P5: parallel restarts(multiprocessing으로 RRT* K개 독립 시드 동시 실행, 최선 채택)로 narrow_passage/cl... |  | ☐ |
 
 ## Done
 | ID | Priority | Phase | Owner | Title | Branch | UserTest |
